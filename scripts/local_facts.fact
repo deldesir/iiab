@@ -58,6 +58,7 @@ OS_VER=$OS-$VERSION_ID
 
 case $OS_VER in
     "debian-10"    | \
+    "debian-11"    | \
     "ubuntu-20"    | \
     "linuxmint-20" | \
     "raspbian-10")
