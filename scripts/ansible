@@ -21,7 +21,7 @@ else
     CODENAME=focal     # Debian 11+, RaspiOS 11+, Ubuntu 20.04+, Mint 20+ (ETC)
 fi
 
-# 'ansible-base' being renamed 'ansible-code' early in 2021. RELEASE LINK REFS:
+# 'ansible-base' being renamed 'ansible-core' early in 2021. RELEASE LINK REFS:
 # http://ppa.launchpad.net/ansible/ansible/ubuntu/pool/main/a/ansible-base/
 # https://launchpad.net/~ansible/+archive/ubuntu/ansible-2.10
 # https://github.com/ansible/ansible/commits/stable-2.10/changelogs/CHANGELOG-v2.10.rst
