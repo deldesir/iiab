@@ -133,6 +133,22 @@
     recurse: yes
   become: yes
 
+- name: Check if patch can be applied
+  command: git apply --check {{ role_path }}/files/0001-Fix-hardcoded-URLs-to-support-subpath-deployment.patch
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  register: patch_check
+  changed_when: false
+  failed_when: false
+  become: yes
+
+- name: Apply patch for subpath deployment
+  command: git apply {{ role_path }}/files/0001-Fix-hardcoded-URLs-to-support-subpath-deployment.patch
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  when: patch_check.rc == 0
+  become: yes
+
 
 - name: Install Poetry
   shell: |
@@ -146,8 +162,7 @@
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
     poetry lock
-    poetry env use system
-    poetry install --no-root
+    poetry install
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
@@ -181,20 +196,30 @@
   set_fact:
     rapidpro_go_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
 
+- name: Download Mailroom
+  get_url:
+    url: "https://github.com/nyaruka/mailroom/releases/download/v10.2.0/mailroom_10.2.0_linux_{{ rapidpro_go_arch }}.tar.gz"
+    dest: /tmp/mailroom.tar.gz
+  become: yes
+
 - name: Install Mailroom
   unarchive:
-    src: "https://github.com/nyaruka/mailroom/releases/download/v10.2.0/mailroom_10.2.0_linux_{{ rapidpro_go_arch }}.tar.gz"
+    src: /tmp/mailroom.tar.gz
     dest: "/usr/local/bin/"
-    remote_src: yes
+    remote_src: no
     extra_opts: [--strip-components=1]
-    creates: /usr/local/bin/rapidpro-mailroom
+  become: yes
+
+- name: Download Courier
+  get_url:
+    url: "https://github.com/nyaruka/courier/releases/download/v10.2.0/courier_10.2.0_linux_{{ rapidpro_go_arch }}.tar.gz"
+    dest: /tmp/courier.tar.gz
   become: yes
 
 - name: Install Courier
   unarchive:
-    src: "https://github.com/nyaruka/courier/releases/download/v10.2.0/courier_10.2.0_linux_{{ rapidpro_go_arch }}.tar.gz"
+    src: /tmp/courier.tar.gz
     dest: "/usr/local/bin/"
-    remote_src: yes
+    remote_src: no
     extra_opts: [--strip-components=1]
-    creates: /usr/local/bin/rapidpro-courier
   become: yes

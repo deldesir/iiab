@@ -46,6 +46,8 @@
   become_user: "{{ iiab_admin_user }}"
 
 
+
+
 - name: Collect static files
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
@@ -54,6 +56,8 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
+
+
 
 - name: Get poetry environment path
   shell: |
@@ -64,6 +68,30 @@
   register: poetry_env
   become: yes
   become_user: "{{ iiab_admin_user }}"
+
+- name: Copy create_superuser.py script
+  copy:
+    src: create_superuser.py
+    dest: "{{ rapidpro_dir }}/create_superuser.py"
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+    mode: "0755"
+  become: yes
+
+- name: Create admin user
+  shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    export DJANGO_SUPERUSER_EMAIL="{{ admin_email | default('admin@example.com') }}"
+    export DJANGO_SUPERUSER_PASSWORD="{{ admin_password | default('changeme') }}"
+    poetry run python manage.py shell < create_superuser.py
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+  become_user: "{{ iiab_admin_user }}"
+  environment:
+    DJANGO_SETTINGS_MODULE: temba.settings
+  changed_when: "'Superuser created successfully!' in create_superuser_output.stdout"
+  register: create_superuser_output
 
 - name: Create gunicorn run directory
   file:
@@ -105,8 +133,8 @@
     owner: "{{ iiab_admin_user }}"
     group: "{{ iiab_admin_user }}"
   loop:
-    - mailroom
-    - courier
+    - mailroom/dynamo
+    - courier/dynamo
   become: yes
 
 - name: Check for valkey-server service
