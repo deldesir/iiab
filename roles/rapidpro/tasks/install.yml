@@ -32,6 +32,19 @@
 
 
 
+- name: Include nginx role
+  include_role:
+    name: nginx
+
+- name: "Set 'postgresql_install: True' and 'postgresql_enabled: True'"
+  set_fact:
+    postgresql_install: True
+    postgresql_enabled: True
+
+- name: Include postgresql role
+  include_role:
+    name: postgresql
+
 - name: Install essential build tools and libraries
   apt:
     name:
