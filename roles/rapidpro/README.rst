@@ -1,47 +1,49 @@
-# RapidPro Ansible Role for IIAB (WIP)
+RapidPro Role
+=============
 
-This Ansible role installs and configures RapidPro within an IIAB (Internet-in-a-Box) environment.
+This role installs and configures RapidPro, a platform for building and managing mobile-based services.
 
-## Features
+Requirements
+------------
 
-- Automates the installation of RapidPro and its dependencies (PostgreSQL, Valkey/Redis, Python, Node.js).
-- Configures RapidPro for production use with Gunicorn and Nginx.
-- Installs and configures Mailroom and Courier Go services.
-- Provides flexible control over installation, service status, and "appliance mode" via Ansible variables.
+This role requires the following:
 
-## Requirements
+*   Debian/Ubuntu-based system
+*   PostgreSQL
+*   Nginx
+*   Redis or Valkey
 
-This role depends on the following IIAB roles:
+These dependencies are automatically installed by this role.
 
-- `nginx`
-- `postgresql`
+Role Variables
+--------------
 
-These roles are typically installed as part of the standard IIAB setup.
+*   ``rapidpro_install``: Set to ``True`` to install RapidPro. Default is ``True``.
+*   ``rapidpro_enabled``: Set to ``True`` to enable and start the RapidPro services. Default is ``True``.
+*   ``rapidpro_db_name``: The name of the PostgreSQL database for RapidPro. Default is ``temba``.
+*   ``rapidpro_db_user``: The PostgreSQL user for the RapidPro database. Default is ``temba``.
+*   ``rapidpro_db_pass``: The password for the PostgreSQL user. Default is ``temba``.
+*   ``admin_email``: The email address for the RapidPro admin user. Default is ``admin@box.lan``.
+*   ``admin_password``: The password for the RapidPro admin user. Default is ``changeme``.
+*   ``rapidpro_url``: The URL path for RapidPro. Default is ``/rp``.
 
-## Role Variables
+Services
+--------
 
-## Usage
+This role configures and manages the following systemd services:
 
-1.  **Enable the role:** Add the following to `/etc/iiab/local_vars.yml`:
+*   ``rapidpro-gunicorn``: The Gunicorn server for the RapidPro Django application.
+*   ``rapidpro-mailroom``: The Mailroom service for handling incoming messages.
+*   ``rapidpro-courier``: The Courier service for sending outgoing messages.
 
-    ```yaml
-    rapidpro_install: true
-    ```
+Usage
+-----
 
-2.  **(Optional) Enable Appliance Mode:** To make RapidPro the default application, add the following to `/etc/iiab/local_vars.yml`:
+To install and enable RapidPro, add the following to your ``/etc/iiab/local_vars.yml``::
 
-    ```yaml
-    rapidpro_appliance_mode: true
-    ```
+    rapidpro_install: True
+    rapidpro_enabled: True
 
-3.  **(Optional) Disable Services:** To install RapidPro but keep the services disabled, add the following to `/etc/iiab/local_vars.yml`:
+Then run the IIAB installer.
 
-    ```yaml
-    rapidpro_enabled: false
-    ```
-
-4.  **Run the playbook:** Execute the main IIAB playbook (e.g., `iiab-install`) or run the `rapidpro` role individually:
-
-    ```bash
-    ./runrole rapidpro
-    ```
+After installation, RapidPro will be available at ``http://box.lan/rp``.
