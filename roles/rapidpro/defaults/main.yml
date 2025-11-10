@@ -2,11 +2,8 @@
 # Defaults for the rapidpro role
 
 
-python_version: "3.13.5"
-rapidpro_db_name: "temba"
-rapidpro_db_user: "temba"
 rapidpro_db_pass: "temba"
-node_version: "24"
+nodejs_version: "24"
 rapidpro_dir: "/opt/iiab/rapidpro"
 rapidpro_install: True
 rapidpro_enabled: True
