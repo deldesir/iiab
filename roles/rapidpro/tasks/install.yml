@@ -32,7 +32,7 @@
 
 
 
-- name: "RapidPro: Install essential build tools and libraries"
+- name: RapidPro: Install essential build tools and libraries
   apt:
     name:
       - git
@@ -44,21 +44,21 @@
     state: present
   become: yes
 
-- name: "RapidPro: Install Valkey/Redis"
+- name: RapidPro: Install Valkey/Redis
   block:
-    - name: "RapidPro: Try installing valkey-server"
+    - name: RapidPro: Try installing valkey-server
       apt:
         name: valkey-server
         state: present
       become: yes
   rescue:
-    - name: "RapidPro: Fallback to redis-server"
+    - name: RapidPro: Fallback to redis-server
       apt:
         name: redis-server
         state: present
       become: yes
 
-- name: "RapidPro: Install Python build dependencies"
+- name: RapidPro: Install Python build dependencies
   apt:
     name:
       - make
@@ -80,35 +80,35 @@
     state: present
   become: yes
 
-- name: "RapidPro: Set 'nodejs_install: True' and 'nodejs_enabled: True'"
+- name: RapidPro: Set 'nodejs_install: True' and 'nodejs_enabled: True'
   set_fact:
     nodejs_install: True
     nodejs_enabled: True
 
-- name: "RapidPro: Include nodejs role"
+- name: RapidPro: Include nodejs role
   include_role:
     name: nodejs
 
-- name: "RapidPro: Check if rapidpro directory exists"
+- name: RapidPro: Check if rapidpro directory exists
   stat:
     path: "{{ rapidpro_dir }}"
   register: rapidpro_dir_stat
 
-- name: "RapidPro: Clone RapidPro repository"
+- name: RapidPro: Clone RapidPro repository
   git:
     repo: 'https://github.com/nyaruka/rapidpro.git'
     dest: "{{ rapidpro_dir }}"
   become: yes
   when: not rapidpro_dir_stat.stat.exists
 
-- name: "RapidPro: Allow Python version in pyproject.toml"
+- name: RapidPro: Allow Python version in pyproject.toml
   replace:
     path: "{{ rapidpro_dir }}/pyproject.toml"
     regexp: 'requires-python = ">=3.12,<3.13"'
     replace: 'requires-python = ">=3.12,<3.{{ (python_version.split(''.'')[1] | int) + 1 }}"'
   become: yes
 
-- name: "RapidPro: Set ownership of project directory"
+- name: RapidPro: Set ownership of project directory
   file:
     path: "{{ rapidpro_dir }}"
     state: directory
@@ -118,7 +118,7 @@
     recurse: yes
   become: yes
 
-- name: "RapidPro: Check if patch can be applied"
+- name: RapidPro: Check if patch can be applied
   command: git apply --check {{ role_path }}/files/0001-Fix-hardcoded-URLs-to-support-subpath-deployment.patch
   args:
     chdir: "{{ rapidpro_dir }}"
@@ -127,7 +127,7 @@
   failed_when: false
   become: yes
 
-- name: "RapidPro: Apply patch for subpath deployment"
+- name: RapidPro: Apply patch for subpath deployment
   command: git apply {{ role_path }}/files/0001-Fix-hardcoded-URLs-to-support-subpath-deployment.patch
   args:
     chdir: "{{ rapidpro_dir }}"
@@ -135,7 +135,7 @@
   become: yes
 
 
-- name: "RapidPro: Install Poetry"
+- name: RapidPro: Install Poetry
   shell: |
     curl -sSL https://install.python-poetry.org | python3 -
   args:
@@ -143,7 +143,7 @@
   become: yes
   become_user: "{{ iiab_admin_user }}"
 
-- name: "RapidPro: Install Python dependencies with Poetry"
+- name: RapidPro: Install Python dependencies with Poetry
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
     poetry lock
@@ -153,41 +153,41 @@
   become: yes
   become_user: "{{ iiab_admin_user }}"
 
-- name: "RapidPro: Install yarn"
+- name: RapidPro: Install yarn
   npm:
     name: yarn
     global: yes
   become: yes
 
-- name: "RapidPro: Install JavaScript dependencies"
+- name: RapidPro: Install JavaScript dependencies
   yarn:
     path: "{{ rapidpro_dir }}"
   become: yes
 
-- name: "RapidPro: Install global JS tools (less)"
+- name: RapidPro: Install global JS tools (less)
   yarn:
     name: less
     global: yes
   become: yes
 
-- name: "RapidPro: Build CSS assets"
+- name: RapidPro: Build CSS assets
   shell: |
     yarn tw-build
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
 
-- name: "RapidPro: Set mailroom and courier architecture"
+- name: RapidPro: Set mailroom and courier architecture
   set_fact:
     rapidpro_go_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
 
-- name: "RapidPro: Download Mailroom"
+- name: RapidPro: Download Mailroom
   get_url:
     url: "https://github.com/nyaruka/mailroom/releases/download/v10.2.0/mailroom_10.2.0_linux_{{ rapidpro_go_arch }}.tar.gz"
     dest: /tmp/mailroom.tar.gz
   become: yes
 
-- name: "RapidPro: Install Mailroom"
+- name: RapidPro: Install Mailroom
   unarchive:
     src: /tmp/mailroom.tar.gz
     dest: "/usr/local/bin/"
@@ -195,13 +195,13 @@
     extra_opts: [--strip-components=1]
   become: yes
 
-- name: "RapidPro: Download Courier"
+- name: RapidPro: Download Courier
   get_url:
     url: "https://github.com/nyaruka/courier/releases/download/v10.2.0/courier_10.2.0_linux_{{ rapidpro_go_arch }}.tar.gz"
     dest: /tmp/courier.tar.gz
   become: yes
 
-- name: "RapidPro: Install Courier"
+- name: RapidPro: Install Courier
   unarchive:
     src: /tmp/courier.tar.gz
     dest: "/usr/local/bin/"

@@ -1,21 +1,21 @@
 ---
 # This file will contain all the configuration tasks for RapidPro.
 
-- name: "RapidPro: Create PostgreSQL user"
+- name: RapidPro: Create PostgreSQL user
   postgresql_user:
     name: "{{ rapidpro_db_user }}"
     password: "{{ rapidpro_db_pass }}"
   become: yes
   become_user: postgres
 
-- name: "RapidPro: Create PostgreSQL database"
+- name: RapidPro: Create PostgreSQL database
   postgresql_db:
     name: "{{ rapidpro_db_name }}"
     owner: "{{ rapidpro_db_user }}"
   become: yes
   become_user: postgres
 
-- name: "RapidPro: Enable PostgreSQL extensions"
+- name: RapidPro: Enable PostgreSQL extensions
   # The 'db' parameter is used for compatibility with older versions of the community.postgresql collection.
   # It should be changed to 'database' when the collection is updated to a version that supports it.
   postgresql_ext:
@@ -30,13 +30,13 @@
   become: yes
   become_user: postgres
 
-- name: "RapidPro: Configure RapidPro settings"
+- name: RapidPro: Configure RapidPro settings
   template:
     src: settings.py.j2
     dest: "{{ rapidpro_dir }}/temba/settings.py"
   become: yes
 
-- name: "RapidPro: Run database migrations"
+- name: RapidPro: Run database migrations
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
     poetry run python manage.py migrate
@@ -48,7 +48,7 @@
 
 
 
-- name: "RapidPro: Collect static files"
+- name: RapidPro: Collect static files
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
     poetry run python manage.py collectstatic --noinput
@@ -59,7 +59,7 @@
 
 
 
-- name: "RapidPro: Get poetry environment path"
+- name: RapidPro: Get poetry environment path
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
     poetry env info --path
@@ -69,7 +69,7 @@
   become: yes
   become_user: "{{ iiab_admin_user }}"
 
-- name: "RapidPro: Copy create_superuser.py script"
+- name: RapidPro: Copy create_superuser.py script
   copy:
     src: create_superuser.py
     dest: "{{ rapidpro_dir }}/create_superuser.py"
@@ -78,7 +78,7 @@
     mode: "0755"
   become: yes
 
-- name: "RapidPro: Create admin user"
+- name: RapidPro: Create admin user
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
     export DJANGO_SUPERUSER_EMAIL="{{ admin_email | default('admin@example.com') }}"
@@ -93,7 +93,7 @@
   changed_when: "'Superuser created successfully!' in create_superuser_output.stdout"
   register: create_superuser_output
 
-- name: "RapidPro: Create gunicorn run directory"
+- name: RapidPro: Create gunicorn run directory
   file:
     path: "{{ rapidpro_dir }}/run"
     state: directory
@@ -102,7 +102,7 @@
     mode: "0770"
   become: yes
 
-- name: "RapidPro: Create Gunicorn systemd service"
+- name: RapidPro: Create Gunicorn systemd service
   template:
     src: rapidpro-gunicorn.service.j2
     dest: /etc/systemd/system/rapidpro-gunicorn.service
@@ -115,13 +115,13 @@
 - name: Enable or disable RapidPro services
   include_tasks: enable-or-disable.yml
 
-- name: "RapidPro: Restart Nginx"
+- name: RapidPro: Restart Nginx
   systemd:
     name: nginx
     state: restarted
   become: yes
 
-- name: "RapidPro: Create spool directories"
+- name: RapidPro: Create spool directories
   file:
     path: "{{ rapidpro_dir }}/spool/{{ item }}"
     state: directory
@@ -132,22 +132,22 @@
     - courier/dynamo
   become: yes
 
-- name: "RapidPro: Check for valkey-server service"
+- name: RapidPro: Check for valkey-server service
   stat:
     path: /lib/systemd/system/valkey-server.service
   register: valkey_service
 
-- name: "RapidPro: Set valkey service name"
+- name: RapidPro: Set valkey service name
   set_fact:
     valkey_service_name: "{{ 'valkey-server.service' if valkey_service.stat.exists else 'redis-server.service' }}"
 
-- name: "RapidPro: Create Mailroom systemd service"
+- name: RapidPro: Create Mailroom systemd service
   template:
     src: rapidpro-mailroom.service.j2
     dest: /etc/systemd/system/rapidpro-mailroom.service
   become: yes
 
-- name: "RapidPro: Create Courier systemd service"
+- name: RapidPro: Create Courier systemd service
   template:
     src: rapidpro-courier.service.j2
     dest: /etc/systemd/system/rapidpro-courier.service
