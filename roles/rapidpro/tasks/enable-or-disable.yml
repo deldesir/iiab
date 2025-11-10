@@ -1,5 +1,5 @@
 ---
-- name: RapidPro: Manage Gunicorn service
+- name: Manage Gunicorn service
   systemd:
     name: rapidpro-gunicorn
     state: "{{ 'started' if rapidpro_enabled else 'stopped' }}"
@@ -7,7 +7,7 @@
     daemon_reload: yes
   become: yes
 
-- name: RapidPro: Manage Go services
+- name: Manage Go services
   systemd:
     name: "{{ item }}"
     state: "{{ 'started' if rapidpro_enabled else 'stopped' }}"
