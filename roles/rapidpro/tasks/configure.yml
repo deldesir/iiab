@@ -112,13 +112,8 @@
 
 
 
-- name: Manage Gunicorn service
-  systemd:
-    name: rapidpro-gunicorn
-    state: "{{ 'started' if rapidpro_enabled else 'stopped' }}"
-    enabled: "{{ rapidpro_enabled }}"
-    daemon_reload: yes
-  become: yes
+- name: Enable or disable RapidPro services
+  include_tasks: enable-or-disable.yml
 
 - name: Restart Nginx
   systemd:
@@ -156,15 +151,4 @@
   template:
     src: rapidpro-courier.service.j2
     dest: /etc/systemd/system/rapidpro-courier.service
-  become: yes
-
-- name: Manage Go services
-  systemd:
-    name: "{{ item }}"
-    state: "{{ 'started' if rapidpro_enabled else 'stopped' }}"
-    enabled: "{{ rapidpro_enabled }}"
-    daemon_reload: yes
-  loop:
-    - rapidpro-mailroom
-    - rapidpro-courier
   become: yes
