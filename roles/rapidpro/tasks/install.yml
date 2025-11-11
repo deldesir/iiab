@@ -119,20 +119,21 @@
   become: yes
 
 - name: Check if patch can be applied
-  command: git apply --check {{ role_path }}/files/0001-Fix-hardcoded-URLs-to-support-subpath-deployment.patch
+  command: git apply --check {{ role_path }}/files/0001-Fix-hardcoded-URLs-and-subpath.patch
   args:
     chdir: "{{ rapidpro_dir }}"
-  register: patch_check
-  changed_when: false
-  failed_when: false
   become: yes
+  become_user: "{{ iiab_admin_user }}"
+  register: patch_check
+  ignore_errors: yes
 
 - name: Apply patch for subpath deployment
-  command: git apply {{ role_path }}/files/0001-Fix-hardcoded-URLs-to-support-subpath-deployment.patch
+  command: git apply {{ role_path }}/files/0001-Fix-hardcoded-URLs-and-subpath.patch
   args:
     chdir: "{{ rapidpro_dir }}"
-  when: patch_check.rc == 0
   become: yes
+  become_user: "{{ iiab_admin_user }}"
+  when: patch_check.rc == 0
 
 
 - name: Install Poetry
