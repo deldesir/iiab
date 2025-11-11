@@ -1,6 +1,7 @@
 [Unit]
 Description=RapidPro Gunicorn App Server
-After=network.target
+After=network.target postgresql.service {{ valkey_service_name }}
+Wants=postgresql.service {{ valkey_service_name }}
 
 [Service]
 User={{ iiab_admin_user }}

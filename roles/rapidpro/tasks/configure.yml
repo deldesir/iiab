@@ -27,6 +27,12 @@
   become: yes
   become_user: postgres
 
+- name: Configure RapidPro common settings
+  template:
+    src: settings_common.py.j2
+    dest: "{{ rapidpro_dir }}/temba/settings_common.py"
+  become: yes
+
 - name: Configure RapidPro settings
   template:
     src: settings.py.j2
