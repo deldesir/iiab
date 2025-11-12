@@ -130,6 +130,7 @@
   template:
     src: rapidpro-gunicorn.service.j2
     dest: /etc/systemd/system/rapidpro-gunicorn.service
+    force: yes
   vars:
     poetry_env_path: "{{ poetry_env.stdout }}"
   become: yes
