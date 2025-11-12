@@ -119,10 +119,11 @@
   when: not rapidpro_dir_stat.stat.exists
 
 - name: "Allow Python version in pyproject.toml"
-  replace:
+  lineinfile:
     path: "{{ rapidpro_dir }}/pyproject.toml"
-    regexp: 'requires-python = ">=3.12,<3.13"'
-    replace: 'requires-python = ">=3.12,<3.{{ (python_version.split(''.'')[1] | int) + 1 }}"'
+    regexp: '^requires-python = ".*"$'
+    line: 'requires-python = ">=3.12,<3.{{ (ansible_python_version.split(''.'')[1] | int) + 1 }}"'
+    backrefs: yes
   become: yes
 
 - name: Set ownership of project directory
