@@ -228,13 +228,29 @@
     dest: /tmp/mailroom.tar.gz
   become: yes
 
+- name: Create temp directory for mailroom
+  tempfile:
+    state: directory
+  register: mailroom_tempdir
+
 - name: Install Mailroom
   unarchive:
     src: /tmp/mailroom.tar.gz
-    dest: "/usr/local/bin/"
+    dest: "{{ mailroom_tempdir.path }}"
     remote_src: no
     extra_opts: [--strip-components=1]
   become: yes
+
+- name: Move mailroom executable
+  command: mv {{ mailroom_tempdir.path }}/mailroom /usr/local/bin/mailroom
+  become: yes
+  args:
+    creates: /usr/local/bin/mailroom
+
+- name: Clean up mailroom temp directory
+  file:
+    path: "{{ mailroom_tempdir.path }}"
+    state: absent
 
 - name: Get latest Courier version
   uri:
@@ -252,10 +268,26 @@
     dest: /tmp/courier.tar.gz
   become: yes
 
+- name: Create temp directory for courier
+  tempfile:
+    state: directory
+  register: courier_tempdir
+
 - name: Install Courier
   unarchive:
     src: /tmp/courier.tar.gz
-    dest: "/usr/local/bin/"
+    dest: "{{ courier_tempdir.path }}"
     remote_src: no
     extra_opts: [--strip-components=1]
   become: yes
+
+- name: Move courier executable
+  command: mv {{ courier_tempdir.path }}/courier /usr/local/bin/courier
+  become: yes
+  args:
+    creates: /usr/local/bin/courier
+
+- name: Clean up courier temp directory
+  file:
+    path: "{{ courier_tempdir.path }}"
+    state: absent
