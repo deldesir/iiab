@@ -13,8 +13,7 @@ Subject: [PATCH] WIP: Fix hardcoded URLs to support subpath deployment
  templates/orgs/org_join.html            |  2 +-
  templates/public/public_frame.html      |  2 +-
  templates/public/public_index.html      |  2 +-
- temba/urls.py                           | 21 +++++++++++++++++----
- 10 files changed, 49 insertions(+), 12 deletions(-)
+ 9 files changed, 28 insertions(+), 12 deletions(-)
  create mode 100644 temba/utils/templatetags/url_tags.py
 
 diff --git a/static/brands/rapidpro/less/style.less b/static/brands/rapidpro/less/style.less
@@ -182,37 +181,5 @@ index a5df1551b..7760338fd 100644
    </div>
    <div class="mb-2">
      If you still have questions, please search the history on the <a href="https://groups.google.com/g/rapidpro-dev">developer list</a> to see if your question has been asked before.
-diff --git a/temba/urls.py b/temba/urls.py
-index e5a0f20ce..082f2b72a 100644
---- a/temba/urls.py
-+++ b/temba/urls.py
-@@ -7,12 +7,12 @@ from django.views.i18n import JavaScriptCatalog
- # javascript translation packages
- js_info_dict = {"packages": ()}  # this is empty due to the fact that all translation are in one folder
- 
--urlpatterns = []
-+_urlpatterns = []
- # import any additional urls
- for app in settings.APP_URLS:  # pragma: needs cover
--    urlpatterns.append(re_path(r"^", include(app)))
-+    _urlpatterns.append(re_path(r"^", include(app)))
- 
--urlpatterns += [
-+_urlpatterns += [
-     re_path(r"^", include("temba.ai.urls")),
-     re_path(r"^", include("temba.airtime.urls")),
-     re_path(r"^", include("temba.api.urls")),
-@@ -41,5 +41,10 @@ urlpatterns += [
-     re_path("accounts/", include("allauth.urls")),
- ]
- 
-+if getattr(settings, "RAPIDPRO_URL", None) and settings.RAPIDPRO_URL != "/":
-+    urlpatterns = [re_path(r"^{}/".format(settings.RAPIDPRO_URL.strip('/')), include(_urlpatterns))]
-+else:
-+    urlpatterns = _urlpatterns
-+
- if settings.DEBUG:
-     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 -- 
 2.43.0
-
