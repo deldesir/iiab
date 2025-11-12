@@ -1,24 +1,25 @@
 ---
 # This file will contain all the installation tasks for RapidPro.
 
-- name: Uninstall RapidPro if reinstalling
+- name: Drop RapidPro database if requested
   block:
-    - name: Drop RapidPro PostgreSQL database if requested
+    - name: Drop RapidPro PostgreSQL database
       postgresql_db:
         name: "{{ rapidpro_db_name }}"
         state: absent
       become: yes
       become_user: postgres
-      when: reinstall is defined and reinstall and rapidpro_drop_db_on_reinstall
 
-    - name: Drop RapidPro PostgreSQL user if requested
+    - name: Drop RapidPro PostgreSQL user
       postgresql_user:
         name: "{{ rapidpro_db_user }}"
         state: absent
       become: yes
       become_user: postgres
-      when: reinstall is defined and reinstall and rapidpro_drop_db_on_reinstall
+  when: rapidpro_force_drop_db | default(false)
 
+- name: Uninstall RapidPro if reinstalling
+  block:
     - name: Get poetry environment path
       shell: |
         export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
@@ -198,9 +199,19 @@
   set_fact:
     rapidpro_go_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
 
+- name: Get latest Mailroom version
+  uri:
+    url: "https://api.github.com/repos/nyaruka/mailroom/releases/latest"
+    body_format: json
+  register: mailroom_latest_release
+
+- name: Set Mailroom version fact
+  set_fact:
+    mailroom_version: "{{ mailroom_latest_release.json.tag_name | regex_replace('^v', '') }}"
+
 - name: Download Mailroom
   get_url:
-    url: "https://github.com/nyaruka/mailroom/releases/download/v10.2.0/mailroom_10.2.0_linux_{{ rapidpro_go_arch }}.tar.gz"
+    url: "https://github.com/nyaruka/mailroom/releases/download/v{{ mailroom_version }}/mailroom_{{ mailroom_version }}_linux_{{ rapidpro_go_arch }}.tar.gz"
     dest: /tmp/mailroom.tar.gz
   become: yes
 
@@ -212,9 +223,19 @@
     extra_opts: [--strip-components=1]
   become: yes
 
+- name: Get latest Courier version
+  uri:
+    url: "https://api.github.com/repos/nyaruka/courier/releases/latest"
+    body_format: json
+  register: courier_latest_release
+
+- name: Set Courier version fact
+  set_fact:
+    courier_version: "{{ courier_latest_release.json.tag_name | regex_replace('^v', '') }}"
+
 - name: Download Courier
   get_url:
-    url: "https://github.com/nyaruka/courier/releases/download/v10.2.0/courier_10.2.0_linux_{{ rapidpro_go_arch }}.tar.gz"
+    url: "https://github.com/nyaruka/courier/releases/download/v{{ courier_version }}/courier_{{ courier_version }}_linux_{{ rapidpro_go_arch }}.tar.gz"
     dest: /tmp/courier.tar.gz
   become: yes
 

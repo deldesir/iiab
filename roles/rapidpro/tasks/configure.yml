@@ -124,26 +124,6 @@
 
 
 
-- name: Enable or disable RapidPro services
-  include_tasks: enable-or-disable.yml
-
-- name: Restart Nginx
-  systemd:
-    name: nginx
-    state: restarted
-  become: yes
-
-- name: Create spool directories
-  file:
-    path: "{{ rapidpro_dir }}/spool/{{ item }}"
-    state: directory
-    owner: "{{ iiab_admin_user }}"
-    group: "{{ iiab_admin_user }}"
-  loop:
-    - mailroom/dynamo
-    - courier/dynamo
-  become: yes
-
 - name: Create Mailroom systemd service
   template:
     src: rapidpro-mailroom.service.j2
@@ -154,4 +134,18 @@
   template:
     src: rapidpro-courier.service.j2
     dest: /etc/systemd/system/rapidpro-courier.service
+  become: yes
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+  become: yes
+
+- name: Enable or disable RapidPro services
+  include_tasks: enable-or-disable.yml
+
+- name: Restart Nginx
+  systemd:
+    name: nginx
+    state: restarted
   become: yes
