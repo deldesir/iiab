@@ -135,6 +135,15 @@
     recurse: yes
   become: yes
 
+- name: Clean RapidPro repository
+  shell: |
+    git reset --hard
+    git clean -fdx
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+  become_user: "{{ iiab_admin_user }}"
+
 - name: Check if patch can be applied
   command: git apply --check {{ role_path }}/files/0001-Fix-hardcoded-URLs-and-subpath.patch
   args:
@@ -151,6 +160,8 @@
   become: yes
   become_user: "{{ iiab_admin_user }}"
   when: patch_check.rc == 0
+
+
 
 
 - name: Install Poetry
