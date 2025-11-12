@@ -4,13 +4,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 # ----------------------------------------------------------------------------------
-# RapidPro settings file for IIAB Appliance mode.
+# RapidPro settings file for IIAB
 # ----------------------------------------------------------------------------------
 
 from .settings_common import *  # noqa
 
-# Appliance mode is not for debugging
-DEBUG = False
+# Disable debug mode for production
+DEBUG = True
 
 
 
@@ -64,13 +64,11 @@ STORAGES = {
 FORCE_SCRIPT_NAME = "/rp/"
 STATIC_URL = "/rp/static/"
 MEDIA_URL = "/rp/media/"
+LOGIN_URL = "/rp/accounts/login/"
+LOGIN_REDIRECT_URL = "/rp/org/choose/"
+ACCOUNT_LOGOUT_REDIRECT_URL = "/rp/"
 
 # ----------------------------------------------------------------------------------
 # Email
 # ----------------------------------------------------------------------------------
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-
-WSGI_APPLICATION = 'temba.wsgi.application'
-
-SCRIPT_NAME_DEBUG = os.environ.get('SCRIPT_NAME')
-logger.info(f"DEBUG: SCRIPT_NAME as seen by Django: {SCRIPT_NAME_DEBUG}")
