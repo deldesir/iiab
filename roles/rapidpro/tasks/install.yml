@@ -118,41 +118,6 @@
   become: yes
   when: not rapidpro_dir_stat.stat.exists
 
-- name: "Allow Python version in pyproject.toml"
-  replace:
-    path: "{{ rapidpro_dir }}/pyproject.toml"
-    regexp: 'requires-python = ">=3.12,<3.13"'
-    replace: 'requires-python = ">=3.12,<3.{{ (ansible_python_version.split(''.'')[1] | int) + 1 }}"'
-  become: yes
-
-- name: Set ownership of project directory
-  file:
-    path: "{{ rapidpro_dir }}"
-    state: directory
-    owner: "{{ iiab_admin_user }}"
-    group: "www-data"
-    mode: "0770"
-    recurse: yes
-  become: yes
-
-- name: Clean RapidPro repository
-  shell: |
-    git reset --hard
-    git clean -fdx
-  args:
-    chdir: "{{ rapidpro_dir }}"
-  become: yes
-  become_user: "{{ iiab_admin_user }}"
-
-- name: Check if patch can be applied
-  command: git apply --check {{ role_path }}/files/0001-Fix-hardcoded-URLs-and-subpath.patch
-  args:
-    chdir: "{{ rapidpro_dir }}"
-  become: yes
-  become_user: "{{ iiab_admin_user }}"
-  register: patch_check
-  ignore_errors: yes
-
 - name: Apply patch for subpath deployment
   command: git apply {{ role_path }}/files/0001-Fix-hardcoded-URLs-and-subpath.patch
   args:
@@ -160,6 +125,13 @@
   become: yes
   become_user: "{{ iiab_admin_user }}"
   when: patch_check.rc == 0
+
+- name: "Allow Python version in pyproject.toml"
+  replace:
+    path: "{{ rapidpro_dir }}/pyproject.toml"
+    regexp: 'requires-python = ">=3.12,<3.13"'
+    replace: 'requires-python = ">=3.12,<3.{{ (ansible_python_version.split(''.'')[1] | int) + 1 }}"'
+  become: yes
 
 
 
