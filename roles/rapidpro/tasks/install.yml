@@ -234,11 +234,8 @@
   register: mailroom_tempdir
 
 - name: Install Mailroom
-  unarchive:
-    src: /tmp/mailroom.tar.gz
-    dest: "{{ mailroom_tempdir.path }}"
-    remote_src: no
-    extra_opts: [--strip-components=1]
+  shell: |
+    tar -xzf /tmp/mailroom.tar.gz -C {{ mailroom_tempdir.path }} --strip-components=1
   become: yes
 
 - name: Move mailroom executable
@@ -274,11 +271,8 @@
   register: courier_tempdir
 
 - name: Install Courier
-  unarchive:
-    src: /tmp/courier.tar.gz
-    dest: "{{ courier_tempdir.path }}"
-    remote_src: no
-    extra_opts: [--strip-components=1]
+  shell: |
+    tar -xzf /tmp/courier.tar.gz -C {{ courier_tempdir.path }} --strip-components=1
   become: yes
 
 - name: Move courier executable
