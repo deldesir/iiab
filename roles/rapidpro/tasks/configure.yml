@@ -140,12 +140,14 @@
   template:
     src: rapidpro-mailroom.service.j2
     dest: /etc/systemd/system/rapidpro-mailroom.service
+    force: yes
   become: yes
 
 - name: Create Courier systemd service
   template:
     src: rapidpro-courier.service.j2
     dest: /etc/systemd/system/rapidpro-courier.service
+    force: yes
   become: yes
 
 - name: Reload systemd daemon
