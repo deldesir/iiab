@@ -17,3 +17,5 @@ admin_password: "changeme"
 
 
 rapidpro_url: /rp
+rapidpro_drop_db_on_reinstall: false
+

@@ -3,6 +3,22 @@
 
 - name: Uninstall RapidPro if reinstalling
   block:
+    - name: Drop RapidPro PostgreSQL database if requested
+      postgresql_db:
+        name: "{{ rapidpro_db_name }}"
+        state: absent
+      become: yes
+      become_user: postgres
+      when: reinstall is defined and reinstall and rapidpro_drop_db_on_reinstall
+
+    - name: Drop RapidPro PostgreSQL user if requested
+      postgresql_user:
+        name: "{{ rapidpro_db_user }}"
+        state: absent
+      become: yes
+      become_user: postgres
+      when: reinstall is defined and reinstall and rapidpro_drop_db_on_reinstall
+
     - name: Get poetry environment path
       shell: |
         export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
