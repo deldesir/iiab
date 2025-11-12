@@ -175,6 +175,7 @@
 - name: Install Python dependencies with Poetry
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    poetry env remove --all
     poetry env use $(which python3)
     poetry lock
     poetry install
