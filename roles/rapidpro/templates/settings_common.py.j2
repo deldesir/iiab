@@ -235,8 +235,6 @@ FORM_RENDERER = "django.forms.renderers.TemplatesSetting"
 # ===============================================================================
 
 MIDDLEWARE = (
-    # Custom middleware to set REMOTE_ADDR from X-Forwarded-For
-    "temba.middleware.x_forwarded_for_middleware.XForwardedForMiddleware",
     # Security headers (HSTS, SSL redirect, etc.)
     "django.middleware.security.SecurityMiddleware",
     # Manages sessions across requests
