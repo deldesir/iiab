@@ -64,6 +64,7 @@
       - python3-dev
       - libgdal-dev
       - ffmpeg
+      - postgis
     state: present
   become: yes
 
