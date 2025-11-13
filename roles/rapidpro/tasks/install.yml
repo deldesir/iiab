@@ -113,17 +113,13 @@
   include_role:
     name: nodejs
 
-- name: Check if rapidpro directory exists
-  stat:
-    path: "{{ rapidpro_dir }}"
-  register: rapidpro_dir_stat
-
-- name: Clone RapidPro repository
+- name: Clone/update RapidPro repository
   git:
     repo: 'https://github.com/nyaruka/rapidpro.git'
     dest: "{{ rapidpro_dir }}"
+    version: "{{ rapidpro_version | default('v6.5.2') }}"
   become: yes
-  when: not rapidpro_dir_stat.stat.exists
+  register: rapidpro_git_clone
 
 - name: Set ownership of project directory
   file:
@@ -135,23 +131,15 @@
     recurse: yes
   become: yes
 
-- name: Clean RapidPro repository
-  shell: |
-    git reset --hard
-    git clean -fdx
+- name: Check if patch has already been applied
+  command: git apply --check --reverse {{ role_path }}/files/0001-Fix-hardcoded-URLs-and-subpath.patch
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-
-- name: Check if patch can be applied
-  command: git apply --check {{ role_path }}/files/0001-Fix-hardcoded-URLs-and-subpath.patch
-  args:
-    chdir: "{{ rapidpro_dir }}"
-  become: yes
-  become_user: "{{ iiab_admin_user }}"
-  register: patch_check
-  ignore_errors: yes
+  register: patch_reverse_check
+  changed_when: false
+  failed_when: false
 
 - name: Apply patch for subpath deployment
   command: git apply {{ role_path }}/files/0001-Fix-hardcoded-URLs-and-subpath.patch
@@ -159,7 +147,8 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-  when: patch_check.rc == 0
+  when: patch_reverse_check.rc != 0
+  register: rapidpro_patch_applied
 
 - name: "Allow Python version in pyproject.toml"
   replace:
@@ -201,6 +190,7 @@
   yarn:
     path: "{{ rapidpro_dir }}"
   become: yes
+  register: rapidpro_yarn_install
 
 - name: Install global JS tools (less)
   yarn:
@@ -214,6 +204,7 @@
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
+  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_yarn_install.changed
 
 - name: "Set mailroom and courier architecture"
   set_fact:

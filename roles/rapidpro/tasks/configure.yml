@@ -31,14 +31,15 @@
   template:
     src: settings_common.py.j2
     dest: "{{ rapidpro_dir }}/temba/settings_common.py"
-    force: yes
   become: yes
+  register: rapidpro_settings_common
 
 - name: Configure RapidPro settings
   template:
     src: settings.py.j2
     dest: "{{ rapidpro_dir }}/temba/settings.py"
   become: yes
+  register: rapidpro_settings
 
 - name: Run database migrations
   shell: |
@@ -48,9 +49,7 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-
-
-
+  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Collect static files
   shell: |
@@ -60,6 +59,7 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
+  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 
 
@@ -73,14 +73,31 @@
   become: yes
   become_user: "{{ iiab_admin_user }}"
 
-- name: Copy create_superuser.py script
+- name: Copy superuser scripts
   copy:
-    src: create_superuser.py
-    dest: "{{ rapidpro_dir }}/create_superuser.py"
+    src: "{{ item }}"
+    dest: "{{ rapidpro_dir }}/{{ item }}"
     owner: "{{ iiab_admin_user }}"
     group: "{{ iiab_admin_user }}"
     mode: "0755"
   become: yes
+  loop:
+    - create_superuser.py
+    - check_superuser.py
+
+- name: Check if admin user exists
+  shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    export DJANGO_SUPERUSER_EMAIL="{{ admin_email | default('admin@example.com') }}"
+    poetry run python manage.py shell < check_superuser.py
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+  become_user: "{{ iiab_admin_user }}"
+  environment:
+    DJANGO_SETTINGS_MODULE: temba.settings
+  register: superuser_check
+  changed_when: false
 
 - name: Create admin user
   shell: |
@@ -94,6 +111,7 @@
   become_user: "{{ iiab_admin_user }}"
   environment:
     DJANGO_SETTINGS_MODULE: temba.settings
+  when: "'EXISTS' not in superuser_check.stdout"
   changed_when: "'Superuser created successfully!' in create_superuser_output.stdout"
   register: create_superuser_output
 
@@ -119,7 +137,6 @@
   template:
     src: rapidpro-gunicorn.service.j2
     dest: /etc/systemd/system/rapidpro-gunicorn.service
-    force: yes
   vars:
     poetry_env_path: "{{ poetry_env.stdout }}"
   become: yes
@@ -130,14 +147,12 @@
   template:
     src: rapidpro-mailroom.service.j2
     dest: /etc/systemd/system/rapidpro-mailroom.service
-    force: yes
   become: yes
 
 - name: Create Courier systemd service
   template:
     src: rapidpro-courier.service.j2
     dest: /etc/systemd/system/rapidpro-courier.service
-    force: yes
   become: yes
 
 - name: Reload systemd daemon
@@ -147,9 +162,3 @@
 
 - name: Enable or disable RapidPro services
   include_tasks: enable-or-disable.yml
-
-- name: Restart Nginx
-  systemd:
-    name: nginx
-    state: restarted
-  become: yes
