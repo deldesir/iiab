@@ -1,0 +1,147 @@
+---
+# This file contains all the tasks to apply fixes for subpath deployment,
+# replacing the previous fragile patch file.
+
+- name: Create url_tags.py templatetag
+  copy:
+    dest: "{{ rapidpro_dir }}/temba/utils/templatetags/url_tags.py"
+    content: |
+      from django import template
+      from django.urls import reverse
+
+      register = template.Library()
+
+      @register.simple_tag
+      def get_urls():
+          return {
+              "staff_org_list": reverse("staff.org_list"),
+              "orgs_org_choose": reverse("orgs.org_choose"),
+              "staff_org_service": reverse("staff.org_service"),
+              "orgs_org_create": reverse("orgs.org_create"),
+          }
+  become: yes
+
+- name: Fix subpath URL in style.less
+  replace:
+    path: "{{ rapidpro_dir }}/static/brands/rapidpro/less/style.less"
+    regexp: "background: url('/sitestatic/brands/rapidpro/splash.jpg')"
+    replace: "background: url('../splash.jpg')"
+  become: yes
+
+- name: Fix subpath URLs in frame.js
+  block:
+    - name: Fix OMIT_ORG_URLS in frame.js
+      replace:
+        path: "{{ rapidpro_dir }}/static/js/frame.js"
+        regexp: "const OMIT_ORG_URLS = ['/staff/', '/org/choose/']";
+        replace: "const OMIT_ORG_URLS = [window.URLS.staff_org_list, window.URLS.orgs_org_choose];"
+    - name: Fix handleWorkspaceChanged in frame.js
+      replace:
+        path: "{{ rapidpro_dir }}/static/js/frame.js"
+        regexp: "posterize('/org/choose/?organization=${orgId}')";
+        replace: "posterize(`${window.URLS.orgs_org_choose}?organization=${orgId}`);"
+    - name: Fix service URL in frame.js
+      replace:
+        path: "{{ rapidpro_dir }}/static/js/frame.js"
+        regexp: "if (url.indexOf('/org/service') > -1)"
+        replace: "if (url.indexOf(window.URLS.staff_org_service) > -1)"
+    - name: Fix new workspace URL in frame.js
+      replace:
+        path: "{{ rapidpro_dir }}/static/js/frame.js"
+        regexp: "modal.setAttribute('endpoint', '/org/create');"
+        replace: "modal.setAttribute('endpoint', window.URLS.orgs_org_create);"
+  become: yes
+
+- name: Fix subpath URLs in builtin.py
+  block:
+    - name: Fix unassigned ticket URL in builtin.py
+      replace:
+        path: "{{ rapidpro_dir }}/temba/notifications/types/builtin.py"
+        regexp: "return \"/ticket/unassigned/\""
+        replace: "return reverse(\"tickets.ticket_folder\", kwargs={\"folder\": \"unassigned\", \"status\": \"open\"})"
+    - name: Fix mine ticket URL in builtin.py
+      replace:
+        path: "{{ rapidpro_dir }}/temba/notifications/types/builtin.py"
+        regexp: "return \"/ticket/mine/\""
+        replace: "return reverse(\"tickets.ticket_folder\", kwargs={\"folder\": \"mine\", \"status\": \"open\"})"
+  become: yes
+
+- name: Fix subpath URL in entrance.html
+  replace:
+    path: "{{ rapidpro_dir }}/templates/allauth/layouts/entrance.html"
+    regexp: 'form\[action="/accounts/login/"\].*'
+    replace: 'form[action="{% url \'\'account_login\' %}"]'
+  become: yes
+
+- name: Fix subpath URL in org_join.html
+  replace:
+    path: "{{ rapidpro_dir }}/templates/orgs/org_join.html"
+    regexp: 'action="/accounts/login/\?next=\{% url \'\'orgs.org_join_accept\' %} invitation.secret}"'
+    replace: 'action="{% url \'\'account_login\' %}?next={% url \'\'orgs.org_join_accept\' %} invitation.secret}"'
+  become: yes
+
+- name: Fix subpath URL in public_frame.html
+  replace:
+    path: "{{ rapidpro_dir }}/templates/public/public_frame.html"
+    regexp: '<a href="/">'
+    replace: '<a href="{% url \'\'public.public_index\' %}">'
+  become: yes
+
+- name: Fix subpath URL in public_index.html
+  replace:
+    path: "{{ rapidpro_dir }}/templates/public/public_index.html"
+    regexp: '<a href="/accounts/login">here</a>'
+    replace: '<a href="{% url \'\'account_login\' %}">here</a>'
+  become: yes
+
+- name: Fix subpath URLs in frame.html
+  block:
+    - name: Add url_tags to frame.html
+      replace:
+        path: "{{ rapidpro_dir }}/templates/frame.html"
+        regexp: "{% load humanize i18n smartmin sms compress static %}"
+        replace: "{% load humanize i18n smartmin sms compress static url_tags %}"
+    - name: Add window.URLS script to frame.html
+      lineinfile:
+        path: "{{ rapidpro_dir }}/templates/frame.html"
+        line: |
+          <script>
+            window.URLS = {% get_urls %};
+          </script>
+        insertafter: "{% endcompress %}"
+    - name: Fix temba-store URLs in frame.html
+      replace:
+        path: "{{ rapidpro_dir }}/templates/frame.html"
+        regexp: 'completion="/mr/docs/{{ LANGUAGE_CODE }}/editor.json"'
+        replace: 'completion="{{ STATIC_URL }}mr/docs/{{ LANGUAGE_CODE }}/editor.json"'
+    - name: Fix temba-store URLs in frame.html 2
+      replace:
+        path: "{{ rapidpro_dir }}/templates/frame.html"
+        regexp: 'languages="/org/languages/"'
+        replace: 'languages="{% url \'\'orgs.org_languages\' %}"'
+    - name: Fix temba-store URLs in frame.html 3
+      replace:
+        path: "{{ rapidpro_dir }}/templates/frame.html"
+        regexp: 'fields="/api/v2/fields.json"'
+        replace: 'fields="{% url \'\'api.v2.fields_list\' %}"'
+    - name: Fix temba-store URLs in frame.html 4
+      replace:
+        path: "{{ rapidpro_dir }}/templates/frame.html"
+        regexp: 'groups="/api/v2/groups.json"'
+        replace: 'groups="{% url \'\'api.v2.groups_list\' %}"'
+    - name: Fix temba-store URLs in frame.html 5
+      replace:
+        path: "{{ rapidpro_dir }}/templates/frame.html"
+        regexp: 'workspace="/api/v2/workspace.json"'
+        replace: 'workspace="{% url \'\'api.v2.workspace_retrieve\' %}"'
+    - name: Fix temba-store URLs in frame.html 6
+      replace:
+        path: "{{ rapidpro_dir }}/templates/frame.html"
+        regexp: 'shortcuts="/api/internal/shortcuts.json"'
+        replace: 'shortcuts="{% url \'\'api.internal.shortcuts_list\' %}"'
+    - name: Fix temba-store URLs in frame.html 7
+      replace:
+        path: "{{ rapidpro_dir }}/templates/frame.html"
+        regexp: 'users="/api/v2/users.json">'
+        replace: 'users="{% url \'\'api.v2.users_list\' %}">'
+  become: yes

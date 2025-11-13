@@ -136,39 +136,17 @@
     recurse: yes
   become: yes
 
-- name: Clean repository before patching
-  command: git clean -fdx
-  args:
-    chdir: "{{ rapidpro_dir }}"
-  become: yes
-  become_user: "{{ iiab_admin_user }}"
-  changed_when: false
-
-- name: Check if patch has already been applied
-  command: git apply --check --reverse {{ role_path }}/files/0001-Fix-hardcoded-URLs-and-subpath.patch
-  args:
-    chdir: "{{ rapidpro_dir }}"
-  become: yes
-  become_user: "{{ iiab_admin_user }}"
-  register: patch_reverse_check
-  changed_when: false
-  failed_when: false
-
-- name: Apply patch for subpath deployment
-  command: git apply {{ role_path }}/files/0001-Fix-hardcoded-URLs-and-subpath.patch
-  args:
-    chdir: "{{ rapidpro_dir }}"
-  become: yes
-  become_user: "{{ iiab_admin_user }}"
-  when: patch_reverse_check.rc != 0
-  register: rapidpro_patch_applied
-
 - name: "Allow Python version in pyproject.toml"
   replace:
     path: "{{ rapidpro_dir }}/pyproject.toml"
     regexp: 'requires-python = ">=3.12,<3.13"'
     replace: 'requires-python = ">=3.12,<3.{{ (ansible_python_version.split(''.'')[1] | int) + 1 }}"'
   become: yes
+
+- name: Apply subpath deployment fixes
+  include_tasks: subpath_fixes.yml
+  register: subpath_fixes_result
+
 
 
 
@@ -217,7 +195,7 @@
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
-  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_yarn_install.changed
+  when: rapidpro_git_clone.changed or subpath_fixes_result.changed or rapidpro_yarn_install.changed
 
 - name: "Set mailroom and courier architecture"
   set_fact:
