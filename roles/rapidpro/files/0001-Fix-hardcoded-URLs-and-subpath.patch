@@ -9,11 +9,11 @@ Subject: [PATCH] WIP: Fix hardcoded URLs to support subpath deployment
  temba/notifications/types/builtin.py    |  4 ++--
  temba/utils/templatetags/url_tags.py    | 13 +++++++++++++
  templates/allauth/layouts/entrance.html |  2 +-
- templates/frame.html                    |  5 ++++-
+ templates/frame.html                    | 13 +++++++++++--
  templates/orgs/org_join.html            |  2 +-
  templates/public/public_frame.html      |  2 +-
  templates/public/public_index.html      |  2 +-
- 9 files changed, 28 insertions(+), 12 deletions(-)
+ 9 files changed, 36 insertions(+), 12 deletions(-)
  create mode 100644 temba/utils/templatetags/url_tags.py
 
 diff --git a/static/brands/rapidpro/less/style.less b/static/brands/rapidpro/less/style.less
@@ -122,7 +122,7 @@ index faf642dc0..0286c030b 100644
        display: block;
        width: 100%;
 diff --git a/templates/frame.html b/templates/frame.html
-index c6e4ea2c8..f18494f03 100644
+index c6e4ea2c8..a9e3a3a1e 100644
 --- a/templates/frame.html
 +++ b/templates/frame.html
 @@ -1,5 +1,5 @@
@@ -142,6 +142,27 @@ index c6e4ea2c8..f18494f03 100644
      <script type="text/javascript">
        function isMobile() {
          return window.innerWidth < 600;
+@@ -100,13 +103,19 @@
+         </div>
+ 
+         <temba-store {% if org_perms.globals.global_list %}globals="/api/v2/globals.json"{% endif %}
+-                     completion="/mr/docs/{{ LANGUAGE_CODE }}/editor.json"
+-                     languages="/org/languages/"
+-                     fields="/api/v2/fields.json"
+-                     groups="/api/v2/groups.json"
+-                     workspace="/api/v2/workspace.json"
+-                     shortcuts="/api/internal/shortcuts.json"
+-                     users="/api/v2/users.json">
++                     completion="{{ STATIC_URL }}mr/docs/{{ LANGUAGE_CODE }}/editor.json"
++                     languages="{% url 'orgs.org_languages' %}"
++                     fields="{% url 'api.v2.fields_list' %}"
++                     groups="{% url 'api.v2.groups_list' %}"
++                     workspace="{% url 'api.v2.workspace_retrieve' %}"
++                     shortcuts="{% url 'api.internal.shortcuts_list' %}"
++                     users="{% url 'api.v2.users_list' %}">
+         </temba-store>
+ 
+         <div class="content-root">
 diff --git a/templates/orgs/org_join.html b/templates/orgs/org_join.html
 index 3b1882e50..28e435da1 100644
 --- a/templates/orgs/org_join.html
@@ -165,7 +186,7 @@ index aaa748c72..f86951bcb 100644
          <div class="mb-6 w-64 mt-12">
 -          <a href="/">
 +          <a href="{% url 'public.public_index' %}">
-             <img src="{{ STATIC_URL }}images/logo-dark.svg">
+              <img src="{{ STATIC_URL }}images/logo-dark.svg">
            </a>
          </div>
 diff --git a/templates/public/public_index.html b/templates/public/public_index.html
