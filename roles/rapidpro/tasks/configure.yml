@@ -31,6 +31,7 @@
   template:
     src: settings_common.py.j2
     dest: "{{ rapidpro_dir }}/temba/settings_common.py"
+    force: yes
   become: yes
 
 - name: Configure RapidPro settings
