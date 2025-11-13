@@ -3,6 +3,12 @@
 
 - name: Drop RapidPro database if requested
   block:
+    - name: Terminate all connections to the 'temba' database
+      postgresql_query:
+        query: "SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '{{ rapidpro_db_name }}' AND pid <> pg_backend_pid();"
+      become: yes
+      become_user: postgres
+
     - name: Drop RapidPro PostgreSQL database
       postgresql_db:
         name: "{{ rapidpro_db_name }}"
