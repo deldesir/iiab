@@ -235,7 +235,7 @@
 
 - name: Install Mailroom
   shell: |
-    tar -xzf /tmp/mailroom.tar.gz -C {{ mailroom_tempdir.path }} --strip-components=1
+    tar -xzf /tmp/mailroom.tar.gz -C {{ mailroom_tempdir.path }}
   become: yes
 
 - name: Move mailroom executable
@@ -272,7 +272,7 @@
 
 - name: Install Courier
   shell: |
-    tar -xzf /tmp/courier.tar.gz -C {{ courier_tempdir.path }} --strip-components=1
+    tar -xzf /tmp/courier.tar.gz -C {{ courier_tempdir.path }}
   become: yes
 
 - name: Move courier executable
