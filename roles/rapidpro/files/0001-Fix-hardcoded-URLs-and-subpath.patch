@@ -1,20 +1,3 @@
-From: Blondel MONDESIR <blondel.md@gmail.com>
-Date: Thu, 13 Nov 2025 12:15:17 +0100
-Subject: [PATCH] Fix hardcoded URLs to support subpath deployment
-
----
- static/brands/rapidpro/less/style.less  |  2 +-
- static/js/frame.js                      |  8 ++++----
- temba/notifications/types/builtin.py    |  4 ++--
- temba/utils/templatetags/url_tags.py    | 15 +++++++++++++++
- templates/allauth/layouts/entrance.html |  2 +-
- templates/frame.html                    | 21 +++++++++++++++------
- templates/orgs/org_join.html            |  2 +-
- templates/public/public_frame.html      |  2 +-
- templates/public/public_index.html      |  2 +-
- 9 files changed, 41 insertions(+), 17 deletions(-)
- create mode 100644 temba/utils/templatetags/url_tags.py
-
 diff --git a/static/brands/rapidpro/less/style.less b/static/brands/rapidpro/less/style.less
 index 62b5e7b3f..428839903 100644
 --- a/static/brands/rapidpro/less/style.less
@@ -33,25 +16,25 @@ index 545e9a421..56b1fad47 100644
 +++ b/static/js/frame.js
 @@ -1,6 +1,6 @@
  var pendingRequests = [];
- 
+
 -const OMIT_ORG_URLS = ['/staff/', '/org/choose/'];
 +const OMIT_ORG_URLS = [window.URLS.staff_org_list, window.URLS.orgs_org_choose];
- 
+
  function onSpload(fn) {
    var container = document.querySelector('.spa-container');
 @@ -473,7 +473,7 @@ function showModax(header, endpoint, modaxOptions) {
  }
- 
+
  function handleWorkspaceChanged(orgId) {
 -  posterize(`/org/choose/?organization=${orgId}`);
 +  posterize(`${window.URLS.orgs_org_choose}?organization=${orgId}`);
  }
- 
+
  document.addEventListener('temba-redirected', function (event) {
 @@ -525,7 +525,7 @@ document.addEventListener('DOMContentLoaded', function () {
          evt.stopPropagation();
          evt.preventDefault();
- 
+
 -        if (url.indexOf('/org/service') > -1) {
 +        if (url.indexOf(window.URLS.staff_org_service) > -1) {
            formEle.submit();
@@ -64,7 +47,7 @@ index 545e9a421..56b1fad47 100644
 -  modal.setAttribute('endpoint', '/org/create');
 +  modal.setAttribute('endpoint', window.URLS.orgs_org_create);
    modal.open = true;
- 
+
    evt.preventDefault();
 diff --git a/temba/notifications/types/builtin.py b/temba/notifications/types/builtin.py
 index 680b0da66..3a28ccf4b 100644
@@ -72,28 +55,28 @@ index 680b0da66..3a28ccf4b 100644
 +++ b/temba/notifications/types/builtin.py
 @@ -105,7 +105,7 @@ class TicketsOpenedNotificationType(NotificationType):
      slug = "tickets:opened"
- 
+
      def get_target_url(self, notification) -> str:
 -        return "/ticket/unassigned/"
 +        return reverse("tickets.ticket_folder", kwargs={"folder": "unassigned", "status": "open"})
- 
- 
+
+
  class TicketActivityNotificationType(NotificationType):
 @@ -116,7 +116,7 @@ class TicketActivityNotificationType(NotificationType):
      slug = "tickets:activity"
- 
+
      def get_target_url(self, notification) -> str:
 -        return "/ticket/mine/"
 +        return reverse("tickets.ticket_folder", kwargs={"folder": "mine", "status": "open"})
- 
- 
+
+
  class UserEmailNotificationType(NotificationType):
 diff --git a/temba/utils/templatetags/url_tags.py b/temba/utils/templatetags/url_tags.py
 new file mode 100644
-index 000000000..c5ea8b3f5
+index 000000000..d791a26ce
 --- /dev/null
 +++ b/temba/utils/templatetags/url_tags.py
-@@ -0,0 +1,15 @@
+@@ -0,0 +1,16 @@
 +import json
 +from django import template
 +from django.urls import reverse
@@ -117,21 +100,21 @@ index faf642dc0..0286c030b 100644
 @@ -33,7 +33,7 @@
        margin-bottom: 0;
      }
- 
+
 -    form[action="/accounts/login/"] button[type="submit"],
 +    form[action="{% url 'account_login' %}"] button[type="submit"],
      form[action="/accounts/2fa/authenticate/"] button[type="submit"] {
        display: block;
        width: 100%;
 diff --git a/templates/frame.html b/templates/frame.html
-index c6e4ea2c8..4a5c8e2e5 100644
+index c6e4ea2c8..6531a592d 100644
 --- a/templates/frame.html
 +++ b/templates/frame.html
 @@ -1,5 +1,5 @@
  <!DOCTYPE HTML>
 -{% load humanize i18n smartmin sms compress static %}
 +{% load humanize i18n smartmin sms compress static url_tags %}
- 
+
  {% block html-tag %}
    <html lang="{{ LANGUAGE_CODE }}">
 @@ -32,6 +32,9 @@
@@ -144,7 +127,7 @@ index c6e4ea2c8..4a5c8e2e5 100644
      <script type="text/javascript">
        function isMobile() {
          return window.innerWidth < 600;
-@@ -158,14 +161,20 @@
+@@ -158,14 +161,14 @@
          {% endcompress %}
        {% endif %}
        {% if user_org %}
@@ -206,5 +189,3 @@ index a5df1551b..7760338fd 100644
    </div>
    <div class="mb-2">
      If you still have questions, please search the history on the <a href="https://groups.google.com/g/rapidpro-dev">developer list</a> to see if your question has been asked before.
--- 
-2.43.0
