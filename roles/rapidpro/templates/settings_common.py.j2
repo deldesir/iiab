@@ -1028,17 +1028,17 @@ SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 # Authentication methods and policies
 ACCOUNT_LOGIN_METHODS = ("email",)  # Only allow email login (not username)
-ACCOUNT_EMAIL_VERIFICATION = "mandatory"  # Require email verification
-ACCOUNT_EMAIL_NOTIFICATIONS = True  # Send email notifications
+ACCOUNT_EMAIL_VERIFICATION = "none"  # Require email verification
+ACCOUNT_EMAIL_NOTIFICATIONS = False  # Send email notifications
 ACCOUNT_UNIQUE_EMAIL = True  # Enforce unique emails
 ACCOUNT_CHANGE_EMAIL = True  # Allow users to change email
-ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"  # Force HTTPS
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = "http"  # Force HTTPS
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None  # No username field on User model
 ACCOUNT_SESSION_REMEMBER = True  # Remember login sessions
 
 # Email confirmation behavior
-ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True  # Auto-login after email confirmation
-ACCOUNT_CONFIRM_EMAIL_ON_GET = True  # Confirm email via GET request
+ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = False  # Auto-login after email confirmation
+ACCOUNT_CONFIRM_EMAIL_ON_GET = False  # Confirm email via GET request
 
 # Fields to show on signup form
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1"]  # Email (required) and password
