@@ -117,7 +117,6 @@
   git:
     repo: 'https://github.com/nyaruka/rapidpro.git'
     dest: "{{ rapidpro_dir }}"
-    version: "{{ rapidpro_version | default('v6.5.2') }}"
   become: yes
   register: rapidpro_git_clone
 
