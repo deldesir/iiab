@@ -136,6 +136,14 @@
     recurse: yes
   become: yes
 
+- name: Clean repository before patching
+  command: git clean -fdx
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+  become_user: "{{ iiab_admin_user }}"
+  changed_when: false
+
 - name: Check if patch has already been applied
   command: git apply --check --reverse {{ role_path }}/files/0001-Fix-hardcoded-URLs-and-subpath.patch
   args:
