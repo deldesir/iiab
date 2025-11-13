@@ -122,6 +122,7 @@
   git:
     repo: 'https://github.com/nyaruka/rapidpro.git'
     dest: "{{ rapidpro_dir }}"
+    force: yes
   become: yes
   register: rapidpro_git_clone
 
