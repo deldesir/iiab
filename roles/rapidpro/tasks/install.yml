@@ -143,9 +143,14 @@
     replace: 'requires-python = ">=3.12,<3.{{ (ansible_python_version.split(''.'')[1] | int) + 1 }}"'
   become: yes
 
-- name: Apply subpath deployment fixes
-  include_tasks: subpath_fixes.yml
-  register: subpath_fixes_result
+- name: Apply subpath deployment patch
+  community.general.patch:
+    src: "{{ role_path }}/files/0001-Fix-hardcoded-URLs-and-subpath.patch"
+    basedir: "{{ rapidpro_dir }}"
+    strip: 1
+  become: yes
+  register: rapidpro_patch_result
+
 
 
 
@@ -195,7 +200,7 @@
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
-  when: rapidpro_git_clone.changed or subpath_fixes_result.changed or rapidpro_yarn_install.changed
+  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_yarn_install.changed
 
 - name: "Set mailroom and courier architecture"
   set_fact:
