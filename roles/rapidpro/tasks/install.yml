@@ -144,7 +144,7 @@
   become: yes
 
 - name: Apply subpath deployment patch
-  community.general.patch:
+  patch:
     src: "{{ role_path }}/files/0001-Fix-hardcoded-URLs-and-subpath.patch"
     basedir: "{{ rapidpro_dir }}"
     strip: 1
