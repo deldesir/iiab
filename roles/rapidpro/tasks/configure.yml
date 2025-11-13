@@ -120,6 +120,12 @@
     state: directory
   become: yes
 
+- name: Create __init__.py in middleware directory
+  file:
+    path: "{{ rapidpro_dir }}/temba/middleware/__init__.py"
+    state: touch
+  become: yes
+
 - name: Copy X-Forwarded-For middleware
   copy:
     src: x_forwarded_for_middleware.py
