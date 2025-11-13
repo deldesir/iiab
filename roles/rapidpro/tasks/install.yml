@@ -113,6 +113,11 @@
   include_role:
     name: nodejs
 
+- name: Add rapidpro directory to git safe directories
+  command: git config --global --add safe.directory {{ rapidpro_dir }}
+  become: yes
+  changed_when: false
+
 - name: Clone/update RapidPro repository
   git:
     repo: 'https://github.com/nyaruka/rapidpro.git'
