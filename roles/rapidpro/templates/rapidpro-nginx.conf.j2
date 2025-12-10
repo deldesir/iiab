@@ -16,5 +16,5 @@ location /rp/ {
     proxy_set_header Host $http_host;
     proxy_set_header SCRIPT_NAME /rp;
     proxy_redirect off;
-    proxy_pass http://unix:/opt/iiab/rapidpro/run/gunicorn.sock;
+    proxy_pass http://unix:/run/rapidpro/gunicorn.sock;
 }
