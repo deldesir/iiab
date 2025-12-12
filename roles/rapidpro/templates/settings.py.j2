@@ -17,6 +17,10 @@ DEBUG = False
 # The hostname of the IIAB box
 ALLOWED_HOSTS = ["{{ ansible_hostname }}", "box.lan"] + {{ ansible_all_ipv4_addresses }}
 
+HOSTNAME = "{{ ansible_hostname }}"
+BRAND["domain"] = "{{ ansible_hostname }}"
+BRAND["hosts"] = ["{{ ansible_hostname }}", "box.lan", "127.0.0.1"] + {{ ansible_all_ipv4_addresses }}
+
 # ----------------------------------------------------------------------------------
 # Databases
 # ----------------------------------------------------------------------------------
@@ -28,6 +32,7 @@ DATABASES = {
         "PASSWORD": "{{ rapidpro_db_pass }}"
     }
 }
+DATABASES["readonly"] = DATABASES["default"]
 
 # ----------------------------------------------------------------------------------
 # Caching
@@ -61,12 +66,12 @@ STORAGES = {
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
 
-FORCE_SCRIPT_NAME = "/rp/"
-STATIC_URL = "/rp/static/"
-MEDIA_URL = "/rp/media/"
-LOGIN_URL = "/rp/accounts/login/"
-LOGIN_REDIRECT_URL = "/rp/org/choose/"
-ACCOUNT_LOGOUT_REDIRECT_URL = "/rp/"
+FORCE_SCRIPT_NAME = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}"
+STATIC_URL = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}static/"
+MEDIA_URL = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}media/"
+LOGIN_URL = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}accounts/login/"
+LOGIN_REDIRECT_URL = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}org/choose/"
+ACCOUNT_LOGOUT_REDIRECT_URL = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}"
 
 # ----------------------------------------------------------------------------------
 # Email

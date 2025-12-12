@@ -1,0 +1,45 @@
+import os
+
+TARGET_DIR = "{{ rapidpro_dir }}/sitestatic"
+
+def patch_file(filepath):
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+        
+        new_content = content
+        replacements = [
+            ("'/api/v2/", "(window.URLS.root || '/') + 'api/v2/"),
+            ('"/api/v2/', '(window.URLS.root || "/") + "api/v2/'),
+            ("'/api/internal/", "(window.URLS.root || '/') + 'api/internal/"),
+            ('"/api/internal/', '(window.URLS.root || "/") + "api/internal/'),
+            ("'/api/v1/", "(window.URLS.root || '/') + 'api/v1/"),
+            ('"/api/v1/', '(window.URLS.root || "/") + "api/v1/'),
+            ("url: '/api/", "url: (window.URLS.root || '/') + 'api/"),
+            ('url: "/api/', 'url: (window.URLS.root || "/") + "api/'),
+        ]
+        
+        modified = False
+        for pattern, replacement in replacements:
+            if pattern in new_content:
+                new_content = new_content.replace(pattern, replacement)
+                modified = True
+                
+        if modified:
+            print(f"Patching {filepath}")
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(new_content)
+                
+    except Exception as e:
+        print(f"Error patching {filepath}: {e}")
+        
+if __name__ == "__main__":
+    if not os.path.exists(TARGET_DIR):
+        print(f"Target directory {TARGET_DIR} does not exist.")
+    else:
+        print(f"Scanning {TARGET_DIR} for JS files to patch...")
+        for root, dirs, files in os.walk(TARGET_DIR):
+            for name in files:
+                if name.endswith(".js") and "jquery" not in name:
+                    patch_file(os.path.join(root, name))
+        print("Patching complete.")

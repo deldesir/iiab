@@ -3,6 +3,19 @@
 
 - name: Drop RapidPro database if requested
   block:
+    - name: Stop RapidPro services before DB drop
+      service:
+        name: "{{ item }}"
+        state: stopped
+      with_items:
+        - rapidpro-gunicorn
+        - rapidpro-courier
+        - rapidpro-mailroom
+        - rapidpro-celery
+        - rapidpro-indexer
+      ignore_errors: yes
+      become: yes
+
     - name: Terminate all connections to the 'temba' database
       postgresql_query:
         query: "SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '{{ rapidpro_db_name }}' AND pid <> pg_backend_pid();"
