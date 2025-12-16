@@ -1,5 +1,5 @@
 diff --git a/temba/archives/migrations/0031_delete_rolled_up.py b/temba/archives/migrations/0031_delete_rolled_up.py
-index 1234567..89abcdef 100644
+index 2da902294..046c2fa43 100644
 --- a/temba/archives/migrations/0031_delete_rolled_up.py
 +++ b/temba/archives/migrations/0031_delete_rolled_up.py
 @@ -8,7 +8,11 @@ from django.db import migrations
@@ -14,3 +14,4 @@ index 1234567..89abcdef 100644
 +        return
  
      purged_rollups = Archive.objects.filter(needs_deletion=False).exclude(rollup=None)
+ 
