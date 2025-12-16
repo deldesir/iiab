@@ -16,4 +16,6 @@
   loop:
     - rapidpro-mailroom
     - rapidpro-courier
+    - rapidpro-dynamo
+    - rapidpro-celery
   become: yes

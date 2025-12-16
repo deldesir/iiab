@@ -42,22 +42,9 @@ if TESTING:
     PASSWORD_HASHERS = ("django.contrib.auth.hashers.MD5PasswordHasher",)
     DEBUG = False
 
-# ===============================================================================
-# Environment Detection
-# ===============================================================================
-
-# Detect if running in VS Code Remote Containers / Docker Dev Environment
-# Uses different hostnames for services inside Docker vs. local development
-if os.getenv("REMOTE_CONTAINERS") == "true":
-    _db_host = "postgres"
-    _valkey_host = "valkey"
-    _minio_host = "minio"
-    _dynamo_host = "dynamo"
-else:
-    _db_host = "localhost"
-    _valkey_host = "localhost"
-    _minio_host = "localhost"
-    _dynamo_host = "localhost"
+_db_host = "postgres"
+_valkey_host = "localhost"
+_localstack_host = "localhost"
 
 # ===============================================================================
 # AWS Configuration (for DynamoDB)
@@ -69,9 +56,7 @@ AWS_ACCESS_KEY_ID = "root"
 AWS_SECRET_ACCESS_KEY = "tembatemba"
 AWS_REGION = "us-east-1"
 
-# DynamoDB endpoint configuration - points to local DynamoDB instance
-DYNAMO_ENDPOINT_URL = f"http://{_dynamo_host}:6000"
-# Table name prefix to separate test vs. production data
+DYNAMO_ENDPOINT_URL = f"http://{_localstack_host}:6000"
 DYNAMO_TABLE_PREFIX = "Test" if TESTING else "Temba"
 
 # ===============================================================================
@@ -110,7 +95,7 @@ STORAGES = {
 
 # django-storages S3 configuration (defaults to local Minio server for development)
 AWS_S3_REGION_NAME = AWS_REGION
-AWS_S3_ENDPOINT_URL = f"http://{_minio_host}:9000"
+AWS_S3_ENDPOINT_URL = f"http://{_localstack_host}:4566"  # Localstack S3 endpoint
 AWS_S3_ADDRESSING_STYLE = "path"  # Path-style URLs for Minio compatibility
 AWS_S3_FILE_OVERWRITE = False  # Prevent accidental file overwrites
 
@@ -122,8 +107,8 @@ STORAGE_URL = f"{AWS_S3_ENDPOINT_URL}/{BUCKET_PREFIX}-default"
 # ===============================================================================
 
 USE_TZ = True  # Use timezone-aware datetimes
-TIME_ZONE = "GMT"  # Default server timezone
-USER_TIME_ZONE = "Africa/Kigali"  # Default timezone for users
+TIME_ZONE = "UTC"  # Default server timezone
+USER_TIME_ZONE = "America/New_York"  # Default timezone for users
 
 LANGUAGE_CODE = "en-us"
 
@@ -266,7 +251,8 @@ ROOT_URLCONF = "temba.urls"
 # Additional URL patterns from external apps (used for plugins)
 APP_URLS = []
 
-# All installed Django apps
+SITEMAP = ("public.public_index", "api")
+
 INSTALLED_APPS = (
     # Django core apps
     "django.contrib.auth",
@@ -353,9 +339,9 @@ LOGGING = {
 BRAND = {
     "name": "RapidPro",
     "description": _("Visually build nationally scalable mobile applications anywhere in the world."),
-    "hosts": ["rapidpro.io"],  # Allowed hostnames for this brand
-    "domain": "app.rapidpro.io",  # Primary domain
-    "emails": {"notifications": "support@rapidpro.io"},
+    "hosts": ["box.lan"],  # Allowed hostnames for this brand
+    "domain": "box.lan",  # Primary domain
+    "emails": {"notifications": "support@box.lan"},
     "logos": {
         "primary": "images/logo-dark.svg",
         "favico": "brands/rapidpro/rapidpro.ico",
@@ -364,14 +350,14 @@ BRAND = {
     "landing": {
         "hero": "brands/rapidpro/splash.jpg",
     },
-    "features": ["signups", "sso"],  # Enabled features for this brand
+    "features": ["signups"],  # Enabled features for this brand (signups, sso, etc.)
 }
 
 # Global feature flags for this installation
 FEATURES = {"locations"}  # Enable location/admin boundary support
 
-# Default exclusions for flow starts and broadcasts (e.g., don't contact people already in a flow)
-DEFAULT_EXCLUSIONS = {"in_a_flow": True}
+# Default exclusions for flow starts and broadcasts (set to True to disable contacting people already in a flow)
+DEFAULT_EXCLUSIONS = {"in_a_flow": False}
 
 # Send time limits: warn/block sending after X hours (0 = no limit)
 SEND_HOURS_WARNING = 0
@@ -397,7 +383,7 @@ PERMISSIONS = {
     "campaigns.campaign": ("archive", "activate", "menu"),
     "channels.channel": ("chart", "claim", "configuration", "logs", "facebook_whitelist"),
     "classifiers.classifier": ("connect", "sync"),
-    "contacts.contact": ("export", "history", "interrupt", "menu", "omnibox", "open_ticket", "start"),
+    "contacts.contact": ("export", "chat", "interrupt", "menu", "omnibox", "open_ticket", "start"),
     "contacts.contactfield": ("update_priority",),
     "contacts.contactgroup": ("menu",),
     "contacts.contactimport": ("preview",),
@@ -474,10 +460,10 @@ GROUP_PERMISSIONS = {
         "classifiers.classifier_list",
         "classifiers.classifier_read",
         "classifiers.classifier_sync",
+        "contacts.contact_chat",
         "contacts.contact_create",
         "contacts.contact_delete",
         "contacts.contact_export",
-        "contacts.contact_history",
         "contacts.contact_interrupt",
         "contacts.contact_list",
         "contacts.contact_menu",
@@ -529,12 +515,7 @@ GROUP_PERMISSIONS = {
         "orgs.org_prometheus",
         "orgs.org_read",
         "orgs.org_resthooks",
-        "orgs.org_service",
-        "orgs.org_signup",
         "orgs.org_switch",
-        "orgs.org_trial",
-        "orgs.org_twilio_account",
-        "orgs.org_twilio_connect",
         "orgs.org_update",
         "orgs.org_workspace",
         "orgs.orgimport.*",
@@ -577,10 +558,10 @@ GROUP_PERMISSIONS = {
         "channels.channelevent_list",
         "classifiers.classifier_list",
         "classifiers.classifier_read",
+        "contacts.contact_chat",
         "contacts.contact_create",
         "contacts.contact_delete",
         "contacts.contact_export",
-        "contacts.contact_history",
         "contacts.contact_interrupt",
         "contacts.contact_list",
         "contacts.contact_menu",
@@ -596,6 +577,7 @@ GROUP_PERMISSIONS = {
         "flows.flowrun_list",
         "flows.flowstart_create",
         "flows.flowstart_list",
+        "flows.flowstart_update",
         "globals.global.*",
         "ivr.call_list",
         "locations.adminboundary_alias",
@@ -638,8 +620,8 @@ GROUP_PERMISSIONS = {
         "triggers.trigger.*",
     ),
     "Agents": (
-        # Limited to ticket management and contact viewing
-        "contacts.contact_history",
+        # Can manage contacts and tickets
+        "contacts.contact_chat",
         "contacts.contact_interrupt",
         "notifications.notification_list",
         "orgs.org_languages",
@@ -743,11 +725,12 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {"socket_timeout": 5}
 # Periodic task schedule (runs these tasks automatically)
 CELERY_BEAT_SCHEDULE = {
     "check-android-channels": {"task": "check_android_channels", "schedule": timedelta(seconds=300)},
-    "delete-released-orgs": {"task": "delete_released_orgs", "schedule": crontab(hour=4, minute=0)},  # Daily at 4 AM
-    "expire-invitations": {"task": "expire_invitations", "schedule": crontab(hour=0, minute=10)},  # Daily at 12:10 AM
-    "fail-old-android-messages": {"task": "fail_old_android_messages", "schedule": crontab(hour=0, minute=0)},  # Daily at midnight
-    "refresh-whatsapp-tokens": {"task": "refresh_whatsapp_tokens", "schedule": crontab(hour=6, minute=0)},  # Daily at 6 AM
-    "refresh-templates": {"task": "refresh_templates", "schedule": timedelta(minutes=30)},
+    "delete-released-orgs": {"task": "delete_released_orgs", "schedule": crontab(hour=4, minute=0)},
+    "expire-invitations": {"task": "expire_invitations", "schedule": crontab(hour=0, minute=10)},
+    "fail-old-android-messages": {"task": "fail_old_android_messages", "schedule": crontab(hour=0, minute=0)},
+    "refresh-whatsapp-tokens": {"task": "refresh_whatsapp_tokens", "schedule": crontab(hour=6, minute=0)},
+    "refresh-turn-whatsapp-tokens": {"task": "refresh_turn_whatsapp_tokens", "schedule": crontab(hour=6, minute=0)},
+    "refresh-templates": {"task": "refresh_templates", "schedule": timedelta(hours=6)},
     "send-notification-emails": {"task": "send_notification_emails", "schedule": timedelta(seconds=60)},
     "squash-channel-counts": {"task": "squash_channel_counts", "schedule": timedelta(seconds=60)},
     "squash-group-counts": {"task": "squash_group_counts", "schedule": timedelta(seconds=60)},
@@ -755,9 +738,9 @@ CELERY_BEAT_SCHEDULE = {
     "squash-item-counts": {"task": "squash_item_counts", "schedule": timedelta(seconds=30)},
     "squash-msg-counts": {"task": "squash_msg_counts", "schedule": timedelta(seconds=60)},
     "sync-classifier-intents": {"task": "sync_classifier_intents", "schedule": timedelta(seconds=300)},
-    "trim-channel-events": {"task": "trim_channel_events", "schedule": crontab(hour=3, minute=0)},  # Daily at 3 AM
+    "trim-channel-events": {"task": "trim_channel_events", "schedule": crontab(hour=3, minute=0)},
     "trim-channel-sync-events": {"task": "trim_channel_sync_events", "schedule": crontab(hour=3, minute=0)},
-    "trim-exports": {"task": "trim_exports", "schedule": crontab(hour=2, minute=0)},  # Daily at 2 AM
+    "trim-exports": {"task": "trim_exports", "schedule": crontab(hour=2, minute=0)},
     "trim-flow-revisions": {"task": "trim_flow_revisions", "schedule": crontab(hour=0, minute=0)},
     "trim-flow-sessions": {"task": "trim_flow_sessions", "schedule": crontab(hour=0, minute=0)},
     "trim-http-logs": {"task": "trim_http_logs", "schedule": crontab(hour=2, minute=0)},
@@ -807,16 +790,10 @@ COMPRESS_FILTERS = {
 COMPRESS_ENABLED = False  # Disable compression in development
 COMPRESS_OFFLINE = False  # Disable offline compression
 
-# ===============================================================================
-# Sitemaps
-# ===============================================================================
-SITEMAP = ("public.public_index", "api")
+# -----------------------------------------------------------------------------------
+# Pluggable Types
+# -----------------------------------------------------------------------------------
 
-# ===============================================================================
-# Pluggable Components System
-# ===============================================================================
-
-# Available integration types (e.g., DTOne for airtime)
 INTEGRATION_TYPES = [
     "temba.orgs.integrations.dtone.DTOneType",
 ]
@@ -879,6 +856,7 @@ CHANNEL_TYPES = [
     "temba.channels.types.telegram.TelegramType",
     "temba.channels.types.telesom.TelesomType",
     "temba.channels.types.thinq.ThinQType",
+    "temba.channels.types.turn.TurnType",
     "temba.channels.types.twilio_messaging_service.TwilioMessagingServiceType",
     "temba.channels.types.twilio_whatsapp.TwilioWhatsappType",
     "temba.channels.types.twilio.TwilioType",
@@ -1017,7 +995,8 @@ ACCOUNT_FORMS = {
 
 # Custom adapters for authentication flow
 ACCOUNT_ADAPTER = "temba.users.adapter.TembaAccountAdapter"
-SOCIALACOUNT_ADAPTER = "temba.users.adapter.TembaSocialAccountAdapter"
+SOCIALACCOUNT_ADAPTER = "temba.users.adapter.TembaSocialAccountAdapter"
+
 MFA_ADAPTER = "temba.users.adapter.TembaMFAAdapter"
 
 # Social authentication providers (Google OAuth)

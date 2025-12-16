@@ -1,17 +1,8 @@
-From 8234856a99283749283475923847592834759238 Mon Sep 17 00:00:00 2001
-From: IIAB Admin <admin@iiab.io>
-Date: Thu, 11 Dec 2025 20:00:00 -0500
-Subject: [PATCH] Fix Android Claim 500 Error by ignoring missing FCM config
-
----
- temba/channels/types/android/views.py | 8 +++++---
- 1 file changed, 5 insertions(+), 3 deletions(-)
-
 diff --git a/temba/channels/types/android/views.py b/temba/channels/types/android/views.py
-index 1234567..89abcdef 100644
+index 2dbbe7412..a9320bf3a 100644
 --- a/temba/channels/types/android/views.py
 +++ b/temba/channels/types/android/views.py
-@@ -100,7 +100,11 @@ class ClaimView(ClaimViewMixin, SmartFormView):
+@@ -100,6 +100,9 @@ class ClaimView(ClaimViewMixin, SmartFormView):
          claim_channel(org, self.object, self.form.cleaned_data["phone_number"])
  
          # trigger a sync
@@ -19,7 +10,6 @@ index 1234567..89abcdef 100644
 +        try:
 +            mailroom.get_client().android_sync(self.object)
 +        except Exception:
-+            # this is best effort, if we don't have FCM configured it will fail
 +            pass
  
          return super().form_valid(form)

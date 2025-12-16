@@ -84,4 +84,13 @@ def get_urls():
         # Django I18n
         "django_js_cat": reverse("django.views.i18n.javascript_catalog"),
     }
+    # Prepend subpath to all URLs
+    subpath = "{{ rapidpro_url }}"
+    if subpath and subpath != "/":
+        if subpath.endswith("/"):
+            subpath = subpath[:-1]
+        for k, v in urls.items():
+            if isinstance(v, str) and v.startswith("/") and not v.startswith(subpath):
+                urls[k] = subpath + v
+
     return mark_safe(json.dumps(urls))

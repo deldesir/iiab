@@ -51,6 +51,31 @@
   become_user: "{{ iiab_admin_user }}"
   when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
+- name: Create DynamoDB systemd service
+  template:
+    src: rapidpro-dynamo.service.j2
+    dest: /etc/systemd/system/rapidpro-dynamo.service
+  become: yes
+
+- name: Force start rapidpro-dynamo for migrations
+  systemd:
+    name: rapidpro-dynamo
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  become: yes
+
+- name: Run DynamoDB migrations
+  shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    poetry run python manage.py migrate_dynamo
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+  become_user: "{{ iiab_admin_user }}"
+  run_once: yes
+  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+
 - name: Collect static files
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
@@ -86,21 +111,31 @@
   become: yes
 - name: Apply formax subpath fix patch
   patch:
-    src: 0002-fix-formax-subpath.patch
+    src: "{{ role_path }}/files/0002-fix-formax-subpath.patch"
     basedir: "{{ rapidpro_dir }}"
     strip: 1
-  become: yes
-  become_user: "{{ iiab_admin_user }}"
   register: rapidpro_patch_applied
 
 - name: Apply Android FCM fix patch
   patch:
-    src: 0002-Fix-Android-FCM-Crash.patch
+    src: "{{ role_path }}/files/0002-Fix-Android-FCM-Crash.patch"
     basedir: "{{ rapidpro_dir }}"
     strip: 1
-  become: yes
-  become_user: "{{ iiab_admin_user }}"
   register: rapidpro_fcm_patch_applied
+
+- name: Apply FileSystemStorage TypeError fix patch
+  patch:
+    src: "{{ role_path }}/files/0004-Fix-FileSystemStorage-TypeError.patch"
+    basedir: "{{ rapidpro_dir }}"
+    strip: 1
+  register: rapidpro_fs_patch_applied
+
+- name: Apply Export Filename fix patch
+  patch:
+    src: "{{ role_path }}/files/0005-Fix-Export-Filename.patch"
+    basedir: "{{ rapidpro_dir }}"
+    strip: 1
+  register: rapidpro_filename_patch_applied
 
 
 - name: Create custom url_tags.py
@@ -198,6 +233,16 @@
   template:
     src: rapidpro-courier.service.j2
     dest: /etc/systemd/system/rapidpro-courier.service
+  become: yes
+
+
+
+- name: Create Celery systemd service
+  template:
+    src: rapidpro-celery.service.j2
+    dest: /etc/systemd/system/rapidpro-celery.service
+  vars:
+    poetry_env_path: "{{ poetry_env.stdout }}"
   become: yes
 
 - name: Reload systemd daemon

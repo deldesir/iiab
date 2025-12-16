@@ -1,0 +1,14 @@
+--- a/temba/utils/management/commands/migrate_dynamo.py
++++ b/temba/utils/management/commands/migrate_dynamo.py
+@@ -77,7 +77,10 @@ class Command(BaseCommand):
+             self.stdout.write(self.style.SUCCESS(" OK"))
+ 
+             if ttlSpec:
+-                self.client.meta.client.update_time_to_live(TableName=real_name, TimeToLiveSpecification=ttlSpec)
++                try:
++                    self.client.meta.client.update_time_to_live(TableName=real_name, TimeToLiveSpecification=ttlSpec)
++                except Exception:
++                    self.stdout.write(f"Skipping TTL for {real_name} (not supported by backend)")
+ 
+                 self.stdout.write(f"Updated TTL for {real_name}")
+         else:

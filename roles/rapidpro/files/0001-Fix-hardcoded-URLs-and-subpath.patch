@@ -160,10 +160,10 @@ index f0f100753..a5d5fcb0c
      var simulateResume = null;
  
      if (canSimulate) {
--      simulateStart = '/flow/simulate/{{object.id}}/';
--      simulateResume = '/flow/simulate/{{object.id}}/';
-+      simulateStart = window.URLS.root + 'flow/simulate/{{object.id}}/';
-+      simulateResume = window.URLS.root + 'flow/simulate/{{object.id}}/';
+-      simulateStart = '/flow/simulate/{{object.uuid}}/';
+-      simulateResume = '/flow/simulate/{{object.uuid}}/';
++      simulateStart = window.URLS.root + 'flow/simulate/{{object.uuid}}/';
++      simulateResume = window.URLS.root + 'flow/simulate/{{object.uuid}}/';
      }
  
      var config = {
@@ -203,9 +203,7 @@ index f0f100753..a5d5fcb0c
  {% block content %}
    <temba-modax header="Send Message" id="send-message-modal">
 diff --git a/templates/frame.html b/templates/frame.html
-old mode 100644
-new mode 100755
-index c6e4ea2c8..fd2af8c8f
+index c6e4ea2c8..7d0338d2f 100644
 --- a/templates/frame.html
 +++ b/templates/frame.html
 @@ -1,5 +1,5 @@
@@ -215,13 +213,7 @@ index c6e4ea2c8..fd2af8c8f
  
  {% block html-tag %}
    <html lang="{{ LANGUAGE_CODE }}">
-@@ -29,9 +29,15 @@
-       <script src="{{ STATIC_URL }}rest_framework/js/prettify-min.js"></script>
-       <script src="{{ STATIC_URL }}croppie/croppie.js"></script>
-     {% endcompress %}
-+    <script>
-+      window.URLS = {% get_urls %};
-+    </script>
+@@ -32,6 +32,9 @@
      {% compress js %}
        <script src="{{ STATIC_URL }}js/utils.js"></script>
      {% endcompress %}
@@ -231,7 +223,7 @@ index c6e4ea2c8..fd2af8c8f
      <script type="text/javascript">
        function isMobile() {
          return window.innerWidth < 600;
-@@ -98,7 +104,7 @@
+@@ -98,7 +101,7 @@
        });
  
        document.addEventListener("temba-workspace-settings", function(event) {
@@ -240,27 +232,16 @@ index c6e4ea2c8..fd2af8c8f
          var menu = document.querySelector('temba-menu');
          if (menu) {
            menu.click();
-@@ -118,6 +124,9 @@
-         <script src="{{ STATIC_URL }}js/frame.js"></script>
-         <script src="{{ STATIC_URL }}js/labels.js"></script>
-       {% endcompress %}
-+    <script>
-+      window.URLS = {% get_urls %};
-+    </script>
-     {% endblock scripts %}
+@@ -122,7 +125,7 @@
      {% for script in flow_editor_scripts %}<script type="text/javascript" src="{{script}}"></script>{% endfor %}
      {% for style in flow_editor_styles %}<link rel="stylesheet" href="{{ style }}" type="text/css">{% endfor %}
-@@ -143,6 +152,9 @@
-           }
-         </style>
-       {% endcompress %}
-+    <script>
-+      window.URLS = {% get_urls %};
-+    </script>
-     {% endblock styles %}
-     {% include "includes/frame_top.html" %}
-   </head>
-@@ -150,22 +162,25 @@
+     {% block favico %}
+-      <link type="image/ico" rel="shortcut icon" href="{{ STATIC_URL }}images/favicon.ico">
++      <link type="image/ico" rel="shortcut icon" href="{{ STATIC_URL }}favicon.ico">
+     {% endblock favico %}
+     {% block styles %}
+       <link rel="stylesheet"
+@@ -150,22 +153,25 @@
      <body class="bg-gradient" id="pageBody">
        {% if COMPONENTS_DEV_MODE %}
          <script type="module">

@@ -1,6 +1,11 @@
 import os
 
 TARGET_DIR = "{{ rapidpro_dir }}/sitestatic"
+SUBPATH = "{{ rapidpro_url }}"
+if SUBPATH == "/":
+    SUBPATH = ""
+elif SUBPATH.endswith("/"):
+    SUBPATH = SUBPATH[:-1]
 
 def patch_file(filepath):
     try:
@@ -17,15 +22,97 @@ def patch_file(filepath):
             ('"/api/v1/', '(window.URLS.root || "/") + "api/v1/'),
             ("url: '/api/", "url: (window.URLS.root || '/') + 'api/"),
             ('url: "/api/', 'url: (window.URLS.root || "/") + "api/'),
+            # Fix hardcoded frontend paths (Tickets, etc) using static subpath
+            ("/ticket/", f"{SUBPATH}/ticket/"),
+            ("'/ticket/", f"'{SUBPATH}/ticket/"),
+            ("/org/", f"{SUBPATH}/org/"),
+            ("'/org/", f"'{SUBPATH}/org/"),
+            # Additional paths for missing 404s
+            ("/contact/", f"{SUBPATH}/contact/"),
+            ("'/contact/", f"'{SUBPATH}/contact/"),
+            ('"/contact/', f'"{SUBPATH}/contact/'),
+            ("`/contact/", f"`{SUBPATH}/contact/"),
+            
+            ("/flow/", f"{SUBPATH}/flow/"),
+            ("'/flow/", f"'{SUBPATH}/flow/"),
+            ('"/flow/', f'"{SUBPATH}/flow/'),
+            ("`/flow/", f"`{SUBPATH}/flow/"),
+            
+            ("/msg/", f"{SUBPATH}/msg/"),
+            ("'/msg/", f"'{SUBPATH}/msg/"),
+            ('"/msg/', f'"{SUBPATH}/msg/'),
+            ("`/msg/", f"`{SUBPATH}/msg/"),
+
+            # Specific fix for relative ticket paths (e.g. in TembaList.ts)
+            ("'ticket/", f"'{SUBPATH}/ticket/"),
+            ('"ticket/', f'"{SUBPATH}/ticket/'),
+            ("`ticket/", f"`{SUBPATH}/ticket/"),
+            ("ticket/folder/", f"{SUBPATH}/ticket/folder/"),
+
+
+            # Fix hardcoded frontend paths (Tickets, etc) using static subpath
+            ("/ticket/", f"{SUBPATH}/ticket/"),
+            ("'/ticket/", f"'{SUBPATH}/ticket/"),
+            ('"/ticket/', f'"{SUBPATH}/ticket/'),
+            ("`/ticket/", f"`{SUBPATH}/ticket/"),
+
+            ("/org/", f"{SUBPATH}/org/"),
+            ("'/org/", f"'{SUBPATH}/org/"),
+            ('"/org/', f'"{SUBPATH}/org/'),
+            ("`/org/", f"`{SUBPATH}/org/"),
         ]
+        import re
         
-        modified = False
+        # Ensure SUBPATH has no trailing slash for lookbehind
+        # e.g. /rp/ -> /rp
+        subpath_clean = SUBPATH.rstrip('/')
+        
         for pattern, replacement in replacements:
-            if pattern in new_content:
-                new_content = new_content.replace(pattern, replacement)
-                modified = True
-                
-        if modified:
+            # We only use regex for specific path patterns (starting with /) to avoid issues
+            # For exact string matches like context variables, keep simple replace? 
+            # Actually, the problem is only with paths like /ticket/.
+            
+            # Construct a regex that matches `pattern` ONLY if not preceded by `subpath_clean`
+            # But `pattern` includes the leading slash e.g. /ticket/
+            # So matched string matches `/ticket/`. Lookbehind checks for `/rp`.
+            
+            # Escape pattern just in case
+            pattern_esc = re.escape(pattern)
+            
+            # Simple check: does pattern start with /? 
+            if pattern.startswith('/') and not pattern.startswith('//'):
+                 # It's a path. Use lookbehind.
+                 # Regex: (?<!/rp)/ticket/
+                 # Note: subpath_clean might be empty if root? verify.
+                 if subpath_clean:
+                     regex_pattern = f"(?<!{re.escape(subpath_clean)}){pattern_esc}"
+                     new_content = re.sub(regex_pattern, replacement, new_content)
+                 else:
+                     new_content = new_content.replace(pattern, replacement)
+            else:
+                 # quote variants: "'/ticket/"
+                 # We need to handle quotes.
+                 # e.g. '(?<!/rp)/ticket/
+                 # This is getting complex.
+                 
+                 # Simpler approach: Check if replacement is already there?
+                 # No, that modifies content globally.
+                 
+                 # What if we just REPLACE BACK the double occurrence?
+                 # e.g. replace /ticket/ -> /rp/ticket/
+                 # Then replace /rp/rp/ticket/ -> /rp/ticket/
+                 # This is much safer and simpler than complex regex generation.
+                 
+                 new_content = new_content.replace(pattern, replacement)
+                 
+        # Cleanup double prefixes if any occurred
+        # e.g. /rp/rp/ -> /rp/
+        # Check specific known bad patterns
+        double_prefix = f"{SUBPATH}{SUBPATH.lstrip('/')}" # e.g. /rp/ + rp/ = /rp/rp/
+        if double_prefix in new_content:
+             new_content = new_content.replace(double_prefix, SUBPATH)
+
+        if new_content != content:
             print(f"Patching {filepath}")
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(new_content)
@@ -40,6 +127,14 @@ if __name__ == "__main__":
         print(f"Scanning {TARGET_DIR} for JS files to patch...")
         for root, dirs, files in os.walk(TARGET_DIR):
             for name in files:
+                # Remove stale compressed files to force Nginx to serve patched JS
+                if name.endswith(".gz") or name.endswith(".br"):
+                    try:
+                        os.remove(os.path.join(root, name))
+                    except Exception:
+                        pass
+                    continue
+                    
                 if name.endswith(".js") and "jquery" not in name:
                     patch_file(os.path.join(root, name))
         print("Patching complete.")
