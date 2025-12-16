@@ -1,0 +1,16 @@
+diff --git a/temba/archives/migrations/0031_delete_rolled_up.py b/temba/archives/migrations/0031_delete_rolled_up.py
+index 1234567..89abcdef 100644
+--- a/temba/archives/migrations/0031_delete_rolled_up.py
++++ b/temba/archives/migrations/0031_delete_rolled_up.py
+@@ -8,7 +8,11 @@ from django.db import migrations
+ 
+ def delete_rolled_up_archives(apps, schema_editor):
+     Archive = apps.get_model("archives", "Archive")
+-    s3_client = storages["archives"].connection.meta.client
++    try:
++        s3_client = storages["archives"].connection.meta.client
++    except AttributeError:
++        print("Skipping rolled up archive deletion (not on S3)")
++        return
+ 
+     purged_rollups = Archive.objects.filter(needs_deletion=False).exclude(rollup=None)
