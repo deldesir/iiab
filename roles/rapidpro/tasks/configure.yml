@@ -49,7 +49,7 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_migration_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Create DynamoDB systemd service
   template:
@@ -74,7 +74,7 @@
   become: yes
   become_user: "{{ iiab_admin_user }}"
   run_once: yes
-  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_migration_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Collect static files
   shell: |
@@ -84,7 +84,7 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_migration_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Create frontend patch script
   template:
@@ -94,13 +94,13 @@
     mode: '0755'
   become_user: "{{ iiab_admin_user }}"
   become: yes
-  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_migration_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Execute frontend patch script
   command: python3 {{ rapidpro_dir }}/patch_urls.py
   become_user: "{{ iiab_admin_user }}"
   become: yes
-  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_migration_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Symlink mr directory for temba-store
   file:
@@ -136,6 +136,13 @@
     basedir: "{{ rapidpro_dir }}"
     strip: 1
   register: rapidpro_filename_patch_applied
+  
+- name: Apply Migration Rollup fix patch
+  patch:
+    src: "{{ role_path }}/files/0006-Fix-Migration-Rollup.patch"
+    basedir: "{{ rapidpro_dir }}"
+    strip: 1
+  register: rapidpro_migration_patch_applied
 
 
 - name: Create custom url_tags.py
