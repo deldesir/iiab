@@ -41,6 +41,41 @@
   become: yes
   register: rapidpro_settings
 
+- name: Apply formax subpath fix patch
+  patch:
+    src: "{{ role_path }}/files/0002-fix-formax-subpath.patch"
+    basedir: "{{ rapidpro_dir }}"
+    strip: 1
+  register: rapidpro_patch_applied
+
+- name: Apply Android FCM fix patch
+  patch:
+    src: "{{ role_path }}/files/0002-Fix-Android-FCM-Crash.patch"
+    basedir: "{{ rapidpro_dir }}"
+    strip: 1
+  register: rapidpro_fcm_patch_applied
+
+- name: Apply FileSystemStorage TypeError fix patch
+  patch:
+    src: "{{ role_path }}/files/0004-Fix-FileSystemStorage-TypeError.patch"
+    basedir: "{{ rapidpro_dir }}"
+    strip: 1
+  register: rapidpro_fs_patch_applied
+
+- name: Apply Export Filename fix patch
+  patch:
+    src: "{{ role_path }}/files/0005-Fix-Export-Filename.patch"
+    basedir: "{{ rapidpro_dir }}"
+    strip: 1
+  register: rapidpro_filename_patch_applied
+  
+- name: Apply Migration Rollup fix patch
+  patch:
+    src: "{{ role_path }}/files/0006-Fix-Migration-Rollup.patch"
+    basedir: "{{ rapidpro_dir }}"
+    strip: 1
+  register: rapidpro_migration_patch_applied
+
 - name: Run database migrations
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
@@ -109,40 +144,7 @@
     state: link
   become_user: "{{ iiab_admin_user }}"
   become: yes
-- name: Apply formax subpath fix patch
-  patch:
-    src: "{{ role_path }}/files/0002-fix-formax-subpath.patch"
-    basedir: "{{ rapidpro_dir }}"
-    strip: 1
-  register: rapidpro_patch_applied
 
-- name: Apply Android FCM fix patch
-  patch:
-    src: "{{ role_path }}/files/0002-Fix-Android-FCM-Crash.patch"
-    basedir: "{{ rapidpro_dir }}"
-    strip: 1
-  register: rapidpro_fcm_patch_applied
-
-- name: Apply FileSystemStorage TypeError fix patch
-  patch:
-    src: "{{ role_path }}/files/0004-Fix-FileSystemStorage-TypeError.patch"
-    basedir: "{{ rapidpro_dir }}"
-    strip: 1
-  register: rapidpro_fs_patch_applied
-
-- name: Apply Export Filename fix patch
-  patch:
-    src: "{{ role_path }}/files/0005-Fix-Export-Filename.patch"
-    basedir: "{{ rapidpro_dir }}"
-    strip: 1
-  register: rapidpro_filename_patch_applied
-  
-- name: Apply Migration Rollup fix patch
-  patch:
-    src: "{{ role_path }}/files/0006-Fix-Migration-Rollup.patch"
-    basedir: "{{ rapidpro_dir }}"
-    strip: 1
-  register: rapidpro_migration_patch_applied
 
 
 - name: Create custom url_tags.py
