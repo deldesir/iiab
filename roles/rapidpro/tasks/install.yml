@@ -154,21 +154,15 @@
     replace: 'requires-python = ">=3.12,<3.{{ (ansible_python_version.split(''.'')[1] | int) + 1 }}"'
   become: yes
 
-- name: Apply subpath deployment patch
+- name: Apply IIAB Compatibility fix patch (Storage, Views, Migrations, Android, TTL)
   patch:
-    src: "{{ role_path }}/files/0001-Fix-hardcoded-URLs-and-subpath.patch"
+    src: "{{ role_path }}/files/0001-Fix-IIAB-Compatibility.patch"
     basedir: "{{ rapidpro_dir }}"
     strip: 1
   become: yes
   register: rapidpro_patch_result
 
-- name: Apply DynamoDB TTL fix patch
-  patch:
-    src: "{{ role_path }}/files/0003-Fix-Dynamo-TTL.patch"
-    basedir: "{{ rapidpro_dir }}"
-    strip: 1
-  become: yes
-  register: rapidpro_ttl_patch_result
+
 
 - name: Install Poetry
   shell: |

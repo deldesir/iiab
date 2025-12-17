@@ -41,40 +41,7 @@
   become: yes
   register: rapidpro_settings
 
-- name: Apply formax subpath fix patch
-  patch:
-    src: "{{ role_path }}/files/0002-fix-formax-subpath.patch"
-    basedir: "{{ rapidpro_dir }}"
-    strip: 1
-  register: rapidpro_patch_applied
 
-- name: Apply Android FCM fix patch
-  patch:
-    src: "{{ role_path }}/files/0002-Fix-Android-FCM-Crash.patch"
-    basedir: "{{ rapidpro_dir }}"
-    strip: 1
-  register: rapidpro_fcm_patch_applied
-
-- name: Apply FileSystemStorage TypeError fix patch
-  patch:
-    src: "{{ role_path }}/files/0004-Fix-FileSystemStorage-TypeError.patch"
-    basedir: "{{ rapidpro_dir }}"
-    strip: 1
-  register: rapidpro_fs_patch_applied
-
-- name: Apply Export Filename fix patch
-  patch:
-    src: "{{ role_path }}/files/0005-Fix-Export-Filename.patch"
-    basedir: "{{ rapidpro_dir }}"
-    strip: 1
-  register: rapidpro_filename_patch_applied
-  
-- name: Apply Migration Rollup fix patch
-  patch:
-    src: "{{ role_path }}/files/0006-Fix-Migration-Rollup.patch"
-    basedir: "{{ rapidpro_dir }}"
-    strip: 1
-  register: rapidpro_migration_patch_applied
 
 - name: Run database migrations
   shell: |
@@ -84,7 +51,7 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_migration_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Create DynamoDB systemd service
   template:
@@ -109,7 +76,7 @@
   become: yes
   become_user: "{{ iiab_admin_user }}"
   run_once: yes
-  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_migration_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Collect static files
   shell: |
@@ -119,7 +86,7 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_migration_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Create frontend patch script
   template:
@@ -129,13 +96,13 @@
     mode: '0755'
   become_user: "{{ iiab_admin_user }}"
   become: yes
-  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_migration_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Execute frontend patch script
   command: python3 {{ rapidpro_dir }}/patch_urls.py
   become_user: "{{ iiab_admin_user }}"
   become: yes
-  when: rapidpro_git_clone.changed or rapidpro_patch_applied.changed or rapidpro_migration_patch_applied.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Symlink mr directory for temba-store
   file:
@@ -258,6 +225,13 @@
   systemd:
     daemon_reload: yes
   become: yes
+
+- name: Restart RapidPro Gunicorn if code changed
+  systemd:
+    name: rapidpro-gunicorn
+    state: restarted
+  become: yes
+  when: rapidpro_patch_result.changed or execute_frontend_patch_script.changed
 
 - name: Enable or disable RapidPro services
   include_tasks: enable-or-disable.yml
