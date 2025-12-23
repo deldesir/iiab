@@ -4,9 +4,12 @@
     state: directory
     # mode: 0755
 
-- name: Install aria2
+- name: Install downloading tools
   apt:
-    name: aria2
+    name:
+      - aria2
+      - python3-xmltodict
+      - python3-requests
 
 - include_tasks: install_frontend.yml
 
