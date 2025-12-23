@@ -1,6 +1,4 @@
 diff --git a/static/brands/rapidpro/less/style.less b/static/brands/rapidpro/less/style.less
-old mode 100644
-new mode 100755
 index 62b5e7b3f..428839903
 --- a/static/brands/rapidpro/less/style.less
 +++ b/static/brands/rapidpro/less/style.less
@@ -13,8 +11,6 @@ index 62b5e7b3f..428839903
    width: 100%;
    height: 0px;
 diff --git a/static/js/frame.js b/static/js/frame.js
-old mode 100644
-new mode 100755
 index 4766639b8..b3fdf7317
 --- a/static/js/frame.js
 +++ b/static/js/frame.js
@@ -54,8 +50,6 @@ index 4766639b8..b3fdf7317
  
    evt.preventDefault();
 diff --git a/temba/api/v2/views.py b/temba/api/v2/views.py
-old mode 100644
-new mode 100755
 index 17c85d28e..99ff81684
 --- a/temba/api/v2/views.py
 +++ b/temba/api/v2/views.py
@@ -109,8 +103,6 @@ index 17c85d28e..99ff81684
          return self.request.branding["name"] + " API v2"
  
 diff --git a/temba/archives/migrations/0031_delete_rolled_up.py b/temba/archives/migrations/0031_delete_rolled_up.py
-old mode 100644
-new mode 100755
 index 2da902294..046c2fa43
 --- a/temba/archives/migrations/0031_delete_rolled_up.py
 +++ b/temba/archives/migrations/0031_delete_rolled_up.py
@@ -128,8 +120,6 @@ index 2da902294..046c2fa43
      purged_rollups = Archive.objects.filter(needs_deletion=False).exclude(rollup=None)
  
 diff --git a/temba/channels/types/android/views.py b/temba/channels/types/android/views.py
-old mode 100644
-new mode 100755
 index 2dbbe7412..a9320bf3a
 --- a/temba/channels/types/android/views.py
 +++ b/temba/channels/types/android/views.py
@@ -145,8 +135,6 @@ index 2dbbe7412..a9320bf3a
  
          return super().form_valid(form)
 diff --git a/temba/formax.py b/temba/formax.py
-old mode 100644
-new mode 100755
 index 7a3a05906..1833632ea
 --- a/temba/formax.py
 +++ b/temba/formax.py
@@ -176,8 +164,6 @@ index 7a3a05906..1833632ea
          self.request.META["HTTP_X_FORMAX_ACTION"] = action
  
 diff --git a/temba/notifications/types/builtin.py b/temba/notifications/types/builtin.py
-old mode 100644
-new mode 100755
 index 680b0da66..3a28ccf4b
 --- a/temba/notifications/types/builtin.py
 +++ b/temba/notifications/types/builtin.py
@@ -200,8 +186,6 @@ index 680b0da66..3a28ccf4b
  
  class UserEmailNotificationType(NotificationType):
 diff --git a/temba/orgs/models.py b/temba/orgs/models.py
-old mode 100644
-new mode 100755
 index 5c18a3ade..79bb5f917
 --- a/temba/orgs/models.py
 +++ b/temba/orgs/models.py
@@ -226,8 +210,6 @@ index 5c18a3ade..79bb5f917
          return url
  
 diff --git a/temba/orgs/views/views.py b/temba/orgs/views/views.py
-old mode 100644
-new mode 100755
 index cfedd1b2e..13e4bc564
 --- a/temba/orgs/views/views.py
 +++ b/temba/orgs/views/views.py
@@ -286,8 +268,6 @@ index cfedd1b2e..13e4bc564
              return super().get(request, *args, **kwargs)
  
 diff --git a/temba/tickets/views.py b/temba/tickets/views.py
-old mode 100644
-new mode 100755
 index ce4aa0a92..fb7faab70
 --- a/temba/tickets/views.py
 +++ b/temba/tickets/views.py
@@ -310,8 +290,6 @@ index ce4aa0a92..fb7faab70
                  )
  
 diff --git a/temba/utils/management/commands/migrate_dynamo.py b/temba/utils/management/commands/migrate_dynamo.py
-old mode 100644
-new mode 100755
 index ad1e2f541..f149e5aef
 --- a/temba/utils/management/commands/migrate_dynamo.py
 +++ b/temba/utils/management/commands/migrate_dynamo.py
@@ -328,7 +306,6 @@ index ad1e2f541..f149e5aef
                  self.stdout.write(f"Updated TTL for {real_name}")
          else:
 diff --git a/temba/utils/templatetags/url_tags.py b/temba/utils/templatetags/url_tags.py
-new file mode 100644
 index 000000000..fb23e682f
 --- /dev/null
 +++ b/temba/utils/templatetags/url_tags.py
@@ -430,8 +407,6 @@ index 000000000..fb23e682f
 +
 +    return mark_safe(json.dumps(urls))
 diff --git a/templates/allauth/layouts/entrance.html b/templates/allauth/layouts/entrance.html
-old mode 100644
-new mode 100755
 index faf642dc0..0286c030b
 --- a/templates/allauth/layouts/entrance.html
 +++ b/templates/allauth/layouts/entrance.html
@@ -445,8 +420,6 @@ index faf642dc0..0286c030b
        display: block;
        width: 100%;
 diff --git a/templates/flows/flow_editor.html b/templates/flows/flow_editor.html
-old mode 100644
-new mode 100755
 index 7aafce942..acfd46178
 --- a/templates/flows/flow_editor.html
 +++ b/templates/flows/flow_editor.html
@@ -531,8 +504,6 @@ index 7aafce942..acfd46178
  {% block content %}
    <temba-modax header="Send Message" id="send-message-modal">
 diff --git a/templates/frame.html b/templates/frame.html
-old mode 100644
-new mode 100755
 index 2b8171207..c1e1fbd18
 --- a/templates/frame.html
 +++ b/templates/frame.html
@@ -607,8 +578,6 @@ index 2b8171207..c1e1fbd18
        {% else %}
          <temba-store>
 diff --git a/templates/locations/adminboundary_alias.html b/templates/locations/adminboundary_alias.html
-old mode 100644
-new mode 100755
 index 2b6f8a012..56b1a0cd8
 --- a/templates/locations/adminboundary_alias.html
 +++ b/templates/locations/adminboundary_alias.html
@@ -620,8 +589,6 @@ index 2b6f8a012..56b1a0cd8
 +  <alias-editor endpoint="{% url 'public.public_index' %}adminboundary/" osmid="{{ object.osm_id }}"></alias-editor>
  {% endblock content %}
 diff --git a/templates/orgs/org_join.html b/templates/orgs/org_join.html
-old mode 100644
-new mode 100755
 index 3b1882e50..28e435da1
 --- a/templates/orgs/org_join.html
 +++ b/templates/orgs/org_join.html
@@ -635,8 +602,6 @@ index 3b1882e50..28e435da1
          id="login-form">
      <fieldset>
 diff --git a/templates/public/public_frame.html b/templates/public/public_frame.html
-old mode 100644
-new mode 100755
 index aaa748c72..f86951bcb
 --- a/templates/public/public_frame.html
 +++ b/templates/public/public_frame.html
@@ -650,8 +615,6 @@ index aaa748c72..f86951bcb
            </a>
          </div>
 diff --git a/templates/public/public_index.html b/templates/public/public_index.html
-old mode 100644
-new mode 100755
 index a5df1551b..7760338fd
 --- a/templates/public/public_index.html
 +++ b/templates/public/public_index.html
@@ -665,8 +628,6 @@ index a5df1551b..7760338fd
    <div class="mb-2">
      If you still have questions, please search the history on the <a href="https://groups.google.com/g/rapidpro-dev">developer list</a> to see if your question has been asked before.
 diff --git a/templates/tickets/ticket_list.html b/templates/tickets/ticket_list.html
-old mode 100644
-new mode 100755
 index 0219685b2..20ae34ddd
 --- a/templates/tickets/ticket_list.html
 +++ b/templates/tickets/ticket_list.html
@@ -725,8 +686,6 @@ index 0219685b2..20ae34ddd
  
      function contactUpdated() {
 diff --git a/templates/triggers/trigger_list.html b/templates/triggers/trigger_list.html
-old mode 100644
-new mode 100755
 index 93b80c62a..59d1204ac
 --- a/templates/triggers/trigger_list.html
 +++ b/templates/triggers/trigger_list.html

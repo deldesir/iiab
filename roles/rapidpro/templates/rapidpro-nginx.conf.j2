@@ -42,6 +42,8 @@ location /android/ {
     proxy_pass http://unix:/run/rapidpro/gunicorn.sock;
 }
 
+
+
 location {{ rapidpro_url }}/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;

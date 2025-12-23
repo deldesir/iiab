@@ -159,7 +159,7 @@
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
     export DJANGO_SUPERUSER_EMAIL="{{ admin_email | default('admin@example.com') }}"
-    export DJANGO_SUPERUSER_PASSWORD="{{ admin_password | default('changeme') }}"
+    export DJANGO_SUPERUSER_PASSWORD="{{ rapidpro_admin_password | default('changeme') }}"
     poetry run python manage.py shell < create_superuser.py
   args:
     chdir: "{{ rapidpro_dir }}"

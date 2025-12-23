@@ -1,6 +1,11 @@
 ---
 # This file will contain all the installation tasks for RapidPro.
 
+- name: Include Wuzapi role
+  include_role:
+    name: wuzapi
+  when: wuzapi_install | default(true)
+
 - name: Drop RapidPro database if requested
   block:
     - name: Stop RapidPro services before DB drop
@@ -56,7 +61,7 @@
         path: "{{ poetry_env.stdout }}"
         state: absent
       become: yes
-      become_user: "{{ iiab_admin_user }}"
+      become_user: root
       when: poetry_env.stdout != ""
 
     - name: Remove RapidPro directory
@@ -76,6 +81,7 @@
       - libgdal-dev
       - ffmpeg
       - postgis
+      - golang-go
     state: present
   become: yes
 
@@ -162,6 +168,32 @@
   become: yes
   register: rapidpro_patch_result
 
+# Superseded by 0005
+# - name: Apply Wuzapi Integration patch
+#   patch:
+#     src: "{{ role_path }}/files/0002-Add-Wuzapi-Integration.patch"
+#     basedir: "{{ rapidpro_dir }}"
+#     strip: 1
+#   become: yes
+#   register: rapidpro_wuzapi_patch_result
+
+# Superseded by 0005
+# - name: Apply Wuzapi Integration Fixes patch
+#   patch:
+#     src: "{{ role_path }}/files/0003-Fix-Wuzapi-RapidPro.patch"
+#     basedir: "{{ rapidpro_dir }}"
+#     strip: 1
+#   become: yes
+#   register: rapidpro_wuzapi_fix_patch_result
+
+- name: Apply Wuzapi Full Integration Patch (Persistent User Fix)
+  patch:
+    src: "{{ role_path }}/files/0005-Wuzapi-Full-Integration.patch"
+    basedir: "{{ rapidpro_dir }}"
+    strip: 1
+  become: yes
+  register: rapidpro_wuzapi_full_patch_result
+
 
 
 - name: Install Poetry
@@ -171,6 +203,14 @@
     creates: "/home/{{ iiab_admin_user }}/.local/bin/poetry"
   become: yes
   become_user: "{{ iiab_admin_user }}"
+
+- name: Fix permissions on Poetry cache
+  file:
+    path: "/home/{{ iiab_admin_user }}/.cache/pypoetry"
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+    recurse: yes
+  become: yes
 
 - name: Install Python dependencies with Poetry
   shell: |
@@ -216,80 +256,137 @@
   become: yes
   when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_yarn_install.changed
 
+- name: Restore RapidPro Directory Ownership (after root build steps)
+  file:
+    path: "{{ rapidpro_dir }}"
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+    recurse: yes
+  become: yes
+  when: rapidpro_git_clone.changed or rapidpro_patch_result.changed or rapidpro_yarn_install.changed
+
+- name: Allow Nginx traversal of RapidPro directory (Professional Fix)
+  file:
+    path: "{{ rapidpro_dir }}"
+    mode: '0751'
+    state: directory
+  become: yes
+
 - name: "Set mailroom and courier architecture"
   set_fact:
     rapidpro_go_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
 
-- name: Get latest Mailroom version
-  uri:
-    url: "https://api.github.com/repos/nyaruka/mailroom/releases/latest"
-    body_format: json
-  register: mailroom_latest_release
-
-- name: Set Mailroom version fact
-  set_fact:
-    mailroom_version: "{{ mailroom_latest_release.json.tag_name | regex_replace('^v', '') }}"
-
-- name: Download Mailroom
-  get_url:
-    url: "https://github.com/nyaruka/mailroom/releases/download/v{{ mailroom_version }}/mailroom_{{ mailroom_version }}_linux_{{ rapidpro_go_arch }}.tar.gz"
-    dest: /tmp/mailroom.tar.gz
-  become: yes
-
-- name: Create temp directory for mailroom
-  tempfile:
-    state: directory
-  register: mailroom_tempdir
-
-- name: Install Mailroom
-  shell: |
-    tar -xzf /tmp/mailroom.tar.gz -C {{ mailroom_tempdir.path }}
-  become: yes
-
-- name: Move mailroom executable
-  command: mv {{ mailroom_tempdir.path }}/mailroom /usr/local/bin/mailroom
-  become: yes
-  args:
-    creates: /usr/local/bin/mailroom
-
-- name: Clean up mailroom temp directory
+- name: Cleanup Go Builds (Pre-flight)
   file:
-    path: "{{ mailroom_tempdir.path }}"
+    path: "{{ item }}"
     state: absent
-
-- name: Get latest Courier version
-  uri:
-    url: "https://api.github.com/repos/nyaruka/courier/releases/latest"
-    body_format: json
-  register: courier_latest_release
-
-- name: Set Courier version fact
-  set_fact:
-    courier_version: "{{ courier_latest_release.json.tag_name | regex_replace('^v', '') }}"
-
-- name: Download Courier
-  get_url:
-    url: "https://github.com/nyaruka/courier/releases/download/v{{ courier_version }}/courier_{{ courier_version }}_linux_{{ rapidpro_go_arch }}.tar.gz"
-    dest: /tmp/courier.tar.gz
+  with_items:
+    - /tmp/mailroom
+    - /tmp/courier
   become: yes
 
-- name: Create temp directory for courier
-  tempfile:
-    state: directory
-  register: courier_tempdir
-
-- name: Install Courier
-  shell: |
-    tar -xzf /tmp/courier.tar.gz -C {{ courier_tempdir.path }}
-  become: yes
-
-- name: Move courier executable
-  command: mv {{ courier_tempdir.path }}/courier /usr/local/bin/courier
-  become: yes
-  args:
-    creates: /usr/local/bin/courier
-
-- name: Clean up courier temp directory
+- name: Create Disk-based Go Build Directories
   file:
-    path: "{{ courier_tempdir.path }}"
+    path: "{{ item }}"
+    state: directory
+    mode: '0777'
+  with_items:
+    - /var/tmp/rapidpro_go_build/gocache
+    - /var/tmp/rapidpro_go_build/gopath
+    - /var/tmp/rapidpro_go_build/tmp
+  become: yes
+
+- name: Prepare Go Source Code
+  block:
+    - name: Clone Mailroom
+      git:
+        repo: https://github.com/nyaruka/mailroom.git
+        dest: /tmp/mailroom
+        version: "main"
+        force: yes
+      become: yes
+
+    - name: Apply Wuzapi Patch to Mailroom
+      patch:
+        src: "{{ role_path }}/files/0001-Mailroom-Wuzapi.patch"
+        basedir: /tmp/mailroom
+        strip: 1
+      become: yes
+
+    - name: Clone Courier
+      git:
+        repo: https://github.com/nyaruka/courier.git
+        dest: /tmp/courier
+        version: "main"
+        force: yes
+      become: yes
+
+
+
+    - name: Apply Wuzapi Patch to Courier
+      patch:
+        src: "{{ role_path }}/files/0001-Courier-Wuzapi.patch"
+        basedir: /tmp/courier
+        strip: 1
+      become: yes
+
+- name: Build Mailroom
+  block:
+    - name: Build Mailroom Binary
+      shell: |
+        mkdir -p /var/tmp/rapidpro_go_build/tmp /var/tmp/rapidpro_go_build/gocache /var/tmp/rapidpro_go_build/gopath
+        go mod tidy
+        go build -o mailroom ./cmd/mailroom
+      args:
+        chdir: /tmp/mailroom
+      become: yes
+      environment:
+        GOCACHE: /var/tmp/rapidpro_go_build/gocache
+        GOPATH: /var/tmp/rapidpro_go_build/gopath
+        GOTMPDIR: /var/tmp/rapidpro_go_build/tmp
+
+    - name: Install Mailroom Binary
+      copy:
+        src: /tmp/mailroom/mailroom
+        dest: /usr/local/bin/mailroom
+        mode: '0755'
+        remote_src: yes
+      become: yes
+
+- name: Build Courier
+  block:
+    - name: Build Courier Binary
+      shell: |
+        mkdir -p /var/tmp/rapidpro_go_build/tmp /var/tmp/rapidpro_go_build/gocache /var/tmp/rapidpro_go_build/gopath
+        go mod tidy
+        go build -o courier ./cmd/courier
+      args:
+        chdir: /tmp/courier
+      become: yes
+      environment:
+        GOCACHE: /var/tmp/rapidpro_go_build/gocache
+        GOPATH: /var/tmp/rapidpro_go_build/gopath
+        GOTMPDIR: /var/tmp/rapidpro_go_build/tmp
+
+    - name: Install Courier Binary
+      copy:
+        src: /tmp/courier/courier
+        dest: /usr/local/bin/courier
+        mode: '0755'
+        remote_src: yes
+      become: yes
+
+- name: Cleanup Go Builds
+  file:
+    path: "{{ item }}"
     state: absent
+  with_items:
+    - /tmp/mailroom
+    - /tmp/courier
+  become: yes
+
+- name: Cleanup Go Build Cache (Disk)
+  file:
+    path: /var/tmp/rapidpro_go_build
+    state: absent
+  become: yes
