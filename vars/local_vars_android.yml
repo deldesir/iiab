@@ -37,7 +37,8 @@ osm_vector_maps_enabled: False
 maps_install: True
 maps_enabled: True
 maps_vector_quality: ne
-maps_sat_zoom: 7
+maps_satellite_zoom: 7
+maps_terrain_zoom: none
 ##############################
 
 ##############################
@@ -57,11 +58,9 @@ awstats_enabled: False
 ##############################
 
 ##############################
-# Matomo
-# 4G RAM phone - False
-# 8GB or more - True (if desired)
-matomo_install: False
-matomo_enabled: False
+# Matomo - enable at will.
+matomo_install: True
+matomo_enabled: True
 ##############################
 
 ##############################

@@ -12,21 +12,45 @@ To configure your map, set the following variables (for the option your choose!)
    maps_enabled: True
 
    maps_vector_quality: ne
-   maps_sat_zoom: 7
+   maps_satellite_zoom: 7
    ```
 
 2. Or if you want **~3.1 GB** = 1.9 GB vector (Higher detail, up to zoom 9, from OpenStreetMap) + 1.2 GB satellite (up to zoom 9), include:
 
    ```
    maps_vector_quality: osm-z9
-   maps_sat_zoom: 9
+   maps_satellite_zoom: 9
    ```
 
 3. Or if you want **~168 GB** = 78 GB vector (Higher detail, up to zoom 14, including 3D buildings, from OpenStreetMap) + 80 GB satellite (up to zoom 12), include:
 
    ```
    maps_vector_quality: osm-full
-   maps_sat_zoom: 12
+   maps_satellite_zoom: 12
+   ```
+
+## What about terrain? (which is still experimental)?
+
+To add terrain files, you can set this optional setting. You may find that when looking at mountains, high quality satellite imagery may compensate for low quality terrain, and vice versa.
+
+1. If you want **~980MB** terrain maps (up to zoom 7), include:
+   ```
+   maps_terrain_zoom: 7
+   ```
+
+2. If you want **~6.4GB** terrain maps (up to zoom 8), include:
+   ```
+   maps_terrain_zoom: 8
+   ```
+
+3. If you want **~29GB** terrain maps (up to zoom 9), include:
+   ```
+   maps_terrain_zoom: 9
+   ```
+
+4. If you want **~106GB** terrain maps (up to zoom 10), include:
+   ```
+   maps_terrain_zoom: 10
    ```
 
 ## Can I try out search (which is still experimental)?
