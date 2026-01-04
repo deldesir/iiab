@@ -43,6 +43,7 @@
 
             // set immediately after the tag is defined
             let mb = null
+            let shouldSetDefaultView = false
 
             // Defining these hash get/set functions outside of the window load because we
             // need to run some of it earlier. Again, the overall code layout sucks and we
@@ -74,31 +75,50 @@
             // when it's set.
             function readHash() {
                 const [lat, lon, pitch, bearing, zoom, globe, _mapStyleChoice] = window.location.hash.slice(1).split('/')
-                mb.lat = lat || 0
-                mb.lon = lon || 0
-                mb.pitch = pitch || 0
-                mb.bearing = bearing || 0
-                mb.zoom = zoom || 0
 
-                mapStyleChoice = _mapStyleChoice || "natural"
+                // Set this whether or not we have the hash, unlike the other parameters.
+                // We still need to set a default here.
+                mapStyleChoice = _mapStyleChoice || "hybrid"
+
+                if (window.location.hash) {
+                    mb.lat = lat || 0
+                    mb.lon = lon || 0
+                    mb.pitch = pitch || 0
+                    mb.bearing = bearing || 0
+                    mb.zoom = zoom || 0
+                } else {
+                    // If there's no initial hash, set the default view once the map loads
+                    shouldSetDefaultView = true
+                }
             }
             function readHashGlobe() {
                 const [lat, lon, pitch, bearing, zoom, globe, _mapStyleChoice] = window.location.hash.slice(1).split('/')
                 mb.globe = globe === 'g'
             }
 
+            function setDefaultView() {
+                // Setting the default view to show all the continents once, and have a decent vertical center.
+                //
+                // The default view is easiest set using fitBounds, which requires the map to be active.
+                // Setting maps.black's parameters (as in readHash) with the same goal would require
+                // calculating optimal zoom and location, which would be difficult.
+                if (shouldSetDefaultView) {
+                    mb.map.fitBounds([[-180, 30], [180, 30] ], {maxDuration: 0.1});
+                    shouldSetDefaultView = false
+                }
+            }
             window.addEventListener("load", () => {
                 function _setStyle() {
                     mb.mapstyle = {
                         // Has nicely colored regions, and buildings
                         natural: {
-                            true:  "openstreetmap-openmaptiles/maputnik/liberty",
-                            false: "naturalearth-openmaptiles/maputnik/liberty",
+                            true:  "openstreetmap-openmaptiles/openfreemap/liberty",
+                            false: "naturalearth-openmaptiles/openfreemap/liberty",
                         },
                         // Has more clearly defined political boundaries
                         // TODO - find something like this with buildings too?
                         political:  {
-                            true:  "openstreetmap-openmaptiles/openmaptiles/basic",
+                            true:  "openstreetmap-openmaptiles/qwant/basic",
                             false: undefined, // We will hide this option for naturalearth since it's not great for political maps - TODO Extract a low res osm for political map.
                         },
                         hybrid:  {
@@ -358,6 +378,8 @@
                         // Future changes in orientation should also be reflected in the hash:
                         mb.map.off('moveend', setHash) // unsetting first, in case it's already there from a previous refresh
                         mb.map.on('moveend', setHash)
+
+                        setDefaultView()
                     } else {
                         // For now try periodically until it's ready.
                         setUpMapTimeout = setTimeout(setUpMap, 100)
@@ -367,7 +389,8 @@
         </script>
     </head>
     <body>
-        <maps-black loader="pmtiles" navigationcontrol="true"></maps-black>
+        {# `cooperativegestures=false` provides familiar zoom/scroll/tilt controls for fullscreen #}
+        <maps-black loader="pmtiles" navigationcontrol="true" cooperativegestures="false"></maps-black>
         <script>
           mb = document.getElementsByTagName("maps-black")[0];
           readHash()
