@@ -44,6 +44,16 @@
   become: yes
   register: rapidpro_settings
 
+- name: Ensure RapidPro log directory permissions (Hardening)
+  file:
+    path: /var/log/rapidpro
+    state: directory
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+    mode: '0755'
+    recurse: yes
+  become: yes
+
 
 
 - name: Force start postgresql for migrations (Android)
@@ -107,6 +117,12 @@
     daemon_reload: yes
   become: yes
   when: ansible_service_mgr == 'systemd'
+
+- name: Force kill any zombie dynalite processes (Android)
+  shell: pkill -9 -f dynalite || true
+  become: yes
+  ignore_errors: yes
+  when: is_proot
 
 - name: Force start rapidpro-dynamo for migrations (Android)
   shell: /usr/local/bin/pdsm start rapidpro-dynamo

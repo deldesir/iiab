@@ -40,6 +40,10 @@ start() {
 
   echo "[pdsm:$SERVICE_NAME] starting..."
   
+  # Proactive Cleanup: Kill any zombies to prevent duplicate consumers
+  # This is critical for queue consumers in Proot environment
+  pkill -u {{ iiab_admin_user }} -f "/usr/local/bin/courier" >/dev/null 2>&1 || true
+  
   # Ensure log ownership
   chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$LOGFILE" 2>/dev/null || true
 
