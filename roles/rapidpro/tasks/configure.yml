@@ -108,6 +108,12 @@
   become: yes
   when: ansible_service_mgr == 'systemd'
 
+- name: Force kill any zombie dynalite processes (Android)
+  shell: pkill -9 -f dynalite || true
+  become: yes
+  ignore_errors: yes
+  when: is_proot
+
 - name: Force start rapidpro-dynamo for migrations (Android)
   shell: /usr/local/bin/pdsm start rapidpro-dynamo
   become: yes
