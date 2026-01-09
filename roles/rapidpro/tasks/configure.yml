@@ -56,6 +56,33 @@
   become: yes
   when: ansible_service_mgr != 'systemd'
 
+- name: Copy prebuilt database dump (Android)
+  copy:
+    src: rapidpro_android_seed.dump
+    dest: /tmp/rapidpro_android_seed.dump
+    mode: '0644'
+  when: is_proot
+  become: yes
+
+- name: Check if database is populated (Android)
+  shell: |
+    export PGHOST=/tmp
+    psql -d {{ rapidpro_db_name }} -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';" -t
+  become: yes
+  become_user: postgres
+  register: db_table_count
+  when: is_proot
+  changed_when: false
+  ignore_errors: yes
+
+- name: Restore prebuilt database (Android)
+  shell: |
+    export PGHOST=/tmp
+    pg_restore -d {{ rapidpro_db_name }} /tmp/rapidpro_android_seed.dump || true
+  become: yes
+  become_user: postgres
+  when: is_proot and (db_table_count.stdout | default('0') | trim | int == 0)
+
 - name: Run database migrations
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
@@ -64,7 +91,7 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-  when: rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: not is_proot and (rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed)
 
 - name: Create DynamoDB systemd service
   template:
