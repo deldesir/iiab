@@ -45,7 +45,9 @@ start() {
 
   # Use screen for persistence, run as correct user
   # Uses custom runner to force IPv4 binding (fixes Android EADDRINUSE)
+  # NODE_PATH required because dynalite is installed globally
   screen -dmS "$SERVICE_NAME" su - {{ iiab_admin_user }} -c "\
+    export NODE_PATH=/usr/lib/node_modules; \
     node {{ rapidpro_dir }}/dynalite_runner.js {{ rapidpro_dir }}/dynamo >>\"$LOGFILE\" 2>&1"
   
   # Stabilization Loop
