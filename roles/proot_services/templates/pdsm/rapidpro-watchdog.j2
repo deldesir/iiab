@@ -10,7 +10,7 @@ PIDFILE="/run/rapidpro/watchdog.pid"
 LOGFILE="/var/log/rapidpro/watchdog.log"
 CHECK_INTERVAL=300
 
-SERVICES="valkey postgresql rapidpro-server rapidpro-celery"
+SERVICES="valkey postgresql rapidpro-dynamo rapidpro-server rapidpro-celery courier mailroom wuzapi"
 
 running() {
     [ -s "$PIDFILE" ] || return 1

@@ -1,0 +1,21 @@
+/var/log/rapidpro/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    su {{ iiab_admin_user }} {{ iiab_admin_user }}
+}
+
+/var/log/wuzapi/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    su {{ iiab_admin_user }} {{ iiab_admin_user }}
+}

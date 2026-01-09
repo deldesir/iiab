@@ -118,6 +118,14 @@
   become: yes
   when: ansible_service_mgr == 'systemd'
 
+- name: Deploy Dynalite IPv4 Runner (Android Fix)
+  copy:
+    src: dynalite_runner.js
+    dest: "{{ rapidpro_dir }}/dynalite_runner.js"
+    owner: "{{ iiab_admin_user }}"
+    mode: '0755'
+  become: yes
+
 - name: Force kill any zombie dynalite processes (Android)
   shell: pkill -9 -f dynalite || true
   become: yes
@@ -315,6 +323,11 @@
   shell: /usr/local/bin/pdsm restart rapidpro-server
   become: yes
   when: execute_frontend_patch_script.changed and ansible_service_mgr != 'systemd'
+
+- name: Start RapidPro Watchdog (Android) ensures services stay running
+  shell: /usr/local/bin/pdsm start rapidpro-watchdog
+  become: yes
+  when: is_proot
 
 - name: Enable or disable RapidPro services
   include_tasks: enable-or-disable.yml

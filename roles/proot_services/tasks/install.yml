@@ -8,10 +8,20 @@
 - name: Install PDSM services on proot
   when: is_proot
   block:
-    - name: Ensure psmisc (provides fuser) is installed
+    - name: Ensure psmisc and logrotate are installed
       package:
-        name: psmisc
+        name:
+          - psmisc
+          - logrotate
         state: present
+
+    - name: Deploy RapidPro logrotate config (Android)
+      template:
+        src: rapidpro.logrotate.j2
+        dest: /etc/logrotate.d/rapidpro
+        owner: root
+        group: root
+        mode: '0644'
 
     - name: Ensure base PDSM dirs exist
       file:
