@@ -118,6 +118,21 @@
   become: yes
   when: ansible_service_mgr == 'systemd'
 
+- name: Force Deploy RapidPro Dynamo PDSM Wrapper (Ensure IPv4 Runner)
+  template:
+    src: ../../proot_services/templates/pdsm/rapidpro-dynamo.j2
+    dest: /usr/local/pdsm/services-available/rapidpro-dynamo
+    owner: root
+    group: root
+    mode: '0755'
+  become: yes
+  when: is_proot
+
+- name: Force Restart DynamoDB to apply new wrapper (Android)
+  shell: /usr/local/bin/pdsm restart rapidpro-dynamo
+  become: yes
+  when: is_proot
+
 - name: Deploy Dynalite IPv4 Runner (Android Fix)
   copy:
     src: dynalite_runner.js
