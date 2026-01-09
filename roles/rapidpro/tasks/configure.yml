@@ -44,6 +44,16 @@
   become: yes
   register: rapidpro_settings
 
+- name: Ensure RapidPro log directory permissions (Hardening)
+  file:
+    path: /var/log/rapidpro
+    state: directory
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+    mode: '0755'
+    recurse: yes
+  become: yes
+
 
 
 - name: Force start postgresql for migrations (Android)
