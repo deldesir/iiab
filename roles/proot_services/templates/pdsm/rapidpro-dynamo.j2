@@ -36,7 +36,7 @@ start() {
   if fuser 4567/tcp >/dev/null 2>&1; then
       echo "[pdsm:$SERVICE_NAME] Port 4567 in use, attempting cleanup..."
       fuser -k 4567/tcp >/dev/null 2>&1 || true
-      pkill -f "dynalite" >/dev/null 2>&1 || true
+      pkill -f "dynalite_runner.js" >/dev/null 2>&1 || true
       sleep 2
   fi
 
@@ -44,8 +44,9 @@ start() {
   chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$LOGFILE" 2>/dev/null || true
 
   # Use screen for persistence, run as correct user
+  # Uses custom runner to force IPv4 binding (fixes Android EADDRINUSE)
   screen -dmS "$SERVICE_NAME" su - {{ iiab_admin_user }} -c "\
-    /usr/bin/dynalite --port 4567 --path {{ rapidpro_dir }}/dynamo >>\"$LOGFILE\" 2>&1"
+    node {{ rapidpro_dir }}/dynalite_runner.js {{ rapidpro_dir }}/dynamo >>\"$LOGFILE\" 2>&1"
   
   # Stabilization Loop
   for i in $(seq 1 5); do
