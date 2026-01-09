@@ -40,6 +40,9 @@ start() {
   fi
 
   echo "[pdsm:$SERVICE_NAME] starting..."
+
+  # Proactive Cleanup: Kill any zombies to prevent duplicate consumers
+  pkill -u {{ iiab_admin_user }} -f "/usr/local/bin/mailroom" >/dev/null 2>&1 || true
   export USER={{ iiab_admin_user }}
 
   # Use screen for persistence

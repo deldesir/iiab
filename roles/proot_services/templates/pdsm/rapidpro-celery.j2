@@ -50,6 +50,9 @@ start() {
 
   echo "[pdsm:$SERVICE_NAME] starting..."
   
+  # Proactive Cleanup: Kill any zombie celery workers
+  pkill -u {{ iiab_admin_user }} -f "celery -A temba worker" >/dev/null 2>&1 || true
+  
   # Ensure log ownership
   chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$LOGFILE" 2>/dev/null || true
   
