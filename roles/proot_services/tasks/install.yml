@@ -15,6 +15,16 @@
           - logrotate
         state: present
 
+    - name: Fix Android DNS (Force 8.8.8.8) to resolve connection refused errors
+      copy:
+        content: |
+          nameserver 8.8.8.8
+          nameserver 1.1.1.1
+        dest: /etc/resolv.conf
+        owner: root
+        group: root
+        mode: '0644'
+
     - name: Deploy RapidPro logrotate config (Android)
       template:
         src: rapidpro.logrotate.j2
