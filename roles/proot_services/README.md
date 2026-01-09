@@ -39,7 +39,7 @@ Start with an Android 12-or-higher phone or tablet:
      * `Disable child process restrictions` (English), or
      * `Desactivar restricciones de procesos secundarios` (Spanish)
 
-   * **Android 12 and 13:** The new installer (`0_termux-setup_v2.sh`) will attempt to automatically disable the ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md) via Wireless Debugging.
+   * **Android 12 and 13:** The new installer (`0_termux-setup.sh`) will attempt to automatically disable the ["Phantom Process Killer" (PPK)](https://github.com/agnostic-apollo/Android-Docs/blob/master/en/docs/apps/processes/phantom-cached-and-empty-processes.md) via Wireless Debugging.
      
      *Ensure "Wireless Debugging" is enabled in Developer Options before running the installer.*
 
@@ -50,7 +50,7 @@ Start with an Android 12-or-higher phone or tablet:
    Run the following command from the Termux CLI:
 
    ```
-   curl https://raw.githubusercontent.com/deldesir/iiab/refs/heads/master/roles/proot_services/0_termux-setup_v2.sh | bash -s -- --all
+   curl https://raw.githubusercontent.com/deldesir/iiab/refs/heads/master/roles/proot_services/0_termux-setup.sh | bash -s -- --all
    ```
 
    **What this does:**
@@ -58,6 +58,10 @@ Start with an Android 12-or-higher phone or tablet:
    * **Baseline Setup**: Installs `proot-distro`, `adb`, and dependencies.
    * **Debian Install**: Bootstraps the Debian environment (with DNS fixes included).
    * **ADB Pairing**: Automatically sets up Wireless Debugging (for PPK disable).
+
+   **Important Note on Pairing:**
+   When the script asks for the pairing code, you must keep the "Pair with device" Settings screen open.
+   **Use Split Screen** to view both Termux and the Settings app simultaneously. Answering the Termux notification while switching apps will often fail because the pairing code changes when the Settings window closes.
 
    Once complete, enter [PRoot Distro](https://wiki.termux.com/wiki/PRoot)'s Debian environment:
 
