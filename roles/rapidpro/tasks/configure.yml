@@ -324,5 +324,10 @@
   become: yes
   when: execute_frontend_patch_script.changed and ansible_service_mgr != 'systemd'
 
+- name: Start RapidPro Watchdog (Android) ensures services stay running
+  shell: /usr/local/bin/pdsm start rapidpro-watchdog
+  become: yes
+  when: is_proot
+
 - name: Enable or disable RapidPro services
   include_tasks: enable-or-disable.yml
