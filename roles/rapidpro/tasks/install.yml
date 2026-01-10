@@ -204,10 +204,12 @@
     global: yes
   become: yes
 
-- name: Install dynalite
-  npm:
-    name: dynalite
-    global: yes
+- name: Install dynalite (Memory-safe)
+  shell: |
+    export UV_THREADPOOL_SIZE=1
+    npm install --global dynalite --no-optional
+  args:
+    creates: /usr/bin/dynalite
   become: yes
 
 - name: Install JavaScript dependencies (with timeout)
