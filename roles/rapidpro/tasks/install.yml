@@ -212,9 +212,10 @@
     creates: /usr/bin/dynalite
   become: yes
 
-- name: Install JavaScript dependencies (with timeout)
+- name: Install JavaScript dependencies (Memory-safe)
   shell: |
-    /usr/bin/yarn install --network-timeout 300000 --non-interactive
+    export UV_THREADPOOL_SIZE=1
+    /usr/bin/yarn install --network-timeout 600000 --non-interactive --check-files
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
