@@ -1,6 +1,7 @@
 #!/bin/sh
 # /usr/local/pdsm/services-available/rapidpro-dynamo
 # PDSM service wrapper for RapidPro Dynalite
+# FIXED: Uses direct binary execution via screen + explicit IPv4 binding
 
 PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 [ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
@@ -12,6 +13,7 @@ LOGFILE="/var/log/rapidpro/dynamo.log"
 mkdir -p /run/rapidpro
 mkdir -p /var/log/rapidpro
 mkdir -p {{ rapidpro_dir }}/dynamo
+# Ensure extensive ownership fix
 chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} /var/log/rapidpro /run/rapidpro {{ rapidpro_dir }}/dynamo 2>/dev/null || true
 
 running() {
@@ -32,25 +34,28 @@ start() {
 
   echo "[pdsm:$SERVICE_NAME] starting..."
   
-  # Aggressive cleanup: Unconditionally kill old runner instances
-  # This avoids reliance on 'fuser' which can be flaky on Android PRoot
-  pkill -f "dynalite_runner.js" >/dev/null 2>&1 || true
-
-  # Ensure log ownership
+  # Cleanup attempt
+  pkill -f "dynalite" >/dev/null 2>&1 || true
+  rm -f "$PIDFILE"
   chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$LOGFILE" 2>/dev/null || true
 
-  # Use screen for persistence, run as correct user
-  # Uses custom runner to force IPv4 binding (fixes Android EADDRINUSE)
-  # NODE_PATH required because dynalite is installed globally
+  # VM-Style Direct Binary Execution
+  DYNALITE_BIN="{{ rapidpro_dir }}/node_modules/.bin/dynalite"
+  if [ ! -x "$DYNALITE_BIN" ]; then
+      echo "[pdsm:$SERVICE_NAME] Error: $DYNALITE_BIN not found" >&2
+      return 1
+  fi
+
+  # Run via screen as correct user
+  # CRITICAL FIX: --listening 127.0.0.1 forces IPv4 binding, avoiding IPv6 zombie conflicts
   screen -dmS "$SERVICE_NAME" su - {{ iiab_admin_user }} -c "\
     export NODE_PATH={{ rapidpro_dir }}/node_modules:/usr/lib/node_modules; \
-    node {{ rapidpro_dir }}/dynalite_runner.js {{ rapidpro_dir }}/dynamo >>\"$LOGFILE\" 2>&1"
+    exec $DYNALITE_BIN --port 4567 --listening 127.0.0.1 --path {{ rapidpro_dir }}/dynamo >>\"$LOGFILE\" 2>&1"
   
   # Stabilization Loop
   for i in $(seq 1 5); do
       sleep 1
       if running; then
-          # Try to grab PID if possible, though screen check is primary
           pgrep -u "{{ iiab_admin_user }}" -f "dynalite" > "$PIDFILE" 2>/dev/null || true
           echo "[pdsm:$SERVICE_NAME] started"
           return 0
@@ -58,7 +63,6 @@ start() {
   done
 
   echo "[pdsm:$SERVICE_NAME] failed to start" >&2
-  # Cleanup screen if it failed to stabilize
   screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
   return 1
 }
@@ -70,16 +74,19 @@ stop() {
   fi
 
   echo "[pdsm:$SERVICE_NAME] stopping..."
+  
   pid="$(cat "$PIDFILE" 2>/dev/null)"
-  if [ -n "$pid" ]; then
-    kill "$pid" 2>/dev/null || true
-    sleep 2
-    if running; then
-       kill -9 "$pid" 2>/dev/null || true
-    fi
-    screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
-    rm -f "$PIDFILE"
-  fi
+  [ -n "$pid" ] && kill "$pid" 2>/dev/null
+  
+  for i in $(seq 1 3); do
+      if ! running; then break; fi
+      sleep 1
+  done
+  
+  screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
+  pkill -f "dynalite" >/dev/null 2>&1 || true
+  rm -f "$PIDFILE"
+  
   echo "[pdsm:$SERVICE_NAME] stopped"
   return 0
 }
