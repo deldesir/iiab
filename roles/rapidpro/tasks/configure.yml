@@ -129,7 +129,10 @@
   when: is_proot
 
 - name: Force Restart DynamoDB to apply new wrapper (Android)
-  shell: /usr/local/bin/pdsm restart rapidpro-dynamo
+  shell: |
+    /usr/local/bin/pdsm stop rapidpro-dynamo || true
+    sleep 2
+    /usr/local/bin/pdsm start rapidpro-dynamo
   become: yes
   when: is_proot
 

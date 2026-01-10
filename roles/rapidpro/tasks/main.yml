@@ -6,6 +6,13 @@
   include_tasks: install.yml
   when: rapidpro_enabled
 
+- name: Start PostgreSQL and Valkey (Android Startup)
+  shell: |
+    /usr/local/bin/pdsm start postgresql
+    /usr/local/bin/pdsm start valkey
+  become: yes
+  when: ansible_service_mgr != 'systemd'
+
 - name: Wait for PostgreSQL to be ready
   wait_for:
     port: 5432
