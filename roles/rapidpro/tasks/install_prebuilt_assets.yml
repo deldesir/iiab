@@ -1,0 +1,28 @@
+---
+- name: Download RapidPro Assets Tarball
+  get_url:
+    url: "{{ rapidpro_assets_url }}"
+    dest: "{{ rapidpro_dir }}/assets.tar.gz"
+    mode: '0644'
+  become: yes
+
+- name: Extract RapidPro Assets (node_modules + static)
+  unarchive:
+    src: "{{ rapidpro_dir }}/assets.tar.gz"
+    dest: "{{ rapidpro_dir }}"
+    remote_src: yes
+  become: yes
+
+- name: Clean up tarball
+  file:
+    path: "{{ rapidpro_dir }}/assets.tar.gz"
+    state: absent
+  become: yes
+
+- name: Link Dynalite (Prebuilt)
+  file:
+    src: "{{ rapidpro_dir }}/node_modules/.bin/dynalite"
+    dest: /usr/bin/dynalite
+    state: link
+    force: yes
+  become: yes

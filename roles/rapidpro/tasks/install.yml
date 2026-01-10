@@ -203,6 +203,7 @@
     name: yarn
     global: yes
   become: yes
+  when: not rapidpro_use_prebuilt_assets
 
 - name: Install dynalite (Memory-safe)
   shell: |
@@ -211,21 +212,25 @@
   args:
     creates: /usr/bin/dynalite
   become: yes
+  when: not rapidpro_use_prebuilt_assets
 
-- name: Install JavaScript dependencies (with timeout)
+- name: Install JavaScript dependencies (Memory-safe)
   shell: |
-    /usr/bin/yarn install --network-timeout 300000 --non-interactive
+    export UV_THREADPOOL_SIZE=1
+    /usr/bin/yarn install --network-timeout 600000 --non-interactive --check-files
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
   register: rapidpro_yarn_install
   changed_when: false
+  when: not rapidpro_use_prebuilt_assets
 
 - name: Install global JS tools (less)
   yarn:
     name: less
     global: yes
   become: yes
+  when: not rapidpro_use_prebuilt_assets
 
 - name: Build CSS assets
   shell: |
@@ -233,7 +238,11 @@
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
-  when: rapidpro_git_clone.changed or rapidpro_yarn_install.changed
+  when: (not rapidpro_use_prebuilt_assets) and (rapidpro_git_clone.changed or rapidpro_yarn_install.changed)
+
+- name: Install Prebuilt Assets
+  include_tasks: install_prebuilt_assets.yml
+  when: rapidpro_use_prebuilt_assets
 
 - name: Restore RapidPro Directory Ownership (after root build steps)
   command: "chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} {{ rapidpro_dir }}"

@@ -21,6 +21,11 @@ rapidpro_drop_db_on_reinstall: false
 rapidpro_force_drop_db: false
 
 wuzapi_install: True
+
+# Prebuilt Assets Strategy (Performance/Stability on ARM64)
+rapidpro_use_prebuilt_assets: true
+rapidpro_assets_version: "v1.0.0"
+rapidpro_assets_url: "https://github.com/deldesir/rp-assets/raw/main/rapidpro-assets-{{ rapidpro_assets_version }}.tar.gz"
 wuzapi_enabled: True
 wuzapi_port: 8095
 
