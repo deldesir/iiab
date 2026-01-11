@@ -136,6 +136,15 @@
     mode: '0755'
   become: yes
 
+- name: Deploy DynamoDB Launcher Script (Android Fix)
+  copy:
+    src: start_dynamo.sh
+    dest: "{{ rapidpro_dir }}/start_dynamo.sh"
+    owner: "{{ iiab_admin_user }}"
+    mode: '0755'
+  become: yes
+  when: is_proot
+
 - name: Force Restart DynamoDB to apply new wrapper (Android)
   shell: |
     /usr/local/bin/pdsm stop rapidpro-dynamo || true

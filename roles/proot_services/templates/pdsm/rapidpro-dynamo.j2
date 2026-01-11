@@ -17,13 +17,18 @@ mkdir -p {{ rapidpro_dir }}/dynamo
 chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} /var/log/rapidpro /run/rapidpro {{ rapidpro_dir }}/dynamo 2>/dev/null || true
 
 running() {
-  if screen -list | grep -q "\.$SERVICE_NAME"; then
+  # Check PID file first
+  if [ -s "$PIDFILE" ]; then
+    pid=$(cat "$PIDFILE")
+    if kill -0 "$pid" 2>/dev/null; then
       return 0
+    fi
   fi
-  [ -s "$PIDFILE" ] || return 1
-  pid="$(cat "$PIDFILE" 2>/dev/null)"
-  [ -n "$pid" ] || return 1
-  kill -0 "$pid" 2>/dev/null
+  # Fallback to pgrep (and update pidfile)
+  if pgrep -u "{{ iiab_admin_user }}" -f "dynalite" > "$PIDFILE"; then
+    return 0
+  fi
+  return 1
 }
 
 start() {
@@ -35,35 +40,31 @@ start() {
   echo "[pdsm:$SERVICE_NAME] starting..."
   
   # Cleanup attempt
-  pkill -f "dynalite" >/dev/null 2>&1 || true
+  pkill -u "{{ iiab_admin_user }}" -f "dynalite" >/dev/null 2>&1 || true
   rm -f "$PIDFILE"
   chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$LOGFILE" 2>/dev/null || true
 
-  # VM-Style Direct Binary Execution
-  DYNALITE_BIN="{{ rapidpro_dir }}/node_modules/.bin/dynalite"
-  if [ ! -x "$DYNALITE_BIN" ]; then
-      echo "[pdsm:$SERVICE_NAME] Error: $DYNALITE_BIN not found" >&2
-      return 1
+  # Run via nohup as correct user (Bypass screen instability)
+  if [ ! -x "{{ rapidpro_dir }}/start_dynamo.sh" ]; then
+     echo "Launcher {{ rapidpro_dir }}/start_dynamo.sh not found" >&2
+     return 1
   fi
 
-  # Run via screen as correct user
-  # CRITICAL FIX: --listening 127.0.0.1 forces IPv4 binding, avoiding IPv6 zombie conflicts
-  screen -dmS "$SERVICE_NAME" su - {{ iiab_admin_user }} -c "\
-    export NODE_PATH={{ rapidpro_dir }}/node_modules:/usr/lib/node_modules; \
-    exec $DYNALITE_BIN --port 4567 --listening 127.0.0.1 --path {{ rapidpro_dir }}/dynamo >>\"$LOGFILE\" 2>&1"
+  # Execute launcher in background with nohup
+  # Logic: su -> nohup -> launcher. Redirects handled in launcher.
+  # Use /bin/bash to ensure 'disown' and other builtins work
+  su -s /bin/bash {{ iiab_admin_user }} -c "nohup {{ rapidpro_dir }}/start_dynamo.sh >/dev/null 2>&1 & disown"
   
   # Stabilization Loop
-  for i in $(seq 1 5); do
+  for i in $(seq 1 10); do
       sleep 1
       if running; then
-          pgrep -u "{{ iiab_admin_user }}" -f "dynalite" > "$PIDFILE" 2>/dev/null || true
           echo "[pdsm:$SERVICE_NAME] started"
           return 0
       fi
   done
-
+  
   echo "[pdsm:$SERVICE_NAME] failed to start" >&2
-  screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
   return 1
 }
 
@@ -78,13 +79,15 @@ stop() {
   pid="$(cat "$PIDFILE" 2>/dev/null)"
   [ -n "$pid" ] && kill "$pid" 2>/dev/null
   
-  for i in $(seq 1 3); do
+  for i in $(seq 1 5); do
       if ! running; then break; fi
       sleep 1
   done
   
-  screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
-  pkill -f "dynalite" >/dev/null 2>&1 || true
+  # Hard kill
+  if running; then
+      pkill -u "{{ iiab_admin_user }}" -f "dynalite" >/dev/null 2>&1 || true
+  fi
   rm -f "$PIDFILE"
   
   echo "[pdsm:$SERVICE_NAME] stopped"
