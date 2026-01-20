@@ -8,7 +8,7 @@ PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 
 SERVICE_NAME="rapidpro-dynamo"
 PIDFILE="/run/rapidpro/dynamo.pid"
-LOGFILE="/var/log/rapidpro/dynamo.log"
+LOGFILE="/tmp/dynamo.log"
 
 mkdir -p /run/rapidpro
 mkdir -p /var/log/rapidpro
@@ -50,7 +50,7 @@ start() {
 
   # Use screen for persistence (PostgreSQL pattern)
   # Run screen as root, then switch user inside. Survives headless.
-  screen -dmS rapidpro-dynamo su -s /bin/bash {{ iiab_admin_user }} -c "{{ rapidpro_dir }}/start_dynamo.sh > /var/log/rapidpro/dynamo.log 2>&1"
+  screen -dmS rapidpro-dynamo su -s /bin/bash {{ iiab_admin_user }} -c "{{ rapidpro_dir }}/start_dynamo.sh > /tmp/dynamo.log 2>&1"
   
   # Stabilization Loop
   for i in $(seq 1 10); do

@@ -15,5 +15,4 @@ mkdir -p {{ rapidpro_dir }}/dynamo
 exec /usr/bin/node {{ rapidpro_dir }}/node_modules/.bin/dynalite \
   --port=4567 \
   --listening=127.0.0.1 \
-  --path={{ rapidpro_dir }}/dynamo \
-  > /var/log/rapidpro/dynamo.log 2>&1
+  --path={{ rapidpro_dir }}/dynamo
