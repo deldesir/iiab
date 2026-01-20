@@ -57,4 +57,12 @@
     create: yes
   become: yes
 
+- name: Symlink Wuzapi binary to path (Android)
+  file:
+    src: "{{ wuzapi_dir }}/wuzapi"
+    dest: /usr/local/bin/wuzapi
+    state: link
+  become: yes
+  when: is_proot
+
 
