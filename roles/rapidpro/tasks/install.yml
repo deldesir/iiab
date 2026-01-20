@@ -120,10 +120,16 @@
   include_role:
     name: nodejs
 
+- name: Check if rapidpro directory is already safe
+  command: git config --global --get-all safe.directory
+  register: git_safe_dirs
+  changed_when: false
+  ignore_errors: yes
+
 - name: Add rapidpro directory to git safe directories
   command: git config --global --add safe.directory {{ rapidpro_dir }}
   become: yes
-  changed_when: false
+  when: rapidpro_dir not in (git_safe_dirs.stdout_lines | default([]))
 
 - name: Clone/update RapidPro repository
   git:
@@ -135,7 +141,7 @@
   register: rapidpro_git_clone
 
 - name: Set ownership of project directory (fast)
-  command: "chown -R {{ iiab_admin_user }}:www-data {{ rapidpro_dir }}"
+  command: "chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} {{ rapidpro_dir }}"
   become: yes
   changed_when: false
 
@@ -162,19 +168,12 @@
   become: yes
   changed_when: false
 
-- name: Add missing regex dependency
-  shell: |
-    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    poetry add regex
-  args:
-    chdir: "{{ rapidpro_dir }}"
-  become: yes
-  become_user: "{{ iiab_admin_user }}"
+
 
 - name: Add missing dependencies
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    poetry add gunicorn celery
+    poetry add regex gunicorn celery
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
