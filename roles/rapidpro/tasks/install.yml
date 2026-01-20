@@ -283,7 +283,6 @@
 - name: Enable and Start PDSM services (Android/Proot only)
   shell: |
     /usr/local/bin/pdsm enable {{ item }}
-    /usr/local/bin/pdsm start {{ item }}
   loop:
     - postgresql
     - valkey

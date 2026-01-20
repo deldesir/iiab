@@ -56,15 +56,7 @@
 
 
 
-- name: Force start postgresql for migrations (Android)
-  shell: /usr/local/bin/pdsm start postgresql
-  become: yes
-  when: ansible_service_mgr != 'systemd'
 
-- name: Force start valkey for migrations (Android)
-  shell: /usr/local/bin/pdsm start valkey
-  become: yes
-  when: ansible_service_mgr != 'systemd'
 
 - name: Copy prebuilt database dump (Android)
   copy:
@@ -145,24 +137,10 @@
   become: yes
   when: is_proot
 
-- name: Force Restart DynamoDB to apply new wrapper (Android)
-  shell: |
-    /usr/local/bin/pdsm stop rapidpro-dynamo || true
-    sleep 2
-    /usr/local/bin/pdsm start rapidpro-dynamo
+- name: Restart RapidPro DynamoDB (Android)
+  shell: /usr/local/bin/pdsm restart rapidpro-dynamo
   become: yes
   when: is_proot
-
-- name: Force kill any zombie dynalite processes (Android)
-  shell: pkill -9 -f dynalite || true
-  become: yes
-  ignore_errors: yes
-  when: is_proot
-
-- name: Force start rapidpro-dynamo for migrations (Android)
-  shell: /usr/local/bin/pdsm start rapidpro-dynamo
-  become: yes
-  when: ansible_service_mgr != 'systemd'
 
 - name: Wait for DynamoDB to accept connections
   wait_for:
