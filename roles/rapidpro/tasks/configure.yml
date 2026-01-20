@@ -137,8 +137,8 @@
   become: yes
 
 - name: Deploy DynamoDB Launcher Script (Android Fix)
-  copy:
-    src: start_dynamo.sh
+  template:
+    src: start_dynamo.sh.j2
     dest: "{{ rapidpro_dir }}/start_dynamo.sh"
     owner: "{{ iiab_admin_user }}"
     mode: '0755'
