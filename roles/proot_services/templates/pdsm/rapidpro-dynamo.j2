@@ -25,7 +25,7 @@ running() {
     fi
   fi
   # Fallback to pgrep (and update pidfile)
-  if pgrep -u "{{ iiab_admin_user }}" -f "dynalite" > "$PIDFILE"; then
+  if pgrep -f "node_modules/.bin/dynalite" > "$PIDFILE"; then
     return 0
   fi
   return 1
@@ -40,7 +40,7 @@ start() {
   echo "[pdsm:$SERVICE_NAME] starting..."
   
   # Cleanup attempt
-  pkill -u "{{ iiab_admin_user }}" -f "dynalite" >/dev/null 2>&1 || true
+  pkill -f "node_modules/.bin/dynalite" >/dev/null 2>&1 || true
   rm -f "$PIDFILE"
   chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$LOGFILE" 2>/dev/null || true
 
@@ -86,7 +86,7 @@ stop() {
   
   # Hard kill
   if running; then
-      pkill -u "{{ iiab_admin_user }}" -f "dynalite" >/dev/null 2>&1 || true
+      pkill -f "node_modules/.bin/dynalite" >/dev/null 2>&1 || true
   fi
   rm -f "$PIDFILE"
   
