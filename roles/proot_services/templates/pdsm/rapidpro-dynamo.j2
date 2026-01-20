@@ -91,6 +91,12 @@ stop() {
   return 0
 }
 
+restart() {
+   stop
+   sleep 1
+   start
+}
+
 status() {
   if running; then
     echo "[pdsm:$SERVICE_NAME] running"
