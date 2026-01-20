@@ -7,8 +7,8 @@ export NODE_PATH=/opt/iiab/rapidpro/node_modules:/usr/lib/node_modules
 # Ensure directory exists (redundant but safe)
 mkdir -p /opt/iiab/rapidpro/dynamo
 
-# Force kill anything holding the port inside PRoot (Best Effort)
-fuser -k -n tcp 4567 || true
+# Force kill handled by PDSM (pkill), fuser is unreliable in PRoot
+# fuser -k -n tcp 4567 || true
 
 # Exec the process directly with safe argument formatting
 # Note: --listening=127.0.0.1 seems ignored by node/dynalite in some contexts, but we keep it safe.
