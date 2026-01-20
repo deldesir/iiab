@@ -1,8 +1,8 @@
-# Internet-in-a-Box on Android
+## :world_map: IIAB on Android documentation map
 
-[Internet-in-a-Box (IIAB)](https://internet-in-a-box.org) on Android means that millions of people worldwide can build their own family libraries, inside their own phones.
+This README documents the **`proot_services` role** (PRoot service management - systemd replacement scripts).
 
-As of January 2026, these IIAB Apps are supported:
+For the broader **"IIAB on Android"** overview and Android-side steps, see:
 
 * Calibre-Web
 * Kiwix
