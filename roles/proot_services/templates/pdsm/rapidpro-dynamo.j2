@@ -50,9 +50,10 @@ start() {
      return 1
   fi
 
-  # Execute launcher via setsid for stability in PRoot (handles TTY-less Ansible runs)
-  # Redirect output to logfile manually since setsid detaches
-  su -s /bin/bash {{ iiab_admin_user }} -c "setsid {{ rapidpro_dir }}/start_dynamo.sh > /var/log/rapidpro/dynamo-stdout.log 2>&1 &"
+  # Execute launcher via daemonize for true double-forking (handles TTY-less Ansible runs)
+  # -u: switch user
+  # -o/-e: redirect stdout/stderr
+  daemonize -u {{ iiab_admin_user }} -o /var/log/rapidpro/dynamo-stdout.log -e /var/log/rapidpro/dynamo-stderr.log {{ rapidpro_dir }}/start_dynamo.sh
   
   # Stabilization Loop
   for i in $(seq 1 10); do
