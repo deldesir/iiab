@@ -96,6 +96,12 @@ status() {
   return 3
 }
 
+restart() {
+   stop
+   sleep 1
+   start
+}
+
 case "$1" in
   start|stop|restart|status) "$1" ;;
   *) echo "Usage: $0 {start|stop|restart|status}" >&2; exit 1 ;;

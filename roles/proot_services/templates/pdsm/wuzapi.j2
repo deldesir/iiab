@@ -119,6 +119,12 @@ status() {
   return 3
 }
 
+restart() {
+   stop
+   sleep 1
+   start
+}
+
 case "$1" in
   start|stop|status) "$1" ;;
   restart) stop; start ;;
