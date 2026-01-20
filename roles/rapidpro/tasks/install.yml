@@ -81,6 +81,7 @@
       - libgdal-dev
       - ffmpeg
       - postgis
+      - daemonize
     state: present
   become: yes
 
