@@ -1,6 +1,7 @@
 #!/bin/sh
 # /usr/local/pdsm/services-available/mailroom
 # PDSM service wrapper for RapidPro Mailroom
+# Refactored for Android/PRoot persistence
 
 PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 [ -r "$PDSM_COMMON" ] && . "$PDSM_COMMON"
@@ -9,14 +10,17 @@ SERVICE_NAME="mailroom"
 PIDFILE="/run/rapidpro/mailroom.pid"
 LOGFILE="/tmp/mailroom.log"
 
-export MAILROOM_DB="postgres://{{ rapidpro_db_user }}:{{ rapidpro_db_pass }}@127.0.0.1/{{ rapidpro_db_name }}?sslmode=disable"
-# Use Unix socket for Valkey in Mailroom too if supported, else TCP
-export MAILROOM_VALKEY="valkey://127.0.0.1:6379/0" 
+# Connection Strings (Android/PRoot optimized)
+# - Postgres: Use Unix Socket (URL encoded)
+# - Valkey: Use TCP (Go driver requirement) and valkey:// scheme
+export MAILROOM_DB="postgres://{{ rapidpro_db_user }}:{{ rapidpro_db_pass }}@localhost/{{ rapidpro_db_name }}?host=/var/run/postgresql&sslmode=disable"
+export MAILROOM_VALKEY="valkey://127.0.0.1:6379/0"
 export MAILROOM_SESSION_STORAGE="db"
 export MAILROOM_SPOOL_DIR="{{ rapidpro_dir }}/spool/mailroom"
 export AWS_ACCESS_KEY_ID="dummy"
 export AWS_SECRET_ACCESS_KEY="dummy"
 export AWS_REGION="us-east-1"
+# DynamoDB on localhost TCP
 export MAILROOM_DYNAMO_ENDPOINT="http://127.0.0.1:4567"
 export MAILROOM_S3_ENDPOINT="http://localhost:1"
 export MAILROOM_ELASTIC=""
@@ -25,12 +29,12 @@ mkdir -p /run/rapidpro
 mkdir -p /var/log/rapidpro
 mkdir -p "$MAILROOM_SPOOL_DIR"
 chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$MAILROOM_SPOOL_DIR" 2>/dev/null || true
+chown {{ iiab_admin_user }}:{{ iiab_admin_user }} /var/log/rapidpro 2>/dev/null || true
 
 running() {
-  [ -s "$PIDFILE" ] || return 1
-  pid="$(cat "$PIDFILE" 2>/dev/null)"
-  [ -n "$pid" ] || return 1
-  kill -0 "$pid" 2>/dev/null || pgrep -u "{{ iiab_admin_user }}" -f "/usr/local/bin/mailroom" >/dev/null
+  # Check if the process exists (pgrep returns 0 if found)
+  # Removing -u check as PRoot UID mapping can be flaky for pgrep
+  pgrep -f "/usr/local/bin/mailroom" >/dev/null
 }
 
 start() {
@@ -40,19 +44,28 @@ start() {
   fi
 
   echo "[pdsm:$SERVICE_NAME] starting..."
-
-  # Proactive Cleanup: Kill any zombies to prevent duplicate consumers
-  pkill -u {{ iiab_admin_user }} -f "/usr/local/bin/mailroom" >/dev/null 2>&1 || true
-  export USER={{ iiab_admin_user }}
-
-  # Use screen for persistence
-  screen -dmS "$SERVICE_NAME" bash -c "\
-    /usr/local/bin/mailroom >>\"$LOGFILE\" 2>&1"
   
-  # Mailroom doesn't write its own PID file easily, so we capture it from pgrep or screen
-  # For PDSM simplicity, we try to capture the background pid if possible
-  sleep 1
-  pgrep -u "$USER" -f "/usr/local/bin/mailroom" > "$PIDFILE"
+  # Proactive Cleanup
+  pkill -u {{ iiab_admin_user }} -f "/usr/local/bin/mailroom" >/dev/null 2>&1 || true
+
+  # Prepare the command string.
+  # Note: Variables inside standard single quotes '...' are literal. 
+  # We construct a string with single quotes around values to protect them in the shell.
+  CMD="export MAILROOM_DB='$MAILROOM_DB'; \
+export MAILROOM_VALKEY='$MAILROOM_VALKEY'; \
+export MAILROOM_SESSION_STORAGE='db'; \
+export MAILROOM_SPOOL_DIR='$MAILROOM_SPOOL_DIR'; \
+export AWS_ACCESS_KEY_ID='dummy'; \
+export AWS_SECRET_ACCESS_KEY='dummy'; \
+export AWS_REGION='us-east-1'; \
+export MAILROOM_DYNAMO_ENDPOINT='http://127.0.0.1:4567'; \
+export MAILROOM_S3_ENDPOINT='http://localhost:1'; \
+export MAILROOM_ELASTIC=''; \
+/usr/local/bin/mailroom >>\"$LOGFILE\" 2>&1"
+
+  # Execute utilizing the specific screen+su pattern for PRoot persistence.
+  # We run 'su - iiab-admin -c ...' inside screen.
+  screen -dmS "$SERVICE_NAME" su - {{ iiab_admin_user }} -c "$CMD"
 
   for i in $(seq 1 10); do
     if running; then
@@ -63,6 +76,8 @@ start() {
   done
 
   echo "[pdsm:$SERVICE_NAME] failed to start" >&2
+  # Cleanup
+  screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
   return 1
 }
 
@@ -73,16 +88,21 @@ stop() {
   fi
 
   echo "[pdsm:$SERVICE_NAME] stopping..."
-  pid="$(cat "$PIDFILE" 2>/dev/null)"
+  
+  pid=$(pgrep -f "/usr/local/bin/mailroom")
   if [ -n "$pid" ]; then
     kill "$pid" 2>/dev/null || true
-    sleep 2
-    if running; then
-       kill -9 "$pid" 2>/dev/null || true
-    fi
-    screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
-    rm -f "$PIDFILE"
+    for i in $(seq 1 5); do
+      if ! running; then break; fi
+      sleep 1
+    done
+    kill -9 "$pid" 2>/dev/null || true
   fi
+  
+  # Clean up screen session
+  screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
+  
+  rm -f "$PIDFILE"
   echo "[pdsm:$SERVICE_NAME] stopped"
   return 0
 }

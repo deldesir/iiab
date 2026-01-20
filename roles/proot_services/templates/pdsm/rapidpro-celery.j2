@@ -8,7 +8,7 @@ PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 
 SERVICE_NAME="rapidpro-celery"
 PIDFILE="/run/rapidpro/celery.pid"
-LOGFILE="/var/log/rapidpro/rapidpro-celery.log"
+LOGFILE="/tmp/celery.log"
 RAPIDPRO_DIR="{{ rapidpro_dir }}"
 
 export USER="{{ iiab_admin_user }}"
@@ -30,16 +30,13 @@ export PATH="$VENV_PATH/bin:$PATH"
 
 mkdir -p /run/rapidpro
 mkdir -p /var/log/rapidpro
-chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} /var/log/rapidpro /run/rapidpro 2>/dev/null || true
+# Ensure log ownership
+chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$LOGFILE" /run/rapidpro 2>/dev/null || true
 
 running() {
-  if screen -list | grep -q "\.$SERVICE_NAME"; then
-      return 0
-  fi
-  [ -s "$PIDFILE" ] || return 1
-  pid="$(cat "$PIDFILE" 2>/dev/null)"
-  [ -n "$pid" ] || return 1
-  kill -0 "$pid" 2>/dev/null
+  # Check if the process exists (pgrep -f matches the full command line)
+  # Removing -u check as PRoot UID mapping can be flaky for pgrep
+  pgrep -f "celery -A temba worker" >/dev/null
 }
 
 start() {
@@ -53,18 +50,17 @@ start() {
   # Proactive Cleanup: Kill any zombie celery workers
   pkill -u {{ iiab_admin_user }} -f "celery -A temba worker" >/dev/null 2>&1 || true
   
-  # Ensure log ownership
-  chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$LOGFILE" 2>/dev/null || true
-  
   cd "$RAPIDPRO_DIR" || return 1
 
   # Screen for persistence, run as correct user
+  # Export CELERY_BROKER_URL to force TCP connection (bypass socket issues)
   screen -dmS "$SERVICE_NAME" su - {{ iiab_admin_user }} -c "\
     export DJANGO_SETTINGS_MODULE=\"temba.settings\"; \
     export PYTHONUNBUFFERED=\"1\"; \
     export PATH=\"$VENV_PATH/bin:\$PATH\"; \
+    export CELERY_BROKER_URL=\"redis://127.0.0.1:6379/15\"; \
     exec celery -A temba worker -l info -B --concurrency=1 \
-    --pidfile=\"$PIDFILE\" > \"$LOGFILE\" 2>&1"
+    --pidfile=\"$PIDFILE\" >> \"$LOGFILE\" 2>&1"
 
   for i in $(seq 1 10); do
     if running; then
@@ -87,17 +83,20 @@ stop() {
   fi
 
   echo "[pdsm:$SERVICE_NAME] stopping..."
-  pid="$(cat "$PIDFILE" 2>/dev/null)"
+  pid="$(pgrep -f "celery -A temba worker")"
   if [ -n "$pid" ]; then
     kill "$pid" 2>/dev/null || true
-    sleep 2
-    if running; then
-       kill -9 "$pid" 2>/dev/null || true
-    fi
-    # Force quit screen session
-    screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
-    rm -f "$PIDFILE"
+    for i in $(seq 1 5); do
+      if ! running; then break; fi
+      sleep 1
+    done
+    kill -9 "$pid" 2>/dev/null || true
   fi
+  
+  # Clean up screen session
+  screen -X -S "$SERVICE_NAME" quit >/dev/null 2>&1 || true
+  
+  rm -f "$PIDFILE"
   echo "[pdsm:$SERVICE_NAME] stopped"
   return 0
 }
@@ -109,6 +108,12 @@ status() {
   fi
   echo "[pdsm:$SERVICE_NAME] not running"
   return 3
+}
+
+restart() {
+   stop
+   sleep 1
+   start
 }
 
 case "$1" in
