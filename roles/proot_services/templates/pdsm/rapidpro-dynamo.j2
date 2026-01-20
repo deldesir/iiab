@@ -50,9 +50,11 @@ start() {
      return 1
   fi
 
-  # Use su to switch user first (safer in PRoot), then daemonize for persistence
-  # daemonize handles detaching; su handles user context
-  su -s /bin/bash {{ iiab_admin_user }} -c "daemonize -o /var/log/rapidpro/dynamo-stdout.log -e /var/log/rapidpro/dynamo-stderr.log {{ rapidpro_dir }}/start_dynamo.sh"
+  # Use dtach for ultimate persistence (immune to SIGHUP/session cleanup)
+  # -u: switch user first via su (safe in PRoot)
+  # -n: detach immediately (background)
+  # socket: allows re-attach if needed for debug
+  su -s /bin/bash {{ iiab_admin_user }} -c "dtach -n /tmp/rapidpro-dynamo.dtach {{ rapidpro_dir }}/start_dynamo.sh"
   
   # Stabilization Loop
   for i in $(seq 1 10); do

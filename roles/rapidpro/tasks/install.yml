@@ -81,7 +81,7 @@
       - libgdal-dev
       - ffmpeg
       - postgis
-      - daemonize
+      - dtach
     state: present
   become: yes
 
