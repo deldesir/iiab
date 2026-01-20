@@ -93,7 +93,7 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-  when: not is_proot and (rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed)
+  when: rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Create DynamoDB systemd service
   template:
