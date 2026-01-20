@@ -81,7 +81,7 @@
       - libgdal-dev
       - ffmpeg
       - postgis
-      - dtach
+      - screen
     state: present
   become: yes
 

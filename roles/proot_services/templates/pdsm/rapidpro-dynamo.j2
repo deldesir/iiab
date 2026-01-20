@@ -17,13 +17,11 @@ mkdir -p {{ rapidpro_dir }}/dynamo
 chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} /var/log/rapidpro /run/rapidpro {{ rapidpro_dir }}/dynamo 2>/dev/null || true
 
 running() {
-  # Check PID file first
-  if [ -s "$PIDFILE" ]; then
-    pid=$(cat "$PIDFILE")
-    if kill -0 "$pid" 2>/dev/null; then
-      return 0
-    fi
+  # 1. Primary Check: Screen Session (Most reliable in PRoot)
+  if screen -list | grep -q "\.rapidpro-dynamo"; then
+       return 0
   fi
+
   # Fallback to pgrep (and update pidfile)
   if pgrep -f "node_modules/.bin/dynalite" > "$PIDFILE"; then
     return 0
@@ -50,11 +48,9 @@ start() {
      return 1
   fi
 
-  # Use dtach for ultimate persistence (immune to SIGHUP/session cleanup)
-  # -u: switch user first via su (safe in PRoot)
-  # -n: detach immediately (background)
-  # socket: allows re-attach if needed for debug
-  su -s /bin/bash {{ iiab_admin_user }} -c "dtach -n /tmp/rapidpro-dynamo.dtach {{ rapidpro_dir }}/start_dynamo.sh"
+  # Use screen for persistence (PostgreSQL pattern)
+  # Run screen as root, then switch user inside. Survives headless.
+  screen -dmS rapidpro-dynamo su -s /bin/bash {{ iiab_admin_user }} -c "{{ rapidpro_dir }}/start_dynamo.sh > /var/log/rapidpro/dynamo.log 2>&1"
   
   # Stabilization Loop
   for i in $(seq 1 10); do
