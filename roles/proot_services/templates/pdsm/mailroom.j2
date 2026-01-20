@@ -7,7 +7,7 @@ PDSM_COMMON="/usr/local/pdsm/lib/pdsm-common.sh"
 
 SERVICE_NAME="mailroom"
 PIDFILE="/run/rapidpro/mailroom.pid"
-LOGFILE="/var/log/rapidpro/mailroom.log"
+LOGFILE="/tmp/mailroom.log"
 
 export MAILROOM_DB="postgres://{{ rapidpro_db_user }}:{{ rapidpro_db_pass }}@localhost/{{ rapidpro_db_name }}?sslmode=disable"
 # Use Unix socket for Valkey in Mailroom too if supported, else TCP
