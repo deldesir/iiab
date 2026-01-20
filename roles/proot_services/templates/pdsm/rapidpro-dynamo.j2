@@ -50,10 +50,9 @@ start() {
      return 1
   fi
 
-  # Execute launcher in background with nohup
-  # Logic: su -> nohup -> launcher. Redirects handled in launcher.
-  # Use /bin/bash to ensure 'disown' and other builtins work
-  su -s /bin/bash {{ iiab_admin_user }} -c "nohup {{ rapidpro_dir }}/start_dynamo.sh >/dev/null 2>&1 & disown"
+  # Execute launcher via screen for stability in PRoot
+  # Use screen logging for debugging
+  su -s /bin/bash {{ iiab_admin_user }} -c "screen -L -Logfile /var/log/rapidpro/screen.log -dmS rapidpro-dynamo {{ rapidpro_dir }}/start_dynamo.sh"
   
   # Stabilization Loop
   for i in $(seq 1 10); do
