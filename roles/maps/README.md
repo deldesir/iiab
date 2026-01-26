@@ -73,16 +73,23 @@ As of this writing, search includes only administrative regions and natural feat
    maps_search_full: True
    ```
 
-## Full Quality Regions (experimental, available once [#4223](https://github.com/iiab/iiab/pull/4223) is merged!)
+## Full Quality Regions (experimental)
 
 Full Quality Regions is a feature that allows you to have small regions at "full" quality vector, satellite and terrain, while still having a full world map at a lower resolution.
 
 ### Installation
 
-In order to turn it on, add the following setting:
+In order to turn it on, add the following setting: (e.g. in [/etc/iiab/local_vars.yml](https://wiki.iiab.io/go/FAQ#What_is_local_vars.yml_and_how_do_I_customize_it?)
 
 ```
 maps_region_downloader: true
+```
+
+Reinstall the new IIAB Maps, if already installed:
+
+```
+cd /opt/iiab/iiab
+sudo ./install --reinstall maps
 ```
 
 ### Downloading Regions
@@ -115,7 +122,7 @@ When you click it, it will bring up another pop-up with instructions on how to d
 
 ### Overlapping Regions
 
-At the moment, overlapping regions is not allowed. However, if you find that you want to expand a region, you can always delete it and download a larger one instead.
+At the moment, overlapping regions are not allowed. However, if you find that you want to expand a region, you can always delete it and download a larger one instead.
 
 ### Final Setup for Users
 
