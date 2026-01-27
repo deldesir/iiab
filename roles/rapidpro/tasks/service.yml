@@ -24,6 +24,7 @@
     - rapidpro-courier
     - rapidpro-mailroom
     - rapidpro-celery
+    - wuzapi
   become: yes
   when: ansible_service_mgr == 'systemd'
 

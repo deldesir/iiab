@@ -59,6 +59,7 @@ DATABASES["readonly"] = DATABASES["default"]
 # ----------------------------------------------------------------------------------
 # Caching
 # ----------------------------------------------------------------------------------
+CACHES = {
     "default": {
         "BACKEND": "django_valkey.cache.ValkeyCache",
         "LOCATION": "redis://127.0.0.1:6379/0",
