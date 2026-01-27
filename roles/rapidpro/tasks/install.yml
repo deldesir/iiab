@@ -146,6 +146,14 @@
   become: yes
   changed_when: false
 
+- name: Deploy Branding Script and Assets
+  copy:
+    src: branding/
+    dest: /opt/iiab/
+    owner: "{{ iiab_admin_user }}"
+    mode: '0755'
+  become: yes
+
 - name: "Allow Python version in pyproject.toml"
   replace:
     path: "{{ rapidpro_dir }}/pyproject.toml"
