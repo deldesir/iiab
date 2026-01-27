@@ -1,22 +1,31 @@
 ---
 # Service Management (Systemd vs PDSM)
 
-- name: Systemd - Enable and Start Services
+- name: Systemd - Ensure Infrastructure Services are Running
   service:
     name: "{{ item }}"
     state: started
     enabled: yes
   loop:
     - postgresql
-    - redis-server
-    - rapidpro-server
-    - rapidpro-courier
-    - rapidpro-mailroom
-    - rapidpro-celery
-    - rapidpro-celery-beat
+    - "{{ valkey_service_name }}"
+    - rapidpro-dynamo
   become: yes
   when: ansible_service_mgr == 'systemd'
   ignore_errors: yes
+
+- name: Systemd - Force Restart RapidPro Services (Fresh Start)
+  service:
+    name: "{{ item }}"
+    state: restarted
+    enabled: yes
+  loop:
+    - rapidpro-gunicorn
+    - rapidpro-courier
+    - rapidpro-mailroom
+    - rapidpro-celery
+  become: yes
+  when: ansible_service_mgr == 'systemd'
 
 - name: PDSM Enable Services (Android/Proot)
   shell: |

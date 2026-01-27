@@ -59,15 +59,14 @@ DATABASES["readonly"] = DATABASES["default"]
 # ----------------------------------------------------------------------------------
 # Caching
 # ----------------------------------------------------------------------------------
-CACHES = {
     "default": {
         "BACKEND": "django_valkey.cache.ValkeyCache",
-        "LOCATION": "unix:///tmp/valkey.sock?db=0",
+        "LOCATION": "redis://127.0.0.1:6379/0",
         "OPTIONS": {"CLIENT_CLASS": "django_valkey.client.DefaultClient"},
     }
 }
 
-CELERY_BROKER_URL = "redis+socket:///tmp/valkey.sock?virtual_host=15"
+CELERY_BROKER_URL = "redis://127.0.0.1:6379/15"
 
 # ----------------------------------------------------------------------------------
 # DynamoDB (Mock)
