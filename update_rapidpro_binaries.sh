@@ -105,12 +105,12 @@ sync_and_build() {
     fi
 
     # Check if release exists
-    if gh release view "$TAG" &> /dev/null; then
+    if gh release view "$TAG" -R "$GH_USER/$REPO" &> /dev/null; then
         echo "Release exists. Uploading assets (clobbering)..."
-        gh release upload "$TAG" "$BIN_AMD" "$BIN_ARM" --clobber
+        gh release upload "$TAG" "$BIN_AMD" "$BIN_ARM" --clobber -R "$GH_USER/$REPO"
     else
         echo "Creating new release..."
-        gh release create "$TAG" "$BIN_AMD" "$BIN_ARM" --title "$TAG" --notes "Automated release of $TAG"
+        gh release create "$TAG" "$BIN_AMD" "$BIN_ARM" --title "$TAG" --notes "Automated release of $TAG" -R "$GH_USER/$REPO"
     fi
     
     echo "$REPO processing complete."
