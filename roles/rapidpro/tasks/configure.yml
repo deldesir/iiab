@@ -202,10 +202,6 @@
   become_user: "{{ iiab_admin_user }}"
   become: yes
 
-
-
-
-
 - name: Create custom url_tags.py
   template:
     src: url_tags.py.j2

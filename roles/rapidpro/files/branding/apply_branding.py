@@ -236,13 +236,24 @@ ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"
             logger.error(f"Template patching failed: {e}")
 
     def restart_service(self):
-        """Restarts the application service."""
-        logger.info(f"Restarting {SERVICE_NAME}...")
-        try:
-            subprocess.run(["systemctl", "restart", SERVICE_NAME], check=True)
-            logger.info("✓ Service restarted successfully.")
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to restart service: {e}")
+        """Restarts the application services and Nginx."""
+        services = [
+            "rapidpro-gunicorn", 
+            "rapidpro-courier", 
+            "rapidpro-mailroom", 
+            "wuzapi",
+            "nginx"
+        ]
+        
+        logger.info(f"Restarting services: {', '.join(services)}...")
+        
+        for service in services:
+            try:
+                subprocess.run(["systemctl", "restart", service], check=True)
+                logger.info(f"✓ {service} restarted.")
+            except subprocess.CalledProcessError:
+                logger.error(f"Failed to restart {service}")    
+
 
     def _set_perms(self, path: Path):
         """Sets file permissions to 644 (readable by Nginx/User)."""
