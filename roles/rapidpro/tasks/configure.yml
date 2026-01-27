@@ -204,6 +204,14 @@
 
 
 
+- name: Deploy Branding Script and Assets
+  copy:
+    src: branding/
+    dest: /opt/iiab/
+    owner: "{{ iiab_admin_user }}"
+    mode: '0755'
+  become: yes
+
 - name: Create custom url_tags.py
   template:
     src: url_tags.py.j2

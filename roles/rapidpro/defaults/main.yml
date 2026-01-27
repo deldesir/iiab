@@ -16,7 +16,7 @@ rapidpro_admin_password: ""
 
 # Hostname Configuration
 rapidpro_hostname: "{{ ansible_fqdn }}"
-rapidpro_http_protocol: "https"
+rapidpro_http_protocol: "http"
 
 
 
