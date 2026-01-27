@@ -1,0 +1,31 @@
+---
+# Universal Binary Installation (VM & Android/Proot)
+
+- name: "Set architecture fact"
+  set_fact:
+    rapidpro_go_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
+
+- name: Install Mailroom Binary from Release (v26.1.10)
+  get_url:
+    url: "https://github.com/deldesir/mailroom/releases/download/v26.1.10/mailroom-linux-{{ rapidpro_go_arch }}"
+    dest: /usr/local/bin/mailroom
+    mode: '0755'
+    force: yes
+  become: yes
+
+- name: Install Courier Binary from Release (v26.1.5)
+  get_url:
+    url: "https://github.com/deldesir/courier/releases/download/v26.1.5/courier-linux-{{ rapidpro_go_arch }}"
+    dest: /usr/local/bin/courier
+    mode: '0755'
+    force: yes
+  become: yes
+
+- name: Install Wuzapi Binary from Release (v1.0.1)
+  get_url:
+    url: "https://github.com/deldesir/wuzapi/releases/download/v1.0.1/wuzapi-linux-{{ rapidpro_go_arch }}"
+    dest: /usr/local/bin/wuzapi
+    mode: '0755'
+    force: yes
+  become: yes
+  when: wuzapi_install | default(true)

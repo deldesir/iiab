@@ -11,42 +11,18 @@ PDSM_START_TIMEOUT=60  # Increased for dependency waiting
 
 RAPIDPRO_DIR="{{ rapidpro_dir }}"
 PIDFILE="/run/rapidpro/rapidpro-server.pid"
-LOGFILE="/var/log/rapidpro/rapidpro-server.log"
 SOCKFILE="/run/rapidpro/gunicorn.sock"
 
-# Environment Variables (Match Systemd)
-export USER="{{ iiab_admin_user }}"
-export DJANGO_SETTINGS_MODULE="temba.settings"
-export PYTHONUNBUFFERED="1"
-
-# Dynamic Virtualenv Discovery (Hash is path-dependent)
-VENV_BASE="/root/.cache/pypoetry/virtualenvs"
-VENV_USER_BASE="/home/{{ iiab_admin_user }}/.cache/pypoetry/virtualenvs"
-
-# Find most recent temba venv with python 3.13 first, then fallback to others
-VENV_PATH=$(ls -dt "$VENV_BASE"/temba-*-py3.13 "$VENV_USER_BASE"/temba-*-py3.13 "$VENV_BASE"/temba-*-py3.1* "$VENV_USER_BASE"/temba-*-py3.1* 2>/dev/null | head -n 1)
-
-if [ -z "$VENV_PATH" ]; then
-    echo "[pdsm:$SERVICE_NAME] ERROR: Could not find Poetry virtualenv for 'temba'" >&2
-    return 1
-fi
-
-# Explicitly add VENV bin to PATH (Vital for Gunicorn worker spawning)
-export PATH="$VENV_PATH/bin:$PATH"
-
-mkdir -p /run/rapidpro
-mkdir -p /var/log/rapidpro
-chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} /var/log/rapidpro /run/rapidpro 2>/dev/null || true
-
+# Legacy but useful check function 
 running() {
-  if screen -list | grep -q "\.$SERVICE_NAME"; then
-      return 0
+  # New robust check based on PID file which start_rapidpro_root.sh manages
+  if [ -s "$PIDFILE" ]; then
+      pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
+      if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+          return 0
+      fi
   fi
-  [ -s "$PIDFILE" ] || return 1
-  pid="$(cat "$PIDFILE" 2>/dev/null || echo '')"
-  [ -n "$pid" ] || return 1
-  # Check if process is alive
-  kill -0 "$pid" 2>/dev/null
+  return 1
 }
 
 wait_for_resource() {
@@ -54,18 +30,11 @@ wait_for_resource() {
     name="$2"
     echo "[pdsm:$SERVICE_NAME] Waiting for $name ($target)..."
     for i in $(seq 1 30); do
-    # Check if target is a file (Socket), Service (pdsm status), or TCP host:port
         if [ -S "$target" ]; then
             return 0
         elif echo "$target" | grep -q "service:"; then
              svc=${target##service:}
              if /usr/local/bin/pdsm status "$svc" >/dev/null 2>&1; then
-                return 0
-             fi
-        elif echo "$target" | grep -q ":"; then
-             host=${target%%:*}
-             port=${target##*:}
-             if timeout 1 bash -c "cat < /dev/tcp/$host/$port" >/dev/null 2>&1; then
                 return 0
              fi
         fi
@@ -81,51 +50,26 @@ start() {
     return 0
   fi
 
-  # Dependency Checks (VM "After=..." logic)
-  # Adapted for Proot: checking Unix Socket in /tmp (relocated for permissions)
+  # Dependency Checks
   wait_for_resource "/tmp/.s.PGSQL.5432" "PostgreSQL" || return 1
-  # Redis/Valkey check (Direct socket is most robust for Proot)
   wait_for_resource "/tmp/valkey.sock" "Valkey/Redis" || return 1
 
-  echo "[pdsm:$SERVICE_NAME] starting..."
+  echo "[pdsm:$SERVICE_NAME] starting (ROOT/Native)..."
   
-  # Ensure log ownership just in case
-  chown {{ iiab_admin_user }}:{{ iiab_admin_user }} "$LOGFILE" 2>/dev/null || true
-  
-  cd "$RAPIDPRO_DIR" || return 1
-
-  # Use 'screen' for robust persistence in Proot (SSH detachment safe)
-  # Proactively cleaning up any stale sockets (Proot /tmp is persistent!)
-  rm -f "$SOCKFILE"
-
-  # Run as correct user with su -
-  screen -dmS rapidpro-server su - {{ iiab_admin_user }} -c "\
-    export DJANGO_SETTINGS_MODULE=\"temba.settings\"; \
-    export PYTHONUNBUFFERED=\"1\"; \
-    export PATH=\"$VENV_PATH/bin:\$PATH\"; \
-    exec gunicorn temba.wsgi:application \
-    --access-logfile \"$LOGFILE\" \
-    --error-logfile \"$LOGFILE\" \
-    --workers 1 \
-    --bind \"unix:$SOCKFILE\" \
-    --forwarded-allow-ips=\"*\" \
-    -p \"$PIDFILE\""
+  # Delegate to the Native Root Launcher
+  # This script handles setsid, env vars, and root execution cleanly
+  /usr/local/bin/start_rapidpro_root.sh >> /var/log/rapidpro/rapidpro-server.log 2>&1 &
 
   # Wait for startup
   for i in $(seq 1 "$PDSM_START_TIMEOUT"); do
-    if running; then
-        # Extra check: ensure socket exists (give it a moment to appear)
-        if [ -S "$SOCKFILE" ]; then
-            echo "[pdsm:$SERVICE_NAME] started"
-            return 0
-        fi
+    if running && [ -S "$SOCKFILE" ]; then
+        echo "[pdsm:$SERVICE_NAME] started"
+        return 0
     fi
     sleep 1
   done
 
   echo "[pdsm:$SERVICE_NAME] failed to start" >&2
-  # Cleanup if failed
-  screen -X -S rapidpro-server quit >/dev/null 2>&1 || true
   return 1
 }
 
@@ -146,12 +90,9 @@ stop() {
       fi
       sleep 1
     done
-    # Force cleanup
     if running; then
        kill -9 "$pid" 2>/dev/null || true
     fi
-    # Cleanup screen session if it lingers
-    screen -X -S rapidpro-server quit >/dev/null 2>&1 || true
     rm -f "$PIDFILE"
     rm -f "$SOCKFILE"
   fi
@@ -166,8 +107,8 @@ status() {
         echo "[pdsm:$SERVICE_NAME] running"
         return 0
     else
-        echo "[pdsm:$SERVICE_NAME] running (but socket missing!)"
-        return 1 # Warning state
+        echo "[pdsm:$SERVICE_NAME] running (warning: socket missing)"
+        return 1
     fi
   fi
   echo "[pdsm:$SERVICE_NAME] not running"

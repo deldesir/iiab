@@ -1,34 +1,27 @@
 ---
-# This is the main task file for the rapidpro role.
-# It orchestrates the entire installation and configuration process.
+# Main Orchestrator for RapidPro Role
 
-- name: Run installation tasks
+- name: Detect Environment (Proot vs Systemd)
+  set_fact:
+    is_proot: "{{ ansible_service_mgr != 'systemd' }}"
+
+- name: Run Installation Tasks
   include_tasks: install.yml
   when: rapidpro_enabled
 
-- name: Start PostgreSQL and Valkey (Android Startup)
-  shell: |
-    /usr/local/bin/pdsm start postgresql
-    /usr/local/bin/pdsm start valkey
-  become: yes
-  when: ansible_service_mgr != 'systemd'
-
-- name: Wait for PostgreSQL to be ready
-  wait_for:
-    port: 5432
-    host: 127.0.0.1
-    timeout: 300
-  when: rapidpro_enabled
-
-- name: Run configuration tasks
+- name: Run Configuration Tasks
   include_tasks: configure.yml
   when: rapidpro_enabled
 
-- name: Run nginx tasks
+- name: Ensure Services are Started
+  include_tasks: service.yml
+  when: rapidpro_enabled
+
+- name: Configure Nginx
   include_tasks: nginx.yml
   when: rapidpro_enabled
 
-- name: Mark rapidpro as installed
+- name: Mark RapidPro as Installed
   lineinfile:
     path: /etc/iiab/iiab_state.yml
     line: "rapidpro_installed: true"

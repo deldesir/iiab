@@ -1,0 +1,47 @@
+---
+# Service Management (Systemd vs PDSM)
+
+- name: Systemd - Enable and Start Services
+  service:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop:
+    - postgresql
+    - redis-server
+    - rapidpro-server
+    - rapidpro-courier
+    - rapidpro-mailroom
+    - rapidpro-celery
+    - rapidpro-celery-beat
+  become: yes
+  when: ansible_service_mgr == 'systemd'
+  ignore_errors: yes
+
+- name: PDSM Enable Services (Android/Proot)
+  shell: |
+    /usr/local/bin/pdsm enable {{ item }}
+  loop:
+    - postgresql
+    - valkey
+    - rapidpro-dynamo
+    - rapidpro-server
+    - rapidpro-courier
+    - rapidpro-mailroom
+    - rapidpro-celery
+  become: yes
+  when: ansible_service_mgr != 'systemd'
+
+- name: PDSM - Start Support Services (Android/Proot)
+  shell: |
+    /usr/local/bin/pdsm start postgresql
+    /usr/local/bin/pdsm start valkey
+    /usr/local/bin/pdsm start rapidpro-dynamo
+  become: yes
+  when: ansible_service_mgr != 'systemd'
+
+- name: Wait for Database Ready (All Platforms)
+  wait_for:
+    port: 5432
+    host: 127.0.0.1
+    timeout: 300

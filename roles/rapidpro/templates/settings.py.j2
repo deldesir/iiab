@@ -50,8 +50,8 @@ DATABASES = {
         "NAME": "{{ rapidpro_db_name }}",
         "USER": "{{ rapidpro_db_user }}",
         "PASSWORD": "{{ rapidpro_db_pass }}",
-        "HOST": "/tmp",
-        "PORT": "",
+        "HOST": "127.0.0.1",
+        "PORT": "5432",
     }
 }
 DATABASES["readonly"] = DATABASES["default"]

@@ -160,6 +160,18 @@ screen -dmS <service_name> su - <user> -c "<full_command_string>"
 *   **Service Duplication:** Ensure `services-enabled` does not contain both numbered (startup order) and unnumbered symlinks to the same service. PDSM will attempt to start/status them twice.
 
 
+### 8. Lessons Learned: Manual Release & Go Toolchains
+*   **Go Toolchain Strictness:** Upstream dependencies (e.g., `nyaruka/gocommon`) now strictly enforce recent Go versions (e.g., `go >= 1.25`), which may be newer than what is available in standard package repositories.
+    *   **Fix:** Manual installation of the specific Go toolchain (downloading official tarball to `/usr/local/go`) is necessary for local builds on older hosts.
+*   **Build Targets (Archive vs Executable):** When building locally, `go build .` in the repository root may produce a static archive library (`.a`) if the root package is not `package main`.
+    *   **Fix:** Explicitly target the `main` package path (e.g., `./cmd/mailroom` or `./cmd/courier`) to guarantee the generation of a standalone ELF executable.
+*   **Release Management:** For the "Fork & Binary" strategy, ensuring releases are populated with valid executables is critical.
+    *   **Recovery:** If invalid assets are uploaded, use `gh release upload --clobber` to replace them without disrupting the semver tag history.
+*   **Version Alignment:** To minimize confusion, Release versions for forks must match the upstream release tag exactly (e.g., `v26.1.10`) rather than using arbitrary increments (e.g., `v26.1.11`), unless the component has a divergent lifecycle (e.g., Wuzapi).
+    *   **Strategy:** Query `git ls-remote --tags upstream` to identify the authoritative version before cutting a release.
+*   **Role Architecture:** The evolution from a monolithic "Patch-at-Install" role to a modular "Router" design (`install_source.yml` vs `install_binary.yml`) enhances long-term maintainability.
+    *   **Benefit:** This separation allows the role to support constrained Android devices (via pre-built binaries) without sacrificing the flexibility to deploy on standard x86_64 VMs (via source compilation), adhering to the IIAB standard of "Universality."
+
 ---
 
 ## 6. Summary

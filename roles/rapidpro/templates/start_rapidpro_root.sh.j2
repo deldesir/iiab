@@ -1,0 +1,40 @@
+#!/bin/sh
+# /usr/local/bin/start_rapidpro_root.sh
+# Phase 3: Native Root Execution for Gunicorn (Android/PRoot)
+# Bypasses 'su' fragility by running as the native (root) user.
+
+export USER="root"
+export DJANGO_SETTINGS_MODULE="temba.settings"
+export PYTHONUNBUFFERED="1"
+
+LOGFILE="/var/log/rapidpro/rapidpro-server.log"
+SOCKFILE="/run/rapidpro/gunicorn.sock"
+PIDFILE="/run/rapidpro/rapidpro-server.pid"
+RAPIDPRO_DIR="{{ rapidpro_dir }}"
+
+# Dynamic Virtualenv Discovery (Root Cache)
+VENV_BASE="/root/.cache/pypoetry/virtualenvs"
+VENV_USER_BASE="/home/{{ iiab_admin_user }}/.cache/pypoetry/virtualenvs"
+
+# Find most recent temba venv
+VENV_PATH=$(ls -dt "$VENV_BASE"/temba-*-py3.13 "$VENV_USER_BASE"/temba-*-py3.13 "$VENV_BASE"/temba-*-py3.1* "$VENV_USER_BASE"/temba-*-py3.1* 2>/dev/null | head -n 1)
+
+if [ -z "$VENV_PATH" ]; then
+    echo "ERROR: Could not find Poetry virtualenv" >> "$LOGFILE"
+    exit 1
+fi
+
+export PATH="$VENV_PATH/bin:$PATH"
+
+# Ensure runtime dirs exist 
+mkdir -p /run/rapidpro
+mkdir -p /var/log/rapidpro
+# No chown needed as we are running as root (native)!
+
+cd "$RAPIDPRO_DIR" || exit 1
+
+rm -f "$SOCKFILE"
+
+# Use setsid to detach from the controlling terminal (SSH)
+# This prevents SIGHUP/SIGKILL when the session ends.
+exec setsid gunicorn temba.wsgi:application     --access-logfile "$LOGFILE"     --error-logfile "$LOGFILE"     --workers 1     --bind "unix:$SOCKFILE"     --forwarded-allow-ips="*"     -p "$PIDFILE"
