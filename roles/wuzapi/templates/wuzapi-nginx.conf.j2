@@ -3,6 +3,13 @@ location = /wuzapi {
 }
 
 location /wuzapi/ {
+    # Security: Restrict access to Local LAN and VPN only
+    allow 127.0.0.1;
+    allow 192.168.0.0/16;
+    allow 10.0.0.0/8;
+    allow 172.16.0.0/12;
+    deny all;
+
     proxy_pass http://127.0.0.1:{{ wuzapi_port }}/;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;

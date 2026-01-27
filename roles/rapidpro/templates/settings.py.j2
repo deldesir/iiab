@@ -33,13 +33,14 @@ DEBUG = False
 
 
 # The hostname of the IIAB box
+# The hostname of the IIAB box
 # Hardcoded for Android/Proot stability
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = ["{{ rapidpro_hostname }}", "localhost", "127.0.0.1", "box.lan"]
 INTERNAL_IPS = ["127.0.0.1"]
 
-HOSTNAME = "localhost"
-BRAND["domain"] = "localhost"
-BRAND["hosts"] = ["localhost", "127.0.0.1", "box.lan"]
+HOSTNAME = "{{ rapidpro_hostname }}"
+BRAND["domain"] = "{{ rapidpro_hostname }}"
+BRAND["hosts"] = ["{{ rapidpro_hostname }}", "localhost", "127.0.0.1", "box.lan"]
 
 # ----------------------------------------------------------------------------------
 # Databases
@@ -111,3 +112,19 @@ ACCOUNT_LOGOUT_REDIRECT_URL = "{{ rapidpro_url if rapidpro_url.endswith('/') els
 # Email
 # ----------------------------------------------------------------------------------
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# ----------------------------------------------------------------------------------
+# Security
+# ----------------------------------------------------------------------------------
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = "{{ rapidpro_http_protocol }}"
+
+# Use HTTPS cookies and proxy headers
+{% if rapidpro_http_protocol == 'https' %}
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+{% else %}
+SECURE_PROXY_SSL_HEADER = None
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+{% endif %}
