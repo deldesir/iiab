@@ -5,6 +5,7 @@
       - python3-pip
       - git
       - postgresql-client
+      - postgresql-16-pgvector
     state: present
   become: yes
 
