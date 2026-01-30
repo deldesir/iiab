@@ -41,3 +41,12 @@
   become: yes
   become_user: "{{ ai_middleware_user }}"
   notify: restart ai-middleware
+
+- name: Install Local RapidPro Client (Editable)
+  pip:
+    name: /opt/iiab/rapidpro-python
+    editable: yes
+    virtualenv: "{{ ai_middleware_dir }}/venv"
+  become: yes
+  become_user: "{{ ai_middleware_user }}"
+  notify: restart ai-middleware
