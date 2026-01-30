@@ -1,0 +1,20 @@
+ai_middleware_enabled: true
+ai_middleware_repo: "https://github.com/deldesir/ai-middleware.git"
+ai_middleware_version: "main"
+ai_middleware_dir: /opt/iiab/ai-middleware
+ai_middleware_user: "{{ iiab_admin_user | default('iiab-admin') }}"
+ai_middleware_port: 8001
+ai_middleware_db_url: "postgresql://temba:temba@127.0.0.1:5432/temba"
+
+# Google AI
+ai_middleware_google_api_key: ""
+ai_middleware_google_client_id: ""
+ai_middleware_google_client_secret: ""
+
+# Admin God Mode (Comma separated phones)
+ai_middleware_admin_phones: ""
+
+# MonCash
+moncash_client_id: ""
+moncash_client_secret: ""
+moncash_env: "sandbox"

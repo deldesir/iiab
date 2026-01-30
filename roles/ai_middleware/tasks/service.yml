@@ -1,0 +1,15 @@
+---
+- name: Deploy Systemd Service
+  template:
+    src: ai-middleware.service.j2
+    dest: /etc/systemd/system/ai-middleware.service
+  become: yes
+  notify: restart ai-middleware
+
+- name: Enable and Start AI Middleware Service
+  systemd:
+    name: ai-middleware
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  become: yes

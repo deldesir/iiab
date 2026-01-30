@@ -1,0 +1,7 @@
+---
+- name: restart ai-middleware
+  systemd:
+    name: ai-middleware
+    state: restarted
+    daemon_reload: yes
+  become: yes

@@ -1,0 +1,43 @@
+- name: Install system dependencies
+  apt:
+    name:
+      - python3-venv
+      - python3-pip
+      - git
+      - postgresql-client
+    state: present
+  become: yes
+
+- name: Create application directory
+  file:
+    path: "{{ ai_middleware_dir }}"
+    state: directory
+    owner: "{{ ai_middleware_user }}"
+    group: "{{ ai_middleware_user }}"
+    mode: '0755'
+  become: yes
+
+- name: Clone AI Middleware Repository
+  git:
+    repo: "{{ ai_middleware_repo }}"
+    dest: "{{ ai_middleware_dir }}"
+    version: "{{ ai_middleware_version }}"
+    force: yes
+  become: yes
+  become_user: "{{ ai_middleware_user }}"
+  notify: restart ai-middleware
+
+- name: Create virtual environment
+  command: python3 -m venv {{ ai_middleware_dir }}/venv
+  args:
+    creates: "{{ ai_middleware_dir }}/venv/bin/python"
+  become: yes
+  become_user: "{{ ai_middleware_user }}"
+
+- name: Install Python requirements
+  pip:
+    requirements: "{{ ai_middleware_dir }}/requirements.txt"
+    virtualenv: "{{ ai_middleware_dir }}/venv"
+  become: yes
+  become_user: "{{ ai_middleware_user }}"
+  notify: restart ai-middleware
