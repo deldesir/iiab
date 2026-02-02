@@ -4,7 +4,8 @@
     "port": {{ openclaw_port | default(3030) }},
     "auth": {
       "token": "{{ openclaw_admin_token }}"
-    }
+    },
+    "bind": "loopback"
   },
   "logging": {
     "level": "info"
