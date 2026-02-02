@@ -19,7 +19,7 @@ location /api/ {
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header Host $http_host;
     proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
-    proxy_pass http://unix:/run/rapidpro/gunicorn.sock;
+    proxy_pass http://unix:{{ rapidpro_dir }}/run/gunicorn.sock;
 }
 
 # Forward /relayers/ requests (Android App Registration/Sync)
@@ -29,7 +29,7 @@ location /relayers/ {
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header Host $http_host;
     proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
-    proxy_pass http://unix:/run/rapidpro/gunicorn.sock;
+    proxy_pass http://unix:{{ rapidpro_dir }}/run/gunicorn.sock;
 }
 
 # Forward /android/ requests (APK checks)
@@ -40,7 +40,7 @@ location /android/ {
     proxy_set_header Host $http_host;
     proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
     proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
-    proxy_pass http://unix:/run/rapidpro/gunicorn.sock;
+    proxy_pass http://unix:{{ rapidpro_dir }}/run/gunicorn.sock;
 }
 
 # Forward /c/ requests (Channel Webhooks like Wuzapi)
@@ -50,7 +50,7 @@ location ^~ /c/ {
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header Host $http_host;
     proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
-    proxy_pass http://unix:/run/rapidpro/gunicorn.sock;
+    proxy_pass http://unix:{{ rapidpro_dir }}/run/gunicorn.sock;
 }
 
 
@@ -61,5 +61,5 @@ location {{ rapidpro_url }}/ {
     proxy_set_header Host $http_host;
     proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
     proxy_redirect off;
-    proxy_pass http://unix:/run/rapidpro/gunicorn.sock;
+    proxy_pass http://unix:{{ rapidpro_dir }}/run/gunicorn.sock;
 }

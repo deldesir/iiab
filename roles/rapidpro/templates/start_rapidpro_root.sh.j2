@@ -8,7 +8,7 @@ export DJANGO_SETTINGS_MODULE="temba.settings"
 export PYTHONUNBUFFERED="1"
 
 LOGFILE="/var/log/rapidpro/rapidpro-server.log"
-SOCKFILE="/run/rapidpro/gunicorn.sock"
+SOCKFILE="{{ rapidpro_dir }}/run/gunicorn.sock"
 PIDFILE="/run/rapidpro/rapidpro-server.pid"
 RAPIDPRO_DIR="{{ rapidpro_dir }}"
 
