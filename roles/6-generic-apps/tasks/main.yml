@@ -62,12 +62,6 @@
     name: rapidpro
   when: rapidpro_install
 
-- name: OPENCLAW
-  include_role:
-    name: openclaw
-  when: openclaw_install
-
-
 - name: WORDPRESS
   include_role:
     name: wordpress

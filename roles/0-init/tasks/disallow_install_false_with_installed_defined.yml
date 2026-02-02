@@ -296,9 +296,3 @@
     that: rapidpro_install or rapidpro_installed is undefined
     fail_msg: "DISALLOWED: 'rapidpro_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'rapidpro_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
     quiet: yes
-
-- name: "DISALLOW 'openclaw_install: False' WHEN openclaw_installed is defined"
-  assert:
-    that: openclaw_install or openclaw_installed is undefined
-    fail_msg: "DISALLOWED: 'openclaw_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'openclaw_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
-    quiet: yes

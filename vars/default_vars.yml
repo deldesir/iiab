@@ -479,12 +479,6 @@ admin_email: "admin@box.lan"
 admin_password: "changeme"
 rapidpro_url: /rp
 
-# Conversational AI Gateway for WhatsApp integration (RapidPro compatible)
-openclaw_install: False
-openclaw_enabled: False
-openclaw_port: 3030
-
-
 # If using WordPress intensively, set nginx_high_php_limits further above.
 wordpress_install: False
 wordpress_enabled: False
