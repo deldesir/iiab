@@ -1,9 +1,0 @@
-- name: Install system dependencies
-  apt:
-    name:
-      - python3-venv
-      - python3-pip
-      - git
-      - postgresql-client
-    state: present
-  become: yes
