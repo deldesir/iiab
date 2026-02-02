@@ -8,5 +8,21 @@
   },
   "logging": {
     "level": "info"
+  },
+  "hooks": {
+    "enabled": true,
+    "token": "{{ rapidpro_auth_token }}",
+    "path": "/hooks",
+    "mappings": [
+      {
+        "id": "rapidpro-default",
+        "match": {
+          "path": "rapidpro/default"
+        },
+        "action": "agent",
+        "sessionKey": "rapidpro:{{payload.contact.urn}}",
+        "messageTemplate": "{{payload.results.message.value}}"
+      }
+    ]
   }
 }
