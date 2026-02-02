@@ -128,3 +128,9 @@ SECURE_PROXY_SSL_HEADER = None
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
 {% endif %}
+
+# OpenClaw Configuration
+OPENCLAW_ADMIN_TOKEN = "{{ wuzapi_admintoken }}"
+
+# Register OpenClaw Channel Type
+CHANNEL_TYPES = CHANNEL_TYPES + ["temba.channels.types.openclaw.type.OpenClawType"]
