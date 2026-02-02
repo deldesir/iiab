@@ -8,5 +8,5 @@ openclaw_branch: main
 openclaw_user: iiab-admin
 openclaw_port: 3030
 rapidpro_inbound_url: "http://localhost:8000/c/ex/UUID/receive"
-openclaw_admin_token: "admin-secret-123"
-rapidpro_auth_token: "rapidpro-secret-123"
+openclaw_admin_token: ""
+rapidpro_auth_token: ""
