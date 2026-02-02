@@ -27,6 +27,13 @@ openclaw_admin_token: "your_secure_admin_token"
 rapidpro_auth_token: "your_secure_rp_token"
 ```
 
+> [!IMPORTANT]
+> The `openclaw` service will fail to start propertly if these tokens are not defined.
+> Default placeholder secrets have been removed for security.
+
+### Network Binding
+By default, this role configures OpenClaw to bind to `127.0.0.1` (loopback) to ensure it is only accessible via the Nginx proxy on port 80/443. This prevents direct external access to the service port (3030).
+
 ## Services
 
 This role configures and manages the following systemd service:
