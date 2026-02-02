@@ -23,6 +23,17 @@
     mode: '0755'
   become: yes
 
+- name: Check if openclaw directory is already safe
+  command: git config --global --get-all safe.directory
+  register: git_safe_dirs
+  changed_when: false
+  ignore_errors: yes
+
+- name: Add openclaw directory to git safe directories
+  command: git config --global --add safe.directory {{ openclaw_dir }}
+  become: yes
+  when: openclaw_dir not in (git_safe_dirs.stdout_lines | default([]))
+
 - name: Clone OpenClaw repository
   git:
     repo: "{{ openclaw_repo }}"
@@ -31,7 +42,16 @@
     force: yes
     update: yes
   become: yes
+
   notify: restart openclaw
+
+- name: Set ownership of OpenClaw directory
+  file:
+    path: "{{ openclaw_dir }}"
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    recurse: yes
+  become: yes
 
 - name: Install dependencies with pnpm
   command: pnpm install
@@ -50,10 +70,47 @@
   become_user: "{{ openclaw_user }}"
   when: pnpm_install.changed
 
-- name: Configure OpenClaw (config.yaml)
+- name: Build OpenClaw UI
+  command: pnpm ui:build
+  args:
+    chdir: "{{ openclaw_dir }}"
+  become: yes
+  become_user: "{{ openclaw_user }}"
+  when: pnpm_install.changed
+
+- name: Configure OpenClaw (openclaw.json)
   template:
-    src: config.yaml.j2
-    dest: "{{ openclaw_dir }}/config.yaml"
+    src: openclaw.json.j2
+    dest: "{{ openclaw_dir }}/openclaw.json"
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: '0644'
+  become: yes
+  notify: restart openclaw
+
+- name: Create RapidPro WhatsApp extension directory
+  file:
+    path: "{{ openclaw_dir }}/extensions/rapidpro-whatsapp"
+    state: directory
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: '0755'
+  become: yes
+
+- name: Create RapidPro WhatsApp plugin manifest
+  copy:
+    dest: "{{ openclaw_dir }}/extensions/rapidpro-whatsapp/openclaw.plugin.json"
+    content: |
+      {
+          "id": "extensions-rapidpro-whatsapp",
+          "name": "@openclaw/extensions-rapidpro-whatsapp",
+          "description": "RapidPro WhatsApp channel plugin",
+          "capabilities": {},
+          "configSchema": {
+              "type": "object",
+              "additionalProperties": true
+          }
+      }
     owner: "{{ openclaw_user }}"
     group: "{{ openclaw_user }}"
     mode: '0644'

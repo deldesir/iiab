@@ -1,10 +1,8 @@
 ---
 # This file will contain all the installation tasks for RapidPro.
 
-- name: Include Wuzapi role
-  include_role:
-    name: wuzapi
-  when: wuzapi_install | default(true)
+# This file will contain all the installation tasks for RapidPro.
+
 
 - name: Drop RapidPro database if requested
   block:
@@ -211,7 +209,7 @@
     name: yarn
     global: yes
   become: yes
-  when: not rapidpro_use_prebuilt_assets
+
 
 - name: Install dynalite (Memory-safe)
   shell: |
@@ -220,7 +218,7 @@
   args:
     creates: /usr/bin/dynalite
   become: yes
-  when: not rapidpro_use_prebuilt_assets
+
 
 - name: Install JavaScript dependencies (Memory-safe)
   shell: |
@@ -231,14 +229,14 @@
   become: yes
   register: rapidpro_yarn_install
   changed_when: false
-  when: not rapidpro_use_prebuilt_assets
+
 
 - name: Install global JS tools (less)
   yarn:
     name: less
     global: yes
   become: yes
-  when: not rapidpro_use_prebuilt_assets
+
 
 - name: Build CSS assets
   shell: |
@@ -246,11 +244,6 @@
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
-  when: (not rapidpro_use_prebuilt_assets)
-
-- name: Install Prebuilt Assets
-  include_tasks: install_prebuilt_assets.yml
-  when: rapidpro_use_prebuilt_assets
 
 - name: Restore RapidPro Directory Ownership (after root build steps)
   command: "chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} {{ rapidpro_dir }}"

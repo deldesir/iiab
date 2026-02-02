@@ -6,13 +6,14 @@ After=network.target
 Type=simple
 User={{ openclaw_user }}
 WorkingDirectory={{ openclaw_dir }}
-ExecStart=/usr/bin/node dist/entry.js daemon --port {{ openclaw_port }}
+ExecStart=/usr/bin/node openclaw.mjs gateway
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
 Environment=RAPIDPRO_INBOUND_URL={{ rapidpro_inbound_url }}
 Environment=OPENCLAW_ADMIN_TOKEN={{ openclaw_admin_token }}
 Environment=RAPIDPRO_AUTH_TOKEN={{ rapidpro_auth_token }}
+Environment=OPENCLAW_CONFIG_PATH={{ openclaw_dir }}/openclaw.json
 
 [Install]
 WantedBy=multi-user.target

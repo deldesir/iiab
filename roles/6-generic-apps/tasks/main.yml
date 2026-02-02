@@ -62,6 +62,12 @@
     name: rapidpro
   when: rapidpro_install
 
+- name: WUZAPI
+  include_role:
+    name: wuzapi
+  when: wuzapi_install
+
+
 - name: OPENCLAW
   include_role:
     name: openclaw

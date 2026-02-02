@@ -1,0 +1,12 @@
+{
+  "gateway": {
+    "mode": "local",
+    "port": {{ openclaw_port | default(3030) }},
+    "auth": {
+      "token": "{{ openclaw_admin_token }}"
+    }
+  },
+  "logging": {
+    "level": "info"
+  }
+}

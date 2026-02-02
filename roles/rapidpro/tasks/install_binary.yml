@@ -20,12 +20,3 @@
     mode: '0755'
     force: yes
   become: yes
-
-- name: Install Wuzapi Binary from Release (v1.0.3)
-  get_url:
-    url: "https://github.com/deldesir/wuzapi/releases/download/v1.0.3/wuzapi-linux-{{ rapidpro_go_arch }}"
-    dest: /opt/iiab/wuzapi/wuzapi
-    mode: '0755'
-    force: yes
-  become: yes
-  when: wuzapi_install | default(true)
