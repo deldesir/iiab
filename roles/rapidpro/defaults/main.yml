@@ -30,3 +30,4 @@ wuzapi_port: 8095
 
 wuzapi_admintoken: ""
 rapidpro_secret_key: ""
+openclaw_admin_token: ""
