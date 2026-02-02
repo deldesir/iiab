@@ -20,8 +20,8 @@
           "path": "rapidpro/default"
         },
         "action": "agent",
-        "sessionKey": "rapidpro:{{ '{{' }}payload.contact.urn{{ '}}' }}",
-        "messageTemplate": "{{ '{{' }}payload.results.message.value{{ '}}' }}"
+        "sessionKey": "{% raw %}rapidpro:{{payload.contact.urn}}{% endraw %}",
+        "messageTemplate": "{% raw %}{{payload.results.message.value}}{% endraw %}"
       }
     ]
   }
