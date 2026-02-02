@@ -1,0 +1,22 @@
+# OpenClaw Configuration (Ansible Managed)
+
+authDir: "data/auth"
+
+api:
+  port: {{ openclaw_port }}
+  adminToken: "{{ openclaw_admin_token }}"
+
+logging:
+  level: "info"
+
+channels:
+  whatsapp:
+    enabled: true
+    deliveryMode: "gateway" # Enforce Gateway mode for RapidPro
+
+extensions:
+  - "./extensions/rapidpro-whatsapp/src/index.ts"
+
+# RapidPro specific settings injected via Env Vars:
+# RAPIDPRO_INBOUND_URL
+# RAPIDPRO_AUTH_TOKEN
