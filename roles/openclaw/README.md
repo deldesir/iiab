@@ -45,4 +45,19 @@ openclaw_enabled: True
 ```
 
 Then run the IIAB installer or roles script:
-`./runrole openclaw`
+`./runrole openclaw
+
+## CLI Usage
+
+The `openclaw` command is not in the global PATH. To use the CLI (e.g. to list channels):
+
+```bash
+cd /opt/iiab/openclaw
+sudo -u iiab-admin npm run openclaw -- channels status
+```
+
+Or directly via node:
+```bash
+cd /opt/iiab/openclaw
+sudo -u iiab-admin node openclaw.mjs --help
+````
