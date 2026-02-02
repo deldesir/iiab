@@ -21,11 +21,6 @@
   include_tasks: nginx.yml
   when: rapidpro_enabled
 
-- name: Install Konex AI Middleware
-  include_role:
-    name: ai_middleware
-  when: rapidpro_enabled
-
 - name: Mark RapidPro as Installed
   lineinfile:
     path: /etc/iiab/iiab_state.yml
