@@ -1,0 +1,90 @@
+---
+- name: Install OpenClaw dependencies
+  apt:
+    name:
+      - git
+      - nodejs
+    state: present
+  become: yes
+
+- name: Ensure pnpm is installed
+  npm:
+    name: pnpm
+    global: yes
+    state: present
+  become: yes
+
+- name: Create OpenClaw directory
+  file:
+    path: "{{ openclaw_dir }}"
+    state: directory
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: '0755'
+  become: yes
+
+- name: Clone OpenClaw repository
+  git:
+    repo: "{{ openclaw_repo }}"
+    dest: "{{ openclaw_dir }}"
+    version: "{{ openclaw_branch }}"
+    force: yes
+    update: yes
+  become: yes
+  notify: restart openclaw
+
+- name: Install dependencies with pnpm
+  command: pnpm install
+  args:
+    chdir: "{{ openclaw_dir }}"
+  become: yes
+  become_user: "{{ openclaw_user }}"
+  register: pnpm_install
+  changed_when: "'Packages are hard linked from the content-addressable store to the virtual store' not in pnpm_install.stdout"
+
+- name: Build OpenClaw
+  command: pnpm build
+  args:
+    chdir: "{{ openclaw_dir }}"
+  become: yes
+  become_user: "{{ openclaw_user }}"
+  when: pnpm_install.changed
+
+- name: Configure OpenClaw (config.yaml)
+  template:
+    src: config.yaml.j2
+    dest: "{{ openclaw_dir }}/config.yaml"
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: '0644'
+  become: yes
+  notify: restart openclaw
+
+- name: Install OpenClaw systemd service
+  template:
+    src: openclaw.service.j2
+    dest: /etc/systemd/system/openclaw.service
+  become: yes
+  notify: restart openclaw
+
+- name: Configure Nginx for OpenClaw (WebhooksShim)
+  template:
+    src: openclaw-nginx.conf.j2
+    dest: /etc/nginx/conf.d/openclaw.conf
+  become: yes
+  notify: reload nginx
+
+- name: Enable and start OpenClaw service
+  systemd:
+    name: openclaw
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  become: yes
+
+- name: Mark openclaw as installed
+  lineinfile:
+    path: /etc/iiab/iiab_state.yml
+    line: "openclaw_installed: True"
+    create: yes
+  become: yes
