@@ -53,13 +53,7 @@
     recurse: yes
   become: yes
 
-- name: Patch Wuzapi shim for RapidPro webhook config
-  patch:
-    src: openclaw-shim-webhook.patch
-    basedir: "{{ openclaw_dir }}"
-    strip: 0
-  become: yes
-  notify: restart openclaw
+
 
 - name: Install dependencies with pnpm
   command: pnpm install
