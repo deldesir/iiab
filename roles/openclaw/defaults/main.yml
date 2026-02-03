@@ -10,3 +10,8 @@ openclaw_port: 3030
 rapidpro_inbound_url: "http://localhost:8000/c/ex/UUID/receive"
 openclaw_admin_token: ""
 rapidpro_auth_token: ""
+
+# LLM Configuration
+openclaw_llm_provider: "gemini"
+openclaw_gemini_model: "gemini-1.5-flash"
+openclaw_gemini_api_key: ""
