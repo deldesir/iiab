@@ -7,6 +7,15 @@
     },
     "bind": "loopback"
   },
+  "channels": {
+    "whatsapp": {
+      "accounts": {
+        "default": {
+          "enabled": true
+        }
+      }
+    }
+  },
   "llm": {
     "provider": "{{ openclaw_llm_provider | default('gemini') }}",
     "auth": {
