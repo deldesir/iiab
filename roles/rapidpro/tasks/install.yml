@@ -144,6 +144,13 @@
   become: yes
   changed_when: false
 
+- name: Patch RapidPro for OpenClaw Admin Token Auto-Use
+  patch:
+    src: rapidpro-openclaw-auth.patch
+    basedir: "{{ rapidpro_dir }}"
+    strip: 0
+  become: yes
+
 - name: Deploy Branding Script and Assets
   copy:
     src: branding/

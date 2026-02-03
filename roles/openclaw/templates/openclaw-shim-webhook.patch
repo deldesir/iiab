@@ -1,0 +1,62 @@
+--- a/src/gateway/server-wuzapi-shim.ts
++++ b/src/gateway/server-wuzapi-shim.ts
+@@ -25,28 +25,6 @@
+         return true;
+       }
+ 
+-      // Get active socket (Single Tenant Assumption: First one found)
+-      const entries = Array.from(activeSockets.values());
+-      const session = entries[0];
+-
+-      if (!session) {
+-        json(res, 503, { error: "No active WhatsApp session found. Please check OpenClaw logs." });
+-        return true;
+-      }
+-
+-      const { sock, qr, connection } = session;
+-
+-      if (url === "/session/qr") {
+-        if (!qr) {
+-          json(res, 200, {
+-            data: { QRCode: "" },
+-            message: "No QR code available (maybe already connected?)",
+-          });
+-        } else {
+-          json(res, 200, { data: { QRCode: qr } });
+-        }
+-        return true;
+-      }
+-
+       if (url === "/webhook") {
+         // RapidPro tries to configure the webhook, but we rely on the plugin environment setup.
+         // Just return success to satisfy the check.
+@@ -54,6 +32,30 @@
+         return true;
+       }
+ 
++      // Get active socket (Single Tenant Assumption: First one found)
++      const entries = Array.from(activeSockets.values());
++      const session = entries[0];
++
++      if (!session) {
++        json(res, 503, { error: "No active WhatsApp session found. Please check OpenClaw logs." });
++        return true;
++      }
++
++      const { sock, qr, connection } = session;
++
++      if (url === "/session/qr") {
++        if (!qr) {
++          json(res, 200, {
++            data: { QRCode: "" },
++            message: "No QR code available (maybe already connected?)",
++          });
++        } else {
++          json(res, 200, { data: { QRCode: qr } });
++        }
++        return true;
++      }
++
+       if (url === "/session/status") {
+         const isConnected = connection === "open";
+         // Wuzapi statuses: "CONNECTED", "scancode", "starting"
