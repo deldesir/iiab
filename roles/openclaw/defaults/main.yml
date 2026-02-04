@@ -5,13 +5,22 @@ openclaw_enabled: True
 openclaw_dir: /opt/iiab/openclaw
 openclaw_repo: https://github.com/deldesir/openclaw.git
 openclaw_branch: main
-openclaw_user: iiab-admin
+openclaw_user: openclaw
 openclaw_port: 3030
+openclaw_plugins_enabled:
+  - google-antigravity-auth
 rapidpro_inbound_url: "http://localhost:8000/c/ex/UUID/receive"
 openclaw_admin_token: ""
 rapidpro_auth_token: ""
 
 # LLM Configuration
-openclaw_llm_provider: "gemini"
-openclaw_gemini_model: "gemini-1.5-flash"
-openclaw_gemini_api_key: ""
+# LLM Configuration
+openclaw_llm_provider: "google-antigravity"
+openclaw_gemini_model: "google-antigravity/gemini-3-flash"
+openclaw_google_email: "users-email@gmail.com"
+
+# Google Antigravity OAuth Credentials (Required for Gemini)
+openclaw_google_access_token: ""
+openclaw_google_refresh_token: ""
+openclaw_google_expires_at: 0
+openclaw_google_project_id: ""

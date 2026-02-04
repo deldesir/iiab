@@ -5,45 +5,40 @@
     "auth": {
       "token": "{{ openclaw_admin_token }}"
     },
-    "bind": "loopback"
-  },
-  "channels": {
-    "whatsapp": {
-      "accounts": {
-        "default": {
-          "enabled": true
+    "bind": "loopback",
+    "http": {
+        "endpoints": {
+            "chatCompletions": {
+                "enabled": true
+            }
         }
-      }
     }
   },
-  "llm": {
-    "provider": "{{ openclaw_llm_provider | default('gemini') }}",
-    "auth": {
-      "gemini": {
-        "apiKey": "{{ ai_middleware_google_api_key | default(openclaw_gemini_api_key) | default('') }}"
-      }
-    },
+  "plugins": {
+    "entries": {
+        {% for plugin in openclaw_plugins_enabled %}
+        "{{ plugin }}": {
+            "enabled": true
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    }
+  },
+  "agents": {
     "defaults": {
-      "model": "{{ openclaw_gemini_model | default('gemini-1.5-flash') }}"
+        "model": {
+            "primary": "{{ openclaw_gemini_model }}"
+        }
+    }
+  },
+  "auth": {
+    "profiles": {
+        "google-antigravity:{{ openclaw_google_email }}": {
+            "provider": "google-antigravity",
+            "mode": "oauth"
+        }
     }
   },
   "logging": {
     "level": "info"
-  },
-  "hooks": {
-    "enabled": true,
-    "token": "{{ rapidpro_auth_token }}",
-    "path": "/hooks",
-    "mappings": [
-      {
-        "id": "rapidpro-default",
-        "match": {
-          "path": "rapidpro/default"
-        },
-        "action": "agent",
-        "sessionKey": "{% raw %}rapidpro:{{payload.contact.urn}}{% endraw %}",
-        "messageTemplate": "{% raw %}{{payload.results.message.value}}{% endraw %}"
-      }
-    ]
   }
 }

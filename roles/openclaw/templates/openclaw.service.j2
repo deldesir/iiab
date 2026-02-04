@@ -9,6 +9,12 @@ WorkingDirectory={{ openclaw_dir }}
 ExecStart=/usr/bin/node openclaw.mjs gateway
 Restart=always
 RestartSec=10
+# Security Hardening
+ProtectSystem=full
+PrivateTmp=true
+NoNewPrivileges=true
+# Restrict write access mostly, but allow OpenClaw dir
+ReadWritePaths={{ openclaw_dir }} /home/{{ openclaw_user }}/.openclaw
 Environment=NODE_ENV=production
 Environment=RAPIDPRO_INBOUND_URL={{ rapidpro_inbound_url }}
 Environment=OPENCLAW_ADMIN_TOKEN={{ openclaw_admin_token }}

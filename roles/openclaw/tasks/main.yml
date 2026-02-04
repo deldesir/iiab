@@ -1,4 +1,13 @@
 ---
+- name: Create openclaw user
+  user:
+    name: "{{ openclaw_user }}"
+    shell: /bin/bash
+    home: "/home/{{ openclaw_user }}"
+    create_home: yes
+    system: yes
+  become: yes
+
 - name: Install OpenClaw dependencies
   apt:
     name:
@@ -90,32 +99,22 @@
   become: yes
   notify: restart openclaw
 
-- name: Create RapidPro WhatsApp extension directory
+- name: Create OpenClaw config directory
   file:
-    path: "{{ openclaw_dir }}/extensions/rapidpro-whatsapp"
+    path: "/home/{{ openclaw_user }}/.openclaw/agents/main/agent"
     state: directory
     owner: "{{ openclaw_user }}"
     group: "{{ openclaw_user }}"
-    mode: '0755'
+    mode: '0700'
   become: yes
 
-- name: Create RapidPro WhatsApp plugin manifest
-  copy:
-    dest: "{{ openclaw_dir }}/extensions/rapidpro-whatsapp/openclaw.plugin.json"
-    content: |
-      {
-          "id": "extensions-rapidpro-whatsapp",
-          "name": "@openclaw/extensions-rapidpro-whatsapp",
-          "description": "RapidPro WhatsApp channel plugin",
-          "capabilities": {},
-          "configSchema": {
-              "type": "object",
-              "additionalProperties": true
-          }
-      }
+- name: Configure OpenClaw Auth Profiles
+  template:
+    src: auth-profiles.json.j2
+    dest: "/home/{{ openclaw_user }}/.openclaw/agents/main/agent/auth-profiles.json"
     owner: "{{ openclaw_user }}"
     group: "{{ openclaw_user }}"
-    mode: '0644'
+    mode: '0600'
   become: yes
   notify: restart openclaw
 
@@ -146,4 +145,8 @@
     path: /etc/iiab/iiab_state.yml
     line: "openclaw_installed: True"
     create: yes
+- name: Lockdown openclaw user shell (security)
+  user:
+    name: "{{ openclaw_user }}"
+    shell: /usr/sbin/nologin
   become: yes
