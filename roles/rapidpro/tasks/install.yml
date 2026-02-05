@@ -135,7 +135,7 @@
     repo: 'https://github.com/deldesir/rapidpro.git'
     dest: "{{ rapidpro_dir }}"
     force: yes
-    version: main
+    version: v26.1.17
   become: yes
   register: rapidpro_git_clone
 

@@ -5,17 +5,17 @@
   set_fact:
     rapidpro_go_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
 
-- name: Install Mailroom Binary from Release (26.1.19)
+- name: Install Mailroom Binary from Release (26.1.21)
   get_url:
-    url: "https://github.com/deldesir/mailroom/releases/download/26.1.19/mailroom-linux-{{ rapidpro_go_arch }}"
+    url: "https://github.com/deldesir/mailroom/releases/download/v26.1.21/mailroom-linux-{{ rapidpro_go_arch }}"
     dest: /usr/local/bin/mailroom
     mode: '0755'
     force: yes
   become: yes
 
-- name: Install Courier Binary from Release (26.1.5)
+- name: Install Courier Binary from Release (26.1.9)
   get_url:
-    url: "https://github.com/deldesir/courier/releases/download/26.1.5/courier-linux-{{ rapidpro_go_arch }}"
+    url: "https://github.com/deldesir/courier/releases/download/v26.1.9/courier-linux-{{ rapidpro_go_arch }}"
     dest: /usr/local/bin/courier
     mode: '0755'
     force: yes
