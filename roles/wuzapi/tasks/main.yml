@@ -27,6 +27,24 @@
   become: yes
   notify: restart wuzapi
 
+- name: Clone Wuzapi repository (for static assets)
+  git:
+    repo: "https://github.com/deldesir/wuzapi.git"
+    dest: "/opt/iiab/wuzapi-src"
+    version: "main"
+    update: yes
+  become: yes
+
+- name: Copy static assets to install directory
+  copy:
+    src: "/opt/iiab/wuzapi-src/static"
+    dest: "{{ wuzapi_dir }}/"
+    remote_src: yes
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+  become: yes
+  notify: restart wuzapi
+
 - name: Install Wuzapi systemd service
   template:
     src: wuzapi.service.j2
