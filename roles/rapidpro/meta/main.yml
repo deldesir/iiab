@@ -6,3 +6,11 @@ dependencies:
     vars:
       postgresql_install: true
       postgresql_enabled: true
+  - role: wuzapi
+    when: wuzapi_install | default(true)
+    vars:
+      wuzapi_enabled: true
+  - role: openclaw
+    when: openclaw_install | default(true)
+    vars:
+      openclaw_enabled: true

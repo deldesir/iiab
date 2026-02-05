@@ -5,9 +5,9 @@
   set_fact:
     rapidpro_go_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
 
-- name: Install Mailroom Binary from Release (26.1.18)
+- name: Install Mailroom Binary from Release (26.1.19)
   get_url:
-    url: "https://github.com/deldesir/mailroom/releases/download/v26.1.18/mailroom-linux-{{ rapidpro_go_arch }}"
+    url: "https://github.com/deldesir/mailroom/releases/download/26.1.19/mailroom-linux-{{ rapidpro_go_arch }}"
     dest: /usr/local/bin/mailroom
     mode: '0755'
     force: yes

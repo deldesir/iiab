@@ -182,7 +182,7 @@
 - name: Add missing dependencies
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    poetry add regex gunicorn celery openai
+    poetry add regex gunicorn celery
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes

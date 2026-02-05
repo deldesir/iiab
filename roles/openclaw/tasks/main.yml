@@ -79,7 +79,6 @@
     chdir: "{{ openclaw_dir }}"
   become: yes
   become_user: "{{ openclaw_user }}"
-  when: pnpm_install.changed
 
 - name: Build OpenClaw UI
   command: pnpm ui:build
@@ -87,7 +86,6 @@
     chdir: "{{ openclaw_dir }}"
   become: yes
   become_user: "{{ openclaw_user }}"
-  when: pnpm_install.changed
 
 - name: Configure OpenClaw (openclaw.json)
   template:
@@ -145,6 +143,7 @@
     path: /etc/iiab/iiab_state.yml
     line: "openclaw_installed: True"
     create: yes
+
 - name: Lockdown openclaw user shell (security)
   user:
     name: "{{ openclaw_user }}"
