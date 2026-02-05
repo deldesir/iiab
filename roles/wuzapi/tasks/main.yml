@@ -45,6 +45,16 @@
   become: yes
   notify: restart wuzapi
 
+- name: Ensure correct ownership for Wuzapi directory
+  file:
+    path: "{{ wuzapi_dir }}"
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+    recurse: yes
+    state: directory
+  become: yes
+  notify: restart wuzapi
+
 - name: Install Wuzapi systemd service
   template:
     src: wuzapi.service.j2
