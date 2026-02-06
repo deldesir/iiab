@@ -484,6 +484,12 @@ openclaw_install: False
 openclaw_enabled: False
 openclaw_port: 3030
 
+# LiteLLM: OpenAI-compatible proxy server
+litellm_install: True
+litellm_enabled: True
+litellm_port: 4000
+# litellm_master_key: "sk-1234" # Override in local_vars.yml
+
 
 # If using WordPress intensively, set nginx_high_php_limits further above.
 wordpress_install: False

@@ -73,6 +73,11 @@
     name: openclaw
   when: openclaw_install
 
+- name: LITELLM
+  include_role:
+    name: litellm
+  when: litellm_install
+
 
 - name: WORDPRESS
   include_role:

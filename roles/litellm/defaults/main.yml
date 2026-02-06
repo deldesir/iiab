@@ -1,0 +1,19 @@
+---
+litellm_install: True
+litellm_enabled: True
+
+litellm_dir: /opt/iiab/litellm
+litellm_repo: https://github.com/deldesir/litellm.git
+litellm_branch: main
+litellm_user: "{{ iiab_admin_user }}"
+litellm_port: 4000
+# SECURITY WARNING: unexpected default key usage
+# You should override this in local_vars.yml
+litellm_master_key: "sk-1234"
+litellm_admin_listen_ip: "0.0.0.0"
+litellm_env: {}
+# Example usage in local_vars.yml:
+# litellm_env:
+#   OPENAI_API_KEY: "sk-..."
+#   ANTHROPIC_API_KEY: "sk-..."
+

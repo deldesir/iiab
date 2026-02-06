@@ -1,0 +1,93 @@
+---
+- block:
+# User creation removed: inheriting iiab_admin_user (standard IIAB pattern)
+
+    - name: Install LiteLLM dependencies
+      apt:
+        name:
+          - git
+          - python3-pip
+          - python3-venv
+          - python3-poetry
+        state: present
+      become: yes
+
+    - name: Create LiteLLM directory
+      file:
+        path: "{{ litellm_dir }}"
+        state: directory
+        owner: "{{ litellm_user }}"
+        group: "{{ litellm_user }}"
+        mode: '0755'
+      become: yes
+
+    - name: Check if litellm directory is already safe
+      command: git config --global --get-all safe.directory
+      register: git_safe_dirs
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Add litellm directory to git safe directories
+      command: git config --global --add safe.directory {{ litellm_dir }}
+      become: yes
+      when: litellm_dir not in (git_safe_dirs.stdout_lines | default([]))
+
+    - name: Clone LiteLLM repository
+      git:
+        repo: "{{ litellm_repo }}"
+        dest: "{{ litellm_dir }}"
+        version: "{{ litellm_branch }}"
+        force: yes
+        update: yes
+      become: yes
+      notify: restart litellm
+
+    - name: Set ownership of LiteLLM directory
+      file:
+        path: "{{ litellm_dir }}"
+        state: directory
+        owner: "{{ litellm_user }}"
+        group: "{{ litellm_user }}"
+        recurse: yes
+      become: yes
+
+    - name: Install dependencies with poetry
+      script: install.sh
+      args:
+        chdir: "{{ litellm_dir }}"
+      become: yes
+      become_user: "{{ litellm_user }}"
+      register: poetry_install
+      changed_when: "'Installing' in poetry_install.stdout"
+
+    - name: Configure LiteLLM (proxy_config.yaml)
+      template:
+        src: proxy_config.yaml.j2
+        dest: "{{ litellm_dir }}/proxy_config.yaml"
+        owner: "{{ litellm_user }}"
+        group: "{{ litellm_user }}"
+        mode: '0644'
+      become: yes
+      notify: restart litellm
+
+    - name: Install LiteLLM systemd service
+      template:
+        src: litellm.service.j2
+        dest: /etc/systemd/system/litellm.service
+      become: yes
+      notify: restart litellm
+
+    - name: Enable and start LiteLLM service
+      systemd:
+        name: litellm
+        state: "{{ 'started' if litellm_enabled | bool else 'stopped' }}"
+        enabled: "{{ litellm_enabled | bool }}"
+        daemon_reload: yes
+      become: yes
+
+    - name: Mark litellm as installed
+      lineinfile:
+        path: /etc/iiab/iiab_state.yml
+        line: "litellm_installed: True"
+
+  when: litellm_install | bool
