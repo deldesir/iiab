@@ -1,0 +1,13 @@
+---
+# defaults file for erpnext
+
+erpnext_install: False
+erpnext_enabled: False
+erpnext_db_root_password: "" # Should ideally be {{ mysql_root_password }}
+erpnext_admin_password: "admin"
+erpnext_version: "version-15"
+erpnext_site_name: "site.local"
+erpnext_user_name: "frappe"
+erpnext_db_name: "_site_local"
+erpnext_db_user: "_site_local"
+erpnext_db_password: "CHANGEME" # User should ideally override this

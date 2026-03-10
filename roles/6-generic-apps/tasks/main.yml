@@ -84,6 +84,11 @@
     name: wordpress
   when: wordpress_install and not is_proot
 
+- name: ERPNEXT
+  include_role:
+    name: erpnext
+  when: erpnext_install and not is_proot
+
 - name: Recording STAGE 6 HAS COMPLETED ====================
   lineinfile:
     path: "{{ iiab_env_file }}"

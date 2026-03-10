@@ -130,6 +130,12 @@
     fail_msg: "DISALLOWED: 'nextcloud_install: False' WITH 'nextcloud_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
     quiet: yes
 
+- name: "DISALLOW 'erpnext_install: False' WITH 'erpnext_enabled: True'"
+  assert:
+    that: erpnext_install or not erpnext_enabled
+    fail_msg: "DISALLOWED: 'erpnext_install: False' WITH 'erpnext_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
+    quiet: yes
+
 - name: "DISALLOW 'wordpress_install: False' WITH 'wordpress_enabled: True'"
   assert:
     that: wordpress_install or not wordpress_enabled

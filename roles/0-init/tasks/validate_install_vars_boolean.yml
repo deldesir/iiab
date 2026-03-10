@@ -130,6 +130,12 @@
     fail_msg: "VARIABLE MUST BE BOOLEAN: 'nextcloud_install' now has type '{{ lookup('vars', 'nextcloud_install') | type_debug }}' and value '{{ lookup('vars', 'nextcloud_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
 
+- name: Assert that var erpnext_install is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: erpnext_install | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'erpnext_install' now has type '{{ lookup('vars', 'erpnext_install') | type_debug }}' and value '{{ lookup('vars', 'erpnext_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
 - name: Assert that var wordpress_install is type boolean (NOT type string, which can invert logic!)
   assert:
     that: wordpress_install | type_debug == 'bool'

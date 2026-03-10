@@ -130,6 +130,12 @@
     fail_msg: "VARIABLE MUST BE DEFINED: 'nextcloud_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
 
+- name: Assert that var erpnext_install is defined
+  assert:
+    that: erpnext_install is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'erpnext_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
 - name: Assert that var wordpress_install is defined
   assert:
     that: wordpress_install is defined

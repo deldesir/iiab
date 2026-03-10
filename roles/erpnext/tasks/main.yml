@@ -1,0 +1,46 @@
+- name: Assert that "erpnext_install is sameas true" (boolean not string etc)
+  assert:
+    that: erpnext_install is sameas true
+    fail_msg: "PLEASE SET 'erpnext_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+  when: erpnext_install | bool
+
+- name: Assert that "erpnext_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: erpnext_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'erpnext_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+  when: erpnext_install | bool
+
+
+- block:
+
+    - name: Install ERPNext if 'erpnext_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+      include_tasks: install.yml
+      when:
+        - erpnext_install | bool
+        - erpnext_installed is undefined
+
+    - name: Add 'erpnext' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+        section: erpnext
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: ERPNext
+        - option: erpnext_install
+          value: "{{ erpnext_install }}"
+        - option: erpnext_enabled
+          value: "{{ erpnext_enabled }}"
+      when: erpnext_install | bool
+
+  rescue:
+
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when:
+        - erpnext_install | bool
+        - not skip_role_on_error

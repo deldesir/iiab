@@ -1,0 +1,223 @@
+---
+# Install tasks for ERPNext
+
+- name: "Set 'mysql_install: True' and 'mysql_enabled: True'"
+  set_fact:
+    mysql_install: True
+    mysql_enabled: True
+
+- name: MYSQL - run 'mysql' role (attempt to install & enable MySQL / MariaDB)
+  include_role:
+    name: mysql
+
+- name: FAIL (STOP THE INSTALL) IF 'mysql_installed is undefined'
+  fail:
+    msg: "ERPNext install cannot proceed, as MySQL / MariaDB is not installed."
+  when: mysql_installed is undefined
+
+- name: "Set 'nodejs_install: True' and 'nodejs_enabled: True'"
+  set_fact:
+    nodejs_install: True
+    nodejs_enabled: True
+
+- name: NODEJS - run 'nodejs' role (attempt to install & enable Node.js)
+  include_role:
+    name: nodejs
+
+- name: FAIL (STOP THE INSTALL) IF 'nodejs_installed is undefined'
+  fail:
+    msg: "ERPNext install cannot proceed, as Node.js is not installed."
+  when: nodejs_installed is undefined
+
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+- name: Install ERPNext system dependencies
+  apt:
+    name:
+      - redis-server
+      - python3-pip
+      - python3-venv
+      - wkhtmltopdf
+      - libmysqlclient-dev
+      - python3-dev
+      - pipx
+      - curl
+      - git
+    state: present
+  when: erpnext_enabled | bool
+
+- name: Install yarn globally via npm
+  npm:
+    name: yarn
+    global: yes
+    state: present
+  when: erpnext_enabled | bool
+
+- name: Configure MariaDB for ERPNext
+  template:
+    src: erpnext-mysqld.cnf.j2
+    dest: /etc/mysql/mariadb.conf.d/99-erpnext.cnf
+  notify: restart mariadb
+  when: erpnext_enabled | bool
+
+- name: Create frappe user
+  user:
+    name: "{{ erpnext_user_name }}"
+    shell: /bin/bash
+    home: /home/{{ erpnext_user_name }}
+  when: erpnext_enabled | bool
+
+- name: Ensure pipx is installed and in path for frappe user
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  command: pipx ensurepath
+  args:
+    creates: /home/{{ erpnext_user_name }}/.local/bin
+  when: erpnext_enabled | bool
+
+- name: Install frappe-bench globally for frappe user
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  command: pipx install frappe-bench
+  args:
+    creates: /home/{{ erpnext_user_name }}/.local/bin/bench
+  when: erpnext_enabled | bool
+
+- name: Install uv via pipx for frappe user (required by modern bench init)
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  command: pipx install uv
+  args:
+    creates: /home/{{ erpnext_user_name }}/.local/bin/uv
+  when: erpnext_enabled | bool
+
+- name: Init frappe bench
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  command: ~/.local/bin/bench init frappe-bench --frappe-branch {{ erpnext_version }}
+  args:
+    chdir: /home/{{ erpnext_user_name }}
+    creates: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+
+- name: Install ERPNext app in bench
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  command: ~/.local/bin/bench get-app erpnext --branch {{ erpnext_version }}
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+    creates: /home/{{ erpnext_user_name }}/frappe-bench/apps/erpnext
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+
+- name: Create ERPNext database
+  mysql_db:
+    name: "{{ erpnext_db_name }}"
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock
+  when: erpnext_enabled | bool
+
+- name: Create ERPNext database user
+  mysql_user:
+    name: "{{ erpnext_db_user }}"
+    password: "{{ erpnext_db_password }}"
+    priv: "{{ erpnext_db_name }}.*:ALL"
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock
+  when: erpnext_enabled | bool
+
+- name: Create ERPNext Site
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  command: ~/.local/bin/bench new-site {{ erpnext_site_name }} --admin-password {{ erpnext_admin_password }} --db-name {{ erpnext_db_name }} --db-password {{ erpnext_db_password }} --no-setup-db --force
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+    creates: /home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}/site_config.json
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+
+- name: Generate Systemd Services (replaces Supervisor)
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  shell: |
+    yes | ~/.local/bin/bench setup systemd
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+
+- name: Setup Systemd Symlinks
+  shell: |
+    ln -sf /home/{{ erpnext_user_name }}/frappe-bench/config/systemd/* /etc/systemd/system/
+    systemctl daemon-reload
+  when: erpnext_enabled | bool
+
+
+- name: Start Bench Redis Services (required for install-app and migrate)
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
+    state: started
+  loop:
+    - frappe-bench-redis-cache.service
+    - frappe-bench-redis-queue.service
+  when: erpnext_enabled | bool
+
+- name: Install ERPNext App in Site
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  shell: |
+    ~/.local/bin/bench --site {{ erpnext_site_name }} install-app erpnext && \
+    ~/.local/bin/bench --site {{ erpnext_site_name }} migrate
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+
+- name: Enable ERPNext Systemd Target
+  systemd:
+    name: "frappe-bench.target"
+    enabled: yes
+    state: started
+  when: erpnext_enabled | bool
+
+- name: Grant Nginx access to Frappe static assets
+  shell: chmod a+x /home/{{ erpnext_user_name }} /home/{{ erpnext_user_name }}/frappe-bench && chmod -R a+rX /home/{{ erpnext_user_name }}/frappe-bench/sites
+  when: erpnext_enabled | bool
+
+- name: Configure IIAB Nginx Sub-Path Proxy for ERPNext
+  template:
+    src: erpnext-nginx.conf.j2
+    dest: /etc/nginx/conf.d/erpnext-nginx.conf
+  notify:
+    - restart nginx
+  when: erpnext_enabled | bool
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'erpnext_disk_usage' delta to iiab.ini
+  ini_file:
+    path: /etc/iiab/iiab.ini
+    section: erpnext
+    option: erpnext_disk_usage
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
+
+- name: "Set 'erpnext_installed: True'"
+  set_fact:
+    erpnext_installed: True
+
+- name: "Add 'erpnext_installed: True' to /etc/iiab/iiab_state.yml"
+  lineinfile:
+    path: /etc/iiab/iiab_state.yml
+    regexp: '^erpnext_installed'
+    line: 'erpnext_installed: True'
