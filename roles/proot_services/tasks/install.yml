@@ -102,6 +102,9 @@
         - { name: 'mailroom', prio: '30' }
         - { name: 'rapidpro-watchdog', prio: '99' }
 
+    - name: Disable sudo use_pty in proot (fix interactive prompts)
+      include_tasks: no_use_pty_sudo.yml
+
 
     # RECORD PROOT_SERVICES AS INSTALLED
 
