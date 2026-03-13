@@ -153,7 +153,9 @@ if [ "$wan" != "none" ]; then
         # For now this is implemented using Admin Console variable "gui_port" from:
         # https://github.com/iiab/iiab/blob/master/roles/0-init/tasks/main.yml#L87-L95
         $IPTABLES -A INPUT -p tcp --dport $gui_port -m state --state NEW -i $wan -j ACCEPT
+{% if iiab_ssl_enabled %}
         $IPTABLES -A INPUT -p tcp --dport 443 -m state --state NEW -i $wan -j ACCEPT
+{% endif %}
     fi
 
     # 3 = ssh + http-or-https + common IIAB services

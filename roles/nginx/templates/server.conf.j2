@@ -1,9 +1,34 @@
 server {
     root {{ doc_root }};
-    server_name $hostname;    # e.g. box.lan, set dynamically when NGINX starts
-    #server_name {{ iiab_hostname }}.{{ iiab_domain }};
-    #server_name {{ iiab_hostname }};
+    
+    # Listen on HTTP
     listen {{ nginx_port }};
+    
+    # Dynamic server names: $hostname + custom SSL domain (if enabled)
+    server_name $hostname {% if iiab_ssl_enabled and iiab_ssl_domain != "box.lan" %}{{ iiab_ssl_domain }}{% endif %};
+
+{% if iiab_ssl_enabled %}
+    # Listen on HTTPS
+    listen 443 ssl http2;
+
+    # SSL Certificates
+    ssl_certificate {{ iiab_ssl_cert_path }};
+    ssl_certificate_key {{ iiab_ssl_key_path }};
+
+    # Optional HTTP to HTTPS Redirection
+    {% if iiab_ssl_redirect_http %}
+    set $redirect_to_https 0;
+    if ($scheme = http) {
+        set $redirect_to_https 1;
+    }
+    if ($host = "{{ iiab_ssl_domain }}") {
+        set $redirect_to_https "${redirect_to_https}1";
+    }
+    if ($redirect_to_https = 11) {
+        return 301 https://$host$request_uri;
+    }
+    {% endif %}
+{% endif %}
 
     index index.php index.html index.htm;
 
@@ -29,6 +54,7 @@ server {
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_param SCRIPT_NAME $fastcgi_script_name;
         include fastcgi_params;
+        fastcgi_param HTTPS $https if_not_empty;
     }
 
     # 2021-07-30: Security risk identified by @tim-moody
