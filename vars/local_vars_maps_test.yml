@@ -1,4 +1,4 @@
-# This is local_vars_tiny.yml -- copy it to /etc/iiab/local_vars.yml then...
+# This is local_vars_maps_test.yml -- copy it to /etc/iiab/local_vars.yml then...
 # modify variables below, to override /opt/iiab/iiab/vars/default_vars.yml
 
 # READ "What is local_vars.yml and how do I customize it?" AT http://FAQ.IIAB.IO
@@ -10,6 +10,12 @@
 # WARNING: IF YOU CONNECT YOUR IIAB'S INTERNAL WIFI TO THE INTERNET OVER 5 GHz,
 # YOU'LL PREVENT OLDER LAPTOPS/PHONES/TABLETS (WHICH REQUIRE 2.4 GHz) FROM
 # CONNECTING TO YOUR IIAB'S INTERNAL HOTSPOT.  See "wifi_up_down: True" below.
+
+
+# We SKIP roles/network, for FASTER UNIT TESTING!  (so IF an internal hotspot
+# is later desired, change these two lines to 'True', then run 'iiab-network')
+network_install: False
+network_enabled: False
 
 
 # Ansible's default timeout for "get_url:" downloads (10 seconds) often fails
@@ -27,8 +33,8 @@ iiab_admin_user_install: True    # If False, THE SETTING BELOW WILL BE IGNORED.
 iiab_admin_can_sudo: True    # For /usr/bin/iiab-* support commands.  Optional.
 
 # Set these to False if you do not want to install/enable IIAB Admin Console
-admin_console_install: True
-admin_console_enabled: True
+admin_console_install: False
+admin_console_enabled: False
 #
 # Homepage: set to /home or /wordpress or /wiki (for MediaWiki)
 iiab_home_url: /home
@@ -63,7 +69,7 @@ iiab_domain: lan
 # Finally, if IIAB does not detect a country code from your OS, the following
 # fallback variable will be used instead: (to populate /etc/hostapd/hostapd.conf)
 host_country_code: US
-host_ssid: Internet in a Box
+host_ssid: unittest
 host_wifi_mode: g
 host_channel: 6
 hostapd_secure: False    # 2021-03-02 WiFi EAPOL fails if hotspot passwords,
@@ -135,14 +141,14 @@ sshd_enabled: True
 
 # https://remote.it can help you remotely maintain an IIAB.
 # INSTRUCTIONS: https://github.com/iiab/iiab/tree/master/roles/remoteit
-remoteit_install: False
+remoteit_install: True
 remoteit_enabled: False
 # OPTION #1: Run 'sudo iiab-remoteit' later.  OPTION #2: Set this now:
 # remoteit_license_key: 592AA9BB-XXXX-YYYY-ZZZZ-6E27654C3DF6
 
 # SECURITY WARNING: https://wiki.iiab.io/go/Security
 # New VPN replaced OpenVPN in Sept 2024:
-tailscale_install: False
+tailscale_install: True
 tailscale_enabled: False    # Stub var, doesn't yet do anything!
 
 # IIAB-ADMIN runs here - see its vars near top of this file:
@@ -185,7 +191,7 @@ gw_squid_whitelist: False    # Works with HTTP sites, not HTTPS sites !
 gw_block_https: False
 
 # Bluetooth PAN access to IIAB server - for Raspberry Pi - for 4-SERVER-OPTIONS
-bluetooth_install: True
+bluetooth_install: False
 bluetooth_enabled: False
 bluetooth_term_enabled: False
 
@@ -217,7 +223,7 @@ nginx_high_php_limits: False
 allow_www_data_poweroff: False
 
 # Toggle iiab-refresh-wiki-docs scraping for offline docs (http://box/info)
-nodocs: False
+nodocs: True
 
 
 # 5-XO-SERVICES
@@ -271,9 +277,6 @@ nextcloud_enabled: False
 # If using WordPress intensively, set nginx_high_php_limits further above.
 wordpress_install: False
 wordpress_enabled: False
-# ERPNext
-erpnext_install: False
-erpnext_enabled: False
 
 
 # 7-EDU-APPS
@@ -305,8 +308,8 @@ osm_vector_maps_enabled: False
 maps_from_internet_archive: False
 
 # "New" IIAB Maps, as of 2025 and 2026 -- INSTRUCTIONS: https://github.com/iiab/iiab/blob/master/roles/maps/README.md
-maps_install: False
-maps_enabled: False
+maps_install: True
+maps_enabled: True
 maps_vector_quality: ne                 # See `maps_dot_black_vector_tiles` in https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml for details and valid values.
 maps_satellite_zoom: 7                  # See `maps_dot_black_satellite_tiles` in https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml for details and valid values.
 maps_terrain_zoom: none                 # See `maps_dot_black_terrain_tiles` in https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml for details and valid values.
