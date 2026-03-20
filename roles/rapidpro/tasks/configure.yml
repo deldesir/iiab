@@ -15,12 +15,9 @@
   become_user: postgres
 
 - name: Enable PostgreSQL extensions
-  # The 'db' parameter is used for compatibility with older versions of the community.postgresql collection.
-  # It should be changed to 'database' when the collection is updated to a version that supports it.
   postgresql_ext:
     name: "{{ item }}"
-    db: "{{ rapidpro_db_name }}"
-    login_db: postgres
+    login_db: "{{ rapidpro_db_name }}"
     login_host: 127.0.0.1
   loop:
     - postgis
