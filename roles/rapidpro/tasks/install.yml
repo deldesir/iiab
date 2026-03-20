@@ -8,17 +8,16 @@
   when: rapidpro_force_drop_db | default(false)
   block:
     - name: Stop RapidPro services before DB drop
-      service:
-        name: "{{ item }}"
-        state: stopped
-      with_items:
+      shell: "systemctl stop {{ item }} 2>/dev/null || true"
+      loop:
         - rapidpro-gunicorn
         - rapidpro-courier
         - rapidpro-mailroom
         - rapidpro-dynamo
         - rapidpro-celery
-      ignore_errors: yes
       become: yes
+      changed_when: false
+      when: not is_proot
 
     - name: Terminate all connections to the 'temba' database
       postgresql_query:
