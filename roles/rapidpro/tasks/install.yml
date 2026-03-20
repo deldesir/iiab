@@ -178,17 +178,6 @@
   become: yes
   changed_when: false
 
-
-
-- name: Add missing dependencies
-  shell: |
-    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    poetry add regex gunicorn celery
-  args:
-    chdir: "{{ rapidpro_dir }}"
-  become: yes
-  become_user: "{{ iiab_admin_user }}"
-
 # Patches removed as they are integrated into deldesir/rapidpro fork
 
 
