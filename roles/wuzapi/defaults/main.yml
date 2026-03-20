@@ -6,3 +6,10 @@ wuzapi_dir: /opt/iiab/wuzapi
 wuzapi_admintoken: ""
 wuzapi_log_level: "INFO"
 wuzapi_debug: "false"
+
+# Architecture mapping (follows kiwix/gitea pattern)
+wuzapi_arch_dict:
+  x86_64: amd64
+  aarch64: arm64
+
+wuzapi_go_arch: "{{ wuzapi_arch_dict.get(ansible_facts.machine, 'unsupported') }}"

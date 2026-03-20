@@ -1,7 +1,6 @@
 ---
 # Defaults for the rapidpro role
 
-
 python_version: "3.13.5"
 rapidpro_db_name: "temba"
 rapidpro_db_user: "temba"
@@ -18,9 +17,6 @@ rapidpro_admin_password: ""
 rapidpro_hostname: "{{ ansible_fqdn }}"
 rapidpro_http_protocol: "http"
 
-
-
-
 rapidpro_url: /rp
 rapidpro_drop_db_on_reinstall: false
 rapidpro_force_drop_db: false
@@ -31,3 +27,10 @@ wuzapi_port: 8095
 wuzapi_admintoken: ""
 rapidpro_secret_key: ""
 custom_ai_admin_token: ""
+
+# Architecture mapping (follows kiwix/gitea pattern)
+rapidpro_arch_dict:
+  x86_64: amd64
+  aarch64: arm64
+
+rapidpro_go_arch: "{{ rapidpro_arch_dict.get(ansible_facts.machine, 'unsupported') }}"
