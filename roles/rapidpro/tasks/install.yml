@@ -5,6 +5,7 @@
 
 
 - name: Drop RapidPro database if requested
+  when: rapidpro_force_drop_db | default(false)
   block:
     - name: Stop RapidPro services before DB drop
       service:
@@ -38,9 +39,10 @@
         state: absent
       become: yes
       become_user: postgres
-  when: rapidpro_force_drop_db | default(false)
+
 
 - name: Uninstall RapidPro if reinstalling
+  when: reinstall is defined and reinstall
   block:
     - name: Get poetry environment path
       shell: |
@@ -67,7 +69,7 @@
         path: "{{ rapidpro_dir }}"
         state: absent
       become: yes
-  when: reinstall is defined and reinstall
+
 
 - name: Install essential build tools and libraries
   apt:
