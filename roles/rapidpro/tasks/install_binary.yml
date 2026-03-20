@@ -1,6 +1,11 @@
 ---
 # Universal Binary Installation (VM & Android/Proot)
 
+- name: Gather facts (needed for ansible_architecture)
+  setup:
+    filter: ansible_architecture
+  when: ansible_architecture is not defined
+
 - name: "Set architecture fact"
   set_fact:
     rapidpro_go_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
