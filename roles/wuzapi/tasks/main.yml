@@ -59,7 +59,7 @@
   become: yes
   notify: restart wuzapi
 
-- name: Enable and start Wuzapi service
+- name: Enable and start Wuzapi service (systemd)
   systemd:
     name: wuzapi
     state: started
@@ -67,6 +67,17 @@
     daemon_reload: yes
   become: yes
   when: not is_proot
+
+- name: Enable & start Wuzapi service via pdsm (Android/Proot)
+  when: is_proot
+  block:
+    - name: pdsm - Enable wuzapi
+      command: /usr/local/bin/pdsm enable wuzapi
+
+    - name: pdsm - Start wuzapi
+      command: /usr/local/bin/pdsm start wuzapi
+      register: pdsm_wuzapi_start
+      changed_when: "'already running' not in pdsm_wuzapi_start.stdout"
 
 - name: Configure Nginx for Wuzapi
   template:

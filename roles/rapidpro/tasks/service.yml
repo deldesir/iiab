@@ -1,6 +1,8 @@
 ---
 # Service Management (Systemd vs PDSM)
 
+# --- Systemd path (standard Linux) ---
+
 - name: Systemd - Ensure Infrastructure Services are Running
   service:
     name: "{{ item }}"
@@ -24,29 +26,32 @@
     - rapidpro-courier
     - rapidpro-mailroom
     - rapidpro-celery
-    - rapidpro-celery
   become: yes
   when: not is_proot
 
-- name: PDSM Enable Services (Android/Proot)
-  shell: |
-    /usr/local/bin/pdsm enable {{ item }}
+# --- pdsm path (proot/Android) ---
+
+- name: pdsm - Enable RapidPro Services (Android/Proot)
+  command: /usr/local/bin/pdsm enable {{ item }}
   loop:
     - postgresql
     - valkey
     - rapidpro-dynamo
-    - rapidpro-server
+    - rapidpro-gunicorn
     - rapidpro-courier
     - rapidpro-mailroom
     - rapidpro-celery
   become: yes
   when: is_proot
 
-- name: PDSM - Start Support Services (Android/Proot)
-  shell: |
-    /usr/local/bin/pdsm start postgresql
-    /usr/local/bin/pdsm start valkey
-    /usr/local/bin/pdsm start rapidpro-dynamo
+- name: pdsm - Start Infrastructure Services (Android/Proot)
+  command: /usr/local/bin/pdsm start {{ item }}
+  loop:
+    - postgresql
+    - valkey
+    - rapidpro-dynamo
+  register: pdsm_infra_start
+  changed_when: "'already running' not in pdsm_infra_start.stdout"
   become: yes
   when: is_proot
 
@@ -55,3 +60,15 @@
     port: 5432
     host: 127.0.0.1
     timeout: 300
+
+- name: pdsm - Start RapidPro Application Services (Android/Proot)
+  command: /usr/local/bin/pdsm start {{ item }}
+  loop:
+    - rapidpro-gunicorn
+    - rapidpro-courier
+    - rapidpro-mailroom
+    - rapidpro-celery
+  register: pdsm_app_start
+  changed_when: "'already running' not in pdsm_app_start.stdout"
+  become: yes
+  when: is_proot

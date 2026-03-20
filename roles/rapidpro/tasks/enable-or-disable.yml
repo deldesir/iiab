@@ -1,5 +1,7 @@
 ---
-- name: Manage Gunicorn service
+# --- Systemd path (standard Linux) ---
+
+- name: Manage Gunicorn service (systemd)
   systemd:
     name: rapidpro-gunicorn
     state: "{{ 'started' if rapidpro_enabled else 'stopped' }}"
@@ -8,7 +10,7 @@
   become: yes
   when: not is_proot
 
-- name: Manage Go services
+- name: Manage Go services (systemd)
   systemd:
     name: "{{ item }}"
     state: "{{ 'started' if rapidpro_enabled else 'stopped' }}"
@@ -21,3 +23,57 @@
     - rapidpro-celery
   become: yes
   when: not is_proot
+
+# --- pdsm path (proot/Android) ---
+
+- name: Enable & start RapidPro services via pdsm (Android/Proot)
+  when:
+    - rapidpro_enabled
+    - is_proot
+  block:
+    - name: pdsm - Enable all RapidPro services
+      command: /usr/local/bin/pdsm enable {{ item }}
+      loop:
+        - rapidpro-gunicorn
+        - rapidpro-mailroom
+        - rapidpro-courier
+        - rapidpro-dynamo
+        - rapidpro-celery
+
+    - name: pdsm - Start all RapidPro services
+      command: /usr/local/bin/pdsm start {{ item }}
+      loop:
+        - rapidpro-gunicorn
+        - rapidpro-mailroom
+        - rapidpro-courier
+        - rapidpro-dynamo
+        - rapidpro-celery
+      register: pdsm_start
+      changed_when: "'already running' not in pdsm_start.stdout"
+
+- name: Disable & stop RapidPro services via pdsm (Android/Proot)
+  when:
+    - not rapidpro_enabled
+    - is_proot
+  block:
+    - name: pdsm - Stop all RapidPro services
+      command: /usr/local/bin/pdsm stop {{ item }}
+      loop:
+        - rapidpro-gunicorn
+        - rapidpro-mailroom
+        - rapidpro-courier
+        - rapidpro-dynamo
+        - rapidpro-celery
+      register: pdsm_stop
+      changed_when: "'not running' not in pdsm_stop.stdout"
+      failed_when: false
+
+    - name: pdsm - Disable all RapidPro services
+      command: /usr/local/bin/pdsm disable {{ item }}
+      loop:
+        - rapidpro-gunicorn
+        - rapidpro-mailroom
+        - rapidpro-courier
+        - rapidpro-dynamo
+        - rapidpro-celery
+      failed_when: false
