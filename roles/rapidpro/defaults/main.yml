@@ -14,7 +14,7 @@ admin_email: "admin@box.lan"
 rapidpro_admin_password: ""
 
 # Hostname Configuration
-rapidpro_hostname: "{{ ansible_fqdn }}"
+rapidpro_hostname: "{{ iiab_hostname }}"
 rapidpro_http_protocol: "http"
 
 rapidpro_url: /rp
