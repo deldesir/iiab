@@ -1,9 +1,6 @@
 ---
 # Main Orchestrator for RapidPro Role
-
-- name: Detect Environment (Proot vs Systemd)
-  set_fact:
-    is_proot: "{{ ansible_service_mgr != 'systemd' }}"
+# Note: is_proot is defined in default_vars.yml — no need to re-derive it here.
 
 - name: Run Installation Tasks
   include_tasks: install.yml
