@@ -108,7 +108,7 @@
     enabled: yes
     daemon_reload: yes
   become: yes
-  when: ansible_service_mgr == 'systemd'
+  when: not is_proot
 
 - name: Force Deploy RapidPro Dynamo PDSM Wrapper (Ensure IPv4 Runner)
   template:
@@ -313,19 +313,19 @@
   systemd:
     daemon_reload: yes
   become: yes
-  when: ansible_service_mgr == 'systemd'
+  when: not is_proot
 
 - name: Restart RapidPro Gunicorn if code changed
   systemd:
     name: rapidpro-gunicorn
     state: restarted
   become: yes
-  when: execute_frontend_patch_script.changed and ansible_service_mgr == 'systemd'
+  when: execute_frontend_patch_script.changed and not is_proot
 
 - name: Restart RapidPro Gunicorn if code changed (Android)
   shell: /usr/local/bin/pdsm restart rapidpro-server
   become: yes
-  when: execute_frontend_patch_script.changed and ansible_service_mgr != 'systemd'
+  when: execute_frontend_patch_script.changed and is_proot
 
 - name: Start RapidPro Watchdog (Android) ensures services stay running
   shell: /usr/local/bin/pdsm start rapidpro-watchdog

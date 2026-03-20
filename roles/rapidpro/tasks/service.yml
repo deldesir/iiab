@@ -11,7 +11,7 @@
     - "{{ valkey_service_name }}"
     - rapidpro-dynamo
   become: yes
-  when: ansible_service_mgr == 'systemd'
+  when: not is_proot
   ignore_errors: yes
 
 - name: Systemd - Force Restart RapidPro Services (Fresh Start)
@@ -26,7 +26,7 @@
     - rapidpro-celery
     - rapidpro-celery
   become: yes
-  when: ansible_service_mgr == 'systemd'
+  when: not is_proot
 
 - name: PDSM Enable Services (Android/Proot)
   shell: |
@@ -40,7 +40,7 @@
     - rapidpro-mailroom
     - rapidpro-celery
   become: yes
-  when: ansible_service_mgr != 'systemd'
+  when: is_proot
 
 - name: PDSM - Start Support Services (Android/Proot)
   shell: |
@@ -48,7 +48,7 @@
     /usr/local/bin/pdsm start valkey
     /usr/local/bin/pdsm start rapidpro-dynamo
   become: yes
-  when: ansible_service_mgr != 'systemd'
+  when: is_proot
 
 - name: Wait for Database Ready (All Platforms)
   wait_for:

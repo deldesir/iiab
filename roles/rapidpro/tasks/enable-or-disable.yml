@@ -6,7 +6,7 @@
     enabled: "{{ rapidpro_enabled }}"
     daemon_reload: yes
   become: yes
-  when: ansible_service_mgr == 'systemd'
+  when: not is_proot
 
 - name: Manage Go services
   systemd:
@@ -20,4 +20,4 @@
     - rapidpro-dynamo
     - rapidpro-celery
   become: yes
-  when: ansible_service_mgr == 'systemd'
+  when: not is_proot
