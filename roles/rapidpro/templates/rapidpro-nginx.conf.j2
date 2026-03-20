@@ -11,10 +11,11 @@ location {{ rapidpro_url }}/media/ {
 }
 
 
-
-# Forward /api/ requests to RapidPro (for clients ignoring subpath)
-location /api/ {
-    rewrite ^/api/(.*)$ {{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}api/$1 break;
+# Forward /api/v2/ requests to RapidPro
+# Uses /api/v2/ (not /api/) so it coexists with ERPNext's ^~ /api/
+# nginx always prefers longer prefix matches, so this wins for RapidPro API calls
+location /api/v2/ {
+    rewrite ^/api/v2/(.*)$ {{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}api/v2/$1 break;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header Host $http_host;
@@ -38,7 +39,6 @@ location /android/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header Host $http_host;
-    proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
     proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
     proxy_pass http://unix:{{ rapidpro_dir }}/run/gunicorn.sock;
 }
