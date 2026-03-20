@@ -118,6 +118,15 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 # ----------------------------------------------------------------------------------
 ACCOUNT_DEFAULT_HTTP_PROTOCOL = "{{ rapidpro_http_protocol }}"
 
+# ----------------------------------------------------------------------------------
+# Allauth / Rate-limiting
+# Tell allauth that exactly 1 trusted reverse proxy (nginx) sits in front,
+# so it reads the real client IP from X-Forwarded-For instead of REMOTE_ADDR.
+# Without this, logins return 403 "Unable to determine client IP address"
+# because REMOTE_ADDR is empty/invalid on unix sockets.
+# ----------------------------------------------------------------------------------
+ALLAUTH_TRUSTED_PROXY_COUNT = 1
+
 # Use HTTPS cookies and proxy headers
 {% if rapidpro_http_protocol == 'https' %}
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
