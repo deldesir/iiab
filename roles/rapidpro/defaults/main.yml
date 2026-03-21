@@ -4,14 +4,14 @@
 python_version: "3.13.5"
 rapidpro_db_name: "temba"
 rapidpro_db_user: "temba"
-rapidpro_db_pass: ""
+rapidpro_db_pass: "temba"
 nodejs_version: "24"
 rapidpro_dir: "/opt/iiab/rapidpro"
 rapidpro_install: True
 rapidpro_enabled: True
 
 admin_email: "admin@box.lan"
-rapidpro_admin_password: ""
+rapidpro_admin_password: "changeme"
 
 # Hostname Configuration
 rapidpro_hostname: "{{ iiab_hostname }}"
@@ -24,9 +24,9 @@ rapidpro_force_drop_db: false
 rapidpro_assets_url: "https://github.com/deldesir/rp-assets/raw/main/rapidpro-assets-{{ rapidpro_assets_version }}.tar.gz"
 wuzapi_port: 8095
 
-wuzapi_admintoken: ""
-rapidpro_secret_key: ""
-custom_ai_admin_token: ""
+wuzapi_admintoken: "changeme"
+rapidpro_secret_key: "changeme-please-set-in-local-vars"
+custom_ai_admin_token: "changeme"
 
 # Architecture mapping (follows kiwix/gitea pattern)
 rapidpro_arch_dict:

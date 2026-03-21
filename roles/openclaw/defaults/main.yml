@@ -10,8 +10,8 @@ openclaw_port: 3030
 openclaw_plugins_enabled:
   - google-antigravity-auth
 rapidpro_inbound_url: "http://localhost:8000/c/ex/UUID/receive"
-openclaw_admin_token: ""
-rapidpro_auth_token: ""
+openclaw_admin_token: "changeme"
+rapidpro_auth_token: "changeme"
 
 # LLM Configuration
 # LLM Configuration
