@@ -2,6 +2,7 @@
 rivebot_install: true
 rivebot_port: 8087
 rivebot_home: /opt/iiab/rivebot
+rivebot_repo: "https://github.com/deldesir/rivebot.git"
 rivebot_brains_dir: /opt/iiab/rivebot/data/brains
 rivebot_siyuan_data_dir: ""  # Set in local_vars.yml if SiYuan runs server-side
 rivebot_gateway_url: "http://127.0.0.1:8086"

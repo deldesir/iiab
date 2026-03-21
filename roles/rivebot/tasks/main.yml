@@ -1,21 +1,41 @@
 ---
-- name: Ensure rivebot directory exists
+# IIAB Ansible role — rivebot
+# Deploys the RiveScript brain service as a systemd unit.
+#
+# Controls:
+#   rivebot_install: true   # set false to skip entirely
+#   rivebot_home: /opt/iiab/rivebot
+#   rivebot_repo: https://github.com/deldesir/rivebot.git
+
+- name: Clone / update rivebot repository
+  git:
+    repo: "{{ rivebot_repo | default('https://github.com/deldesir/rivebot.git') }}"
+    dest: "{{ rivebot_home }}"
+    version: main
+    force: false
+    update: true
+  when: rivebot_install | bool
+
+- name: Ensure rivebot directory has correct permissions
   file:
     path: "{{ rivebot_home }}"
     state: directory
     mode: '0755'
+  when: rivebot_install | bool
 
 - name: Sync rivebot Python dependencies with uv
   command: uv sync
   args:
     chdir: "{{ rivebot_home }}"
   changed_when: false
+  when: rivebot_install | bool
 
 - name: Write systemd unit
   template:
     src: rivebot.service.j2
     dest: /etc/systemd/system/rivebot.service
   notify: restart rivebot
+  when: rivebot_install | bool
 
 - name: Enable and start rivebot service
   systemd:
@@ -23,3 +43,4 @@
     enabled: yes
     state: started
     daemon_reload: yes
+  when: rivebot_install | bool
