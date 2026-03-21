@@ -1,4 +1,8 @@
 ---
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
 - name: Create SiYuan directories
   file:
     path: "{{ item }}"
@@ -50,10 +54,25 @@
     mode: '0644'
   become: yes
 
-- name: Mark siyuan as installed in {{ iiab_state_file }}
+# RECORD SiYuan AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'siyuan_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: siyuan
+    option: siyuan_disk_usage
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
+
+- name: "Set 'siyuan_installed: True'"
+  set_fact:
+    siyuan_installed: True
+
+- name: "Add 'siyuan_installed: True' to {{ iiab_state_file }}"
   lineinfile:
     path: "{{ iiab_state_file }}"
     regexp: '^siyuan_installed'
-    line: "siyuan_installed: True"
-    create: yes
-  become: yes
+    line: 'siyuan_installed: True'
