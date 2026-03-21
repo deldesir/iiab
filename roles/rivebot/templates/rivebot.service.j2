@@ -4,8 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
+User={{ rivebot_user }}
 WorkingDirectory={{ rivebot_home }}
+EnvironmentFile={{ rivebot_home }}/.env
 Environment="RIVEBOT_PORT={{ rivebot_port }}"
 Environment="RIVEBOT_BRAINS_DIR={{ rivebot_brains_dir }}"
 Environment="RIVEBOT_GATEWAY_URL={{ rivebot_gateway_url }}"
