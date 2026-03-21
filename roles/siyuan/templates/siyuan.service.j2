@@ -7,12 +7,10 @@ Type=simple
 User={{ siyuan_user }}
 WorkingDirectory={{ siyuan_dir }}
 Environment=RUN_IN_CONTAINER=true
+Environment=SIYUAN_ACCESS_AUTH_CODE={{ siyuan_access_auth_code | default('iiab', true) }}
 ExecStart={{ siyuan_dir }}/kernel/SiYuan-Kernel \
   --workspace={{ siyuan_workspace }} \
   --port={{ siyuan_port }} \
-{% if siyuan_access_auth_code %}
-  --accessAuthCode={{ siyuan_access_auth_code }} \
-{% endif %}
   --mode=prod
 Restart=always
 RestartSec=3

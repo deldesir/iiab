@@ -7,9 +7,25 @@
     state: restarted
   when: siyuan_enabled
 
+- name: Install SiYuan Nginx config, if siyuan_enabled
+  template:
+    src: siyuan-nginx.conf.j2
+    dest: /etc/nginx/conf.d/siyuan.conf
+  become: yes
+  when: siyuan_enabled
+  notify: reload nginx
+
 - name: Disable & Stop 'siyuan' systemd service, if not siyuan_enabled
   systemd:
     name: siyuan
     enabled: no
     state: stopped
   when: not siyuan_enabled
+
+- name: Remove SiYuan Nginx config, if not siyuan_enabled
+  file:
+    path: /etc/nginx/conf.d/siyuan.conf
+    state: absent
+  become: yes
+  when: not siyuan_enabled
+  notify: reload nginx
