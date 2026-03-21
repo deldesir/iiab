@@ -1,0 +1,89 @@
+---
+- when: ai_gateway_install | bool
+  become: yes
+  block:
+
+    - name: Install AI Gateway system dependencies
+      apt:
+        name:
+          - git
+          - libpq-dev
+        state: present
+
+    - name: Ensure uv is installed
+      shell: which uv || curl -LsSf https://astral.sh/uv/install.sh | sh
+      args:
+        creates: "{{ ai_gateway_uv_bin }}"
+
+    - name: Create AI Gateway directory
+      file:
+        path: "{{ ai_gateway_dir }}"
+        state: directory
+        owner: "{{ ai_gateway_user }}"
+        group: "{{ ai_gateway_user }}"
+        mode: '0755'
+
+    - name: Add AI Gateway directory to git safe directories
+      community.general.git_config:
+        name: safe.directory
+        scope: global
+        value: "{{ ai_gateway_dir }}"
+
+    - name: Clone AI Gateway repository
+      git:
+        repo: "{{ ai_gateway_repo }}"
+        dest: "{{ ai_gateway_dir }}"
+        version: "{{ ai_gateway_repo_version }}"
+        force: yes
+        update: yes
+      notify: restart ai-gateway
+
+    - name: Set ownership of AI Gateway directory
+      file:
+        path: "{{ ai_gateway_dir }}"
+        state: directory
+        owner: "{{ ai_gateway_user }}"
+        group: "{{ ai_gateway_user }}"
+        recurse: yes
+
+    - name: Install AI Gateway dependencies (uv sync)
+      command: "{{ ai_gateway_uv_bin }} sync"
+      args:
+        chdir: "{{ ai_gateway_dir }}"
+      become_user: "{{ ai_gateway_user }}"
+      environment:
+        PATH: "{{ ansible_env.HOME }}/.local/bin:{{ ansible_env.PATH }}"
+
+    - name: Deploy AI Gateway environment file from local_vars.yml
+      template:
+        src: ai-gateway.env.j2
+        dest: "{{ ai_gateway_dir }}/.env"
+        owner: "{{ ai_gateway_user }}"
+        group: "{{ ai_gateway_user }}"
+        mode: '0600'
+      notify: restart ai-gateway
+
+    - name: Install AI Gateway systemd service
+      template:
+        src: ai-gateway.service.j2
+        dest: /etc/systemd/system/ai-gateway.service
+        mode: '0644'
+      notify: restart ai-gateway
+
+    - name: Enable or disable AI Gateway service
+      systemd:
+        name: ai-gateway
+        state: "{{ 'started' if ai_gateway_enabled | bool else 'stopped' }}"
+        enabled: "{{ ai_gateway_enabled | bool }}"
+        daemon_reload: yes
+
+    - name: Configure Nginx for AI Gateway
+      include_tasks: nginx.yml
+      when: ai_gateway_enabled | bool
+
+    - name: Mark ai-gateway as installed in iiab_state.yml
+      lineinfile:
+        path: /etc/iiab/iiab_state.yml
+        regexp: '^ai_gateway_installed'
+        line: "ai_gateway_installed: True"
+        create: yes

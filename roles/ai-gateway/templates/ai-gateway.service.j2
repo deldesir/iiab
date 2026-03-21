@@ -1,0 +1,38 @@
+[Unit]
+Description=AI Gateway Service
+Documentation=https://github.com/deldesir/gateway
+After=network.target litellm.service
+Wants=litellm.service
+
+[Service]
+Type=simple
+User={{ ai_gateway_user }}
+WorkingDirectory={{ ai_gateway_dir }}
+StandardOutput=journal
+StandardError=journal
+
+# Environment — managed by Ansible, edit via local_vars.yml
+Environment="OPENAI_API_BASE={{ ai_gateway_openai_api_base }}"
+Environment="OPENAI_API_KEY={{ ai_gateway_openai_api_key }}"
+Environment="LLM_MODEL={{ ai_gateway_llm_model }}"
+Environment="LLM_MODEL_SUMMARIZE={{ ai_gateway_llm_model_summarize }}"
+Environment="EMBEDDING_PROVIDER={{ ai_gateway_embedding_provider }}"
+Environment="EMBEDDING_MODEL={{ ai_gateway_embedding_model }}"
+Environment="RAPIDPRO_HOST={{ ai_gateway_rapidpro_host }}"
+Environment="RAPIDPRO_API_TOKEN={{ ai_gateway_rapidpro_token }}"
+{% if ai_gateway_admin_phone %}
+Environment="ADMIN_PHONE={{ ai_gateway_admin_phone }}"
+{% endif %}
+{% if ai_gateway_postgres_uri %}
+Environment="POSTGRES_URI={{ ai_gateway_postgres_uri }}"
+{% endif %}
+
+ExecStart={{ ai_gateway_uv_bin }} run uvicorn {{ ai_gateway_app }} \
+    --host 0.0.0.0 \
+    --port {{ ai_gateway_port }}
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

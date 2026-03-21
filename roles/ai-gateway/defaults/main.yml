@@ -1,0 +1,41 @@
+---
+ai_gateway_install: True
+ai_gateway_enabled: True
+
+# Install location
+ai_gateway_dir: /opt/iiab/ai-gateway
+
+# uv binary path (installed per-user via astral.sh/uv)
+ai_gateway_uv_bin: "{{ ansible_env.HOME }}/.local/bin/uv"
+
+# Source repository
+ai_gateway_repo: "https://github.com/deldesir/gateway.git"
+ai_gateway_repo_version: "main"
+
+# Service
+ai_gateway_port: 8086
+ai_gateway_user: "{{ iiab_admin_user }}"
+
+# App entrypoint (uvicorn factory)
+ai_gateway_app: "app.api.app:create_app"
+
+# LLM Integration (points to litellm proxy)
+ai_gateway_openai_api_base: "http://localhost:4000"
+ai_gateway_openai_api_key: "{{ litellm_master_key | default('change-me') }}"
+ai_gateway_llm_model: "openai/custom_ai"
+ai_gateway_llm_model_summarize: "openai/custom_ai"
+ai_gateway_llm_temperature: "0.3"
+
+# Embeddings
+ai_gateway_embedding_provider: "local"
+ai_gateway_embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+
+# RapidPro Integration
+ai_gateway_rapidpro_host: "http://localhost:8080"
+ai_gateway_rapidpro_token: "{{ rapidpro_auth_token | default('change-me') }}"
+
+# Optional admin contact (e.g. for debug webhooks)
+ai_gateway_admin_phone: ""
+
+# Optional PostgreSQL URI (leave empty to use SQLite)
+ai_gateway_postgres_uri: ""

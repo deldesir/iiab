@@ -1,0 +1,13 @@
+---
+- name: restart ai-gateway
+  systemd:
+    name: ai-gateway
+    state: restarted
+    daemon_reload: yes
+  become: yes
+
+- name: restart nginx
+  service:
+    name: nginx
+    state: restarted
+  become: yes

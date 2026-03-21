@@ -1,0 +1,8 @@
+---
+dependencies:
+  - role: nginx
+    vars:
+      nginx_install: true
+  - role: nginx
+    vars:
+      nginx_install: true

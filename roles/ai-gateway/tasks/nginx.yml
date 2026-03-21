@@ -1,0 +1,8 @@
+---
+- name: Deploy AI Gateway Nginx configuration
+  template:
+    src: ai-gateway-nginx.conf.j2
+    dest: "{{ nginx_conf_dir | default('/etc/nginx/conf.d') }}/ai-gateway.conf"
+    mode: '0644'
+  become: yes
+  notify: restart nginx
