@@ -297,3 +297,27 @@
     that: rapidpro_install or not rapidpro_enabled
     fail_msg: "DISALLOWED: 'rapidpro_install: False' WITH 'rapidpro_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
     quiet: yes
+
+- name: "DISALLOW 'wuzapi_install: False' WITH 'wuzapi_enabled: True'"
+  assert:
+    that: wuzapi_install or not wuzapi_enabled
+    fail_msg: "DISALLOWED: 'wuzapi_install: False' WITH 'wuzapi_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
+    quiet: yes
+
+- name: "DISALLOW 'ai_gateway_install: False' WITH 'ai_gateway_enabled: True'"
+  assert:
+    that: ai_gateway_install or not ai_gateway_enabled
+    fail_msg: "DISALLOWED: 'ai_gateway_install: False' WITH 'ai_gateway_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
+    quiet: yes
+
+- name: "DISALLOW 'rivebot_install: False' WITH 'rivebot_enabled: True'"
+  assert:
+    that: rivebot_install or not rivebot_enabled
+    fail_msg: "DISALLOWED: 'rivebot_install: False' WITH 'rivebot_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
+    quiet: yes
+
+- name: "DISALLOW 'siyuan_install: False' WITH 'siyuan_enabled: True'"
+  assert:
+    that: siyuan_install or not siyuan_enabled
+    fail_msg: "DISALLOWED: 'siyuan_install: False' WITH 'siyuan_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
+    quiet: yes

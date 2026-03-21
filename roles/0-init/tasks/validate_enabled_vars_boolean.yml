@@ -288,3 +288,27 @@
     that: network_enabled | type_debug == 'bool'
     fail_msg: "VARIABLE MUST BE BOOLEAN: 'network_enabled' now has type '{{ network_enabled | type_debug }}' and value '{{ network_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+
+- name: Assert that var wuzapi_enabled is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: wuzapi_enabled | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'wuzapi_enabled' now has type '{{ wuzapi_enabled | type_debug }}' and value '{{ wuzapi_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var ai_gateway_enabled is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: ai_gateway_enabled | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'ai_gateway_enabled' now has type '{{ ai_gateway_enabled | type_debug }}' and value '{{ ai_gateway_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var rivebot_enabled is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: rivebot_enabled | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'rivebot_enabled' now has type '{{ rivebot_enabled | type_debug }}' and value '{{ rivebot_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var siyuan_enabled is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: siyuan_enabled | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'siyuan_enabled' now has type '{{ siyuan_enabled | type_debug }}' and value '{{ siyuan_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

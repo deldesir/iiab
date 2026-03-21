@@ -308,3 +308,27 @@
     that: openclaw_install or openclaw_installed is undefined
     fail_msg: "DISALLOWED: 'openclaw_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'openclaw_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
     quiet: yes
+
+- name: "DISALLOW 'wuzapi_install: False' WHEN wuzapi_installed is defined"
+  assert:
+    that: wuzapi_install or wuzapi_installed is undefined
+    fail_msg: "DISALLOWED: 'wuzapi_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'wuzapi_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
+    quiet: yes
+
+- name: "DISALLOW 'ai_gateway_install: False' WHEN ai_gateway_installed is defined"
+  assert:
+    that: ai_gateway_install or ai_gateway_installed is undefined
+    fail_msg: "DISALLOWED: 'ai_gateway_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'ai_gateway_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
+    quiet: yes
+
+- name: "DISALLOW 'rivebot_install: False' WHEN rivebot_installed is defined"
+  assert:
+    that: rivebot_install or rivebot_installed is undefined
+    fail_msg: "DISALLOWED: 'rivebot_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'rivebot_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
+    quiet: yes
+
+- name: "DISALLOW 'siyuan_install: False' WHEN siyuan_installed is defined"
+  assert:
+    that: siyuan_install or siyuan_installed is undefined
+    fail_msg: "DISALLOWED: 'siyuan_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'siyuan_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
+    quiet: yes

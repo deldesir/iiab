@@ -78,6 +78,20 @@
     name: litellm
   when: litellm_install
 
+- name: SIYUAN
+  include_role:
+    name: siyuan
+  when: siyuan_install
+
+- name: AI-GATEWAY
+  include_role:
+    name: ai-gateway
+  when: ai_gateway_install
+
+- name: RIVEBOT
+  include_role:
+    name: rivebot
+  when: rivebot_install
 
 - name: WORDPRESS
   include_role:

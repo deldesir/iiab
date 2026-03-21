@@ -294,3 +294,27 @@
     that: network_install is defined
     fail_msg: "VARIABLE MUST BE DEFINED: 'network_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+
+- name: Assert that var wuzapi_install is defined
+  assert:
+    that: wuzapi_install is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'wuzapi_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var ai_gateway_install is defined
+  assert:
+    that: ai_gateway_install is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'ai_gateway_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var rivebot_install is defined
+  assert:
+    that: rivebot_install is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'rivebot_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var siyuan_install is defined
+  assert:
+    that: siyuan_install is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'siyuan_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

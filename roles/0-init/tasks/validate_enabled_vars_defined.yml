@@ -288,3 +288,27 @@
     that: network_enabled is defined
     fail_msg: "VARIABLE MUST BE DEFINED: 'network_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+
+- name: Assert that var wuzapi_enabled is defined
+  assert:
+    that: wuzapi_enabled is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'wuzapi_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var ai_gateway_enabled is defined
+  assert:
+    that: ai_gateway_enabled is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'ai_gateway_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var rivebot_enabled is defined
+  assert:
+    that: rivebot_enabled is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'rivebot_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var siyuan_enabled is defined
+  assert:
+    that: siyuan_enabled is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'siyuan_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

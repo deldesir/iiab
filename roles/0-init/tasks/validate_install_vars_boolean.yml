@@ -297,3 +297,27 @@
     that: rapidpro_install | type_debug == 'bool'
     fail_msg: "VARIABLE MUST BE BOOLEAN: 'rapidpro_install' now has type '{{ lookup('vars', 'rapidpro_install') | type_debug }}' and value '{{ lookup('vars', 'rapidpro_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+
+- name: Assert that var wuzapi_install is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: wuzapi_install | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'wuzapi_install' now has type '{{ lookup('vars', 'wuzapi_install') | type_debug }}' and value '{{ lookup('vars', 'wuzapi_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var ai_gateway_install is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: ai_gateway_install | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'ai_gateway_install' now has type '{{ lookup('vars', 'ai_gateway_install') | type_debug }}' and value '{{ lookup('vars', 'ai_gateway_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var rivebot_install is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: rivebot_install | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'rivebot_install' now has type '{{ lookup('vars', 'rivebot_install') | type_debug }}' and value '{{ lookup('vars', 'rivebot_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var siyuan_install is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: siyuan_install | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'siyuan_install' now has type '{{ lookup('vars', 'siyuan_install') | type_debug }}' and value '{{ lookup('vars', 'siyuan_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
