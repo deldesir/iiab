@@ -1,6 +1,6 @@
 ---
-siyuan_install: True
-siyuan_enabled: True
+siyuan_install: False
+siyuan_enabled: False
 
 # Version — update to pull a newer release
 siyuan_version: "3.6.1"
@@ -12,13 +12,13 @@ siyuan_user: "{{ iiab_admin_user }}"
 # Service
 siyuan_port: 6806
 
-# Auth — leave empty to disable auth (local-only access)
+# Auth — set a code to protect the web UI (recommended on shared networks)
 siyuan_access_auth_code: ""
 
 # Workspace (where notebooks live)
 siyuan_workspace: "{{ siyuan_dir }}/workspace"
 
-# Architecture mapping (follows wuzapi/kiwix pattern)
+# Architecture mapping for release tarballs
 siyuan_arch_dict:
   x86_64: linux
   aarch64: linux-arm64

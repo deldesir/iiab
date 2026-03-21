@@ -22,14 +22,26 @@
     mode: '0644'
   become: yes
 
-- name: Extract SiYuan tarball to {{ siyuan_dir }}
-  unarchive:
-    src: "/tmp/siyuan-{{ siyuan_version }}.tar.gz"
-    dest: "{{ siyuan_dir }}"
-    remote_src: yes
-    extra_opts: ['--strip-components=1']
-    owner: "{{ siyuan_user }}"
-    group: "{{ siyuan_user }}"
+# The release tarball is an Electron desktop bundle; we only need
+# the resources/ subdirectory which contains:
+#   kernel/SiYuan-Kernel  — the standalone Go HTTP server
+#   appearance/           — UI themes, fonts, icons
+#   stage/                — built frontend assets
+#   guide/                — user guide notebook
+#   changelogs/           — release notes
+
+- name: Extract SiYuan server resources from tarball
+  shell: >
+    tar xzf "/tmp/siyuan-{{ siyuan_version }}.tar.gz"
+    --strip-components=2
+    -C "{{ siyuan_dir }}"
+    "siyuan-{{ siyuan_version }}-{{ siyuan_arch }}/resources"
+  become: yes
+
+- name: Make SiYuan kernel binary executable
+  file:
+    path: "{{ siyuan_dir }}/kernel/SiYuan-Kernel"
+    mode: '0755'
   become: yes
 
 - name: Clean up tarball

@@ -1,9 +1,9 @@
 ---
 galaxy_info:
   role_name: siyuan
-  description: "SiYuan — Note-taking server for knowledge authoring in IIAB"
-  author: deldesir
-  license: AGPL-3.0
-  min_ansible_version: "2.10"
+  description: "SiYuan note-taking and knowledge management server for IIAB"
+  author: "Internet-in-a-Box project"
+  license: "AGPLv3"
+  min_ansible_version: "2.12"
 
 dependencies: []

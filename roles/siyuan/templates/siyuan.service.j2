@@ -6,7 +6,8 @@ After=network.target
 Type=simple
 User={{ siyuan_user }}
 WorkingDirectory={{ siyuan_dir }}
-ExecStart={{ siyuan_dir }}/kernel \
+Environment=RUN_IN_CONTAINER=true
+ExecStart={{ siyuan_dir }}/kernel/SiYuan-Kernel \
   --workspace={{ siyuan_workspace }} \
   --port={{ siyuan_port }} \
 {% if siyuan_access_auth_code %}
