@@ -33,6 +33,24 @@
     value: "{{ ai_gateway_dir }}"
   become: yes
 
+- name: Clone TalkMaster library
+  git:
+    repo: "{{ ai_gateway_talkmaster_repo }}"
+    dest: "{{ ai_gateway_talkmaster_dir }}"
+    version: "{{ ai_gateway_talkmaster_version }}"
+    force: yes
+    update: yes
+  become: yes
+
+- name: Clone JWLinker library
+  git:
+    repo: "{{ ai_gateway_jwlinker_repo }}"
+    dest: "{{ ai_gateway_jwlinker_dir }}"
+    version: "{{ ai_gateway_jwlinker_version }}"
+    force: yes
+    update: yes
+  become: yes
+
 - name: Clone AI Gateway repository
   git:
     repo: "{{ ai_gateway_repo }}"

@@ -12,6 +12,14 @@ ai_gateway_uv_bin: /root/.local/bin/uv
 ai_gateway_repo: "https://github.com/deldesir/gateway.git"
 ai_gateway_repo_version: "main"
 
+# Domain libraries (cloned automatically by the role)
+ai_gateway_talkmaster_repo: "https://github.com/deldesir/talkmaster.git"
+ai_gateway_talkmaster_dir: /opt/iiab/talkmaster
+ai_gateway_talkmaster_version: main
+ai_gateway_jwlinker_repo: "https://github.com/deldesir/jwlinker.git"
+ai_gateway_jwlinker_dir: /opt/iiab/jwlinker
+ai_gateway_jwlinker_version: main
+
 # Service
 ai_gateway_port: 8086
 ai_gateway_user: "{{ iiab_admin_user }}"
