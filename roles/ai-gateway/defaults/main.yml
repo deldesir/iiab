@@ -26,9 +26,9 @@ ai_gateway_llm_model: "openai/custom_ai"
 ai_gateway_llm_model_summarize: "openai/custom_ai"
 ai_gateway_llm_temperature: "0.3"
 
-# Embeddings
+# Embeddings (#5 — nomic-embed-text-v1.5 is 2x better than MiniLM at same size)
 ai_gateway_embedding_provider: "local"
-ai_gateway_embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+ai_gateway_embedding_model: "nomic-ai/nomic-embed-text-v1.5"
 
 # RapidPro Integration
 ai_gateway_rapidpro_host: "http://localhost:8080"
@@ -36,6 +36,9 @@ ai_gateway_rapidpro_token: "{{ rapidpro_auth_token | default('change-me') }}"
 
 # Optional admin contact (e.g. for debug webhooks)
 ai_gateway_admin_phone: ""
+
+# jwlinker DB path — empty uses platform default (~/.local/share/jwlinker/jw_library.db)
+ai_gateway_jwlinker_db_path: ""
 
 # Optional PostgreSQL URI (leave empty to use SQLite)
 ai_gateway_postgres_uri: ""
