@@ -5,8 +5,8 @@ ai_gateway_enabled: True
 # Install location
 ai_gateway_dir: /opt/iiab/ai-gateway
 
-# uv binary path (installed per-user via astral.sh/uv)
-ai_gateway_uv_bin: "{{ ansible_env.HOME }}/.local/bin/uv"
+# uv binary path (IIAB Ansible runs as root)
+ai_gateway_uv_bin: /root/.local/bin/uv
 
 # Source repository
 ai_gateway_repo: "https://github.com/deldesir/gateway.git"

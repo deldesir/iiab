@@ -57,9 +57,17 @@
   args:
     chdir: "{{ ai_gateway_dir }}"
   become: yes
-  become_user: "{{ ai_gateway_user }}"
   environment:
-    PATH: "{{ ansible_env.HOME }}/.local/bin:{{ ansible_env.PATH }}"
+    PATH: "/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+- name: Fix ownership after uv sync
+  file:
+    path: "{{ ai_gateway_dir }}"
+    state: directory
+    owner: "{{ ai_gateway_user }}"
+    group: "{{ ai_gateway_user }}"
+    recurse: yes
+  become: yes
 
 - name: Deploy AI Gateway environment file from local_vars.yml
   template:

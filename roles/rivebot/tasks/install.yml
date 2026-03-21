@@ -61,9 +61,17 @@
   args:
     chdir: "{{ rivebot_home }}"
   become: yes
-  become_user: "{{ rivebot_user }}"
   environment:
-    PATH: "{{ ansible_env.HOME }}/.local/bin:{{ ansible_env.PATH }}"
+    PATH: "/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+- name: Fix ownership after uv sync
+  file:
+    path: "{{ rivebot_home }}"
+    state: directory
+    owner: "{{ rivebot_user }}"
+    group: "{{ rivebot_user }}"
+    recurse: yes
+  become: yes
 
 - name: Deploy RiveBot environment file
   template:

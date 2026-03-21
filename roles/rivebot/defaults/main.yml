@@ -5,7 +5,7 @@ rivebot_enabled: True
 # Install location
 rivebot_home: /opt/iiab/rivebot
 rivebot_user: "{{ iiab_admin_user }}"
-rivebot_uv_bin: "{{ ansible_env.HOME }}/.local/bin/uv"
+rivebot_uv_bin: /root/.local/bin/uv
 
 # Source repository
 rivebot_repo: "https://github.com/deldesir/rivebot.git"
