@@ -7,7 +7,6 @@ siyuan_version: "3.6.1"
 
 # Install location
 siyuan_dir: /opt/iiab/siyuan-server
-siyuan_data_dir: "{{ siyuan_dir }}/data"
 siyuan_user: "{{ iiab_admin_user }}"
 
 # Service
@@ -18,3 +17,10 @@ siyuan_access_auth_code: ""
 
 # Workspace (where notebooks live)
 siyuan_workspace: "{{ siyuan_dir }}/workspace"
+
+# Architecture mapping (follows wuzapi/kiwix pattern)
+siyuan_arch_dict:
+  x86_64: linux
+  aarch64: linux-arm64
+
+siyuan_arch: "{{ siyuan_arch_dict.get(ansible_facts.machine, 'linux') }}"

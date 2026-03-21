@@ -512,6 +512,26 @@ moncash_env: "sandbox"
 moncash_client_id: ""
 moncash_client_secret: ""
 
+# WuzAPI: WhatsApp Web bridge (whatsmeow Go library)
+wuzapi_install: False
+wuzapi_enabled: False
+wuzapi_port: 8095
+
+# AI Gateway: Conversational AI orchestrator (OpenAI-compatible)
+ai_gateway_install: False
+ai_gateway_enabled: False
+ai_gateway_port: 8086
+
+# RiveBot: Deterministic intent router (RiveScript brains)
+rivebot_install: False
+rivebot_enabled: False
+rivebot_port: 8087
+
+# SiYuan: Note-taking and knowledge authoring server
+siyuan_install: False
+siyuan_enabled: False
+siyuan_port: 6806
+
 
 # If using WordPress intensively, set nginx_high_php_limits further above.
 wordpress_install: False

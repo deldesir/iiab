@@ -5,7 +5,6 @@ After=network.target
 [Service]
 Type=simple
 User={{ siyuan_user }}
-Group={{ siyuan_user }}
 WorkingDirectory={{ siyuan_dir }}
 ExecStart={{ siyuan_dir }}/kernel \
   --workspace={{ siyuan_workspace }} \
@@ -14,10 +13,8 @@ ExecStart={{ siyuan_dir }}/kernel \
   --accessAuthCode={{ siyuan_access_auth_code }} \
 {% endif %}
   --mode=prod
-
-Restart=on-failure
-RestartSec=5
-LimitNOFILE=65536
+Restart=always
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
