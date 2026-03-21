@@ -1,0 +1,154 @@
+---
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+- name: Create openclaw user
+  user:
+    name: "{{ openclaw_user }}"
+    shell: /bin/bash
+    home: "/home/{{ openclaw_user }}"
+    create_home: yes
+    system: yes
+  become: yes
+
+- name: Install OpenClaw dependencies
+  apt:
+    name:
+      - git
+      - nodejs
+    state: present
+  become: yes
+
+- name: Ensure pnpm is installed
+  npm:
+    name: pnpm
+    global: yes
+    state: present
+  become: yes
+
+- name: Create OpenClaw directory
+  file:
+    path: "{{ openclaw_dir }}"
+    state: directory
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: '0755'
+  become: yes
+
+- name: Check if openclaw directory is already safe
+  command: git config --global --get-all safe.directory
+  register: git_safe_dirs
+  changed_when: false
+  ignore_errors: yes
+
+- name: Add openclaw directory to git safe directories
+  command: git config --global --add safe.directory {{ openclaw_dir }}
+  become: yes
+  when: openclaw_dir not in (git_safe_dirs.stdout_lines | default([]))
+
+- name: Clone OpenClaw repository
+  git:
+    repo: "{{ openclaw_repo }}"
+    dest: "{{ openclaw_dir }}"
+    version: "{{ openclaw_branch }}"
+    force: yes
+    update: yes
+  become: yes
+  notify: restart openclaw
+
+- name: Set ownership of OpenClaw directory
+  file:
+    path: "{{ openclaw_dir }}"
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    recurse: yes
+  become: yes
+
+- name: Install dependencies with pnpm
+  command: pnpm install
+  args:
+    chdir: "{{ openclaw_dir }}"
+  become: yes
+  become_user: "{{ openclaw_user }}"
+  register: pnpm_install
+  changed_when: "'Packages are hard linked from the content-addressable store to the virtual store' not in pnpm_install.stdout"
+
+- name: Build OpenClaw
+  command: pnpm build
+  args:
+    chdir: "{{ openclaw_dir }}"
+  become: yes
+  become_user: "{{ openclaw_user }}"
+
+- name: Build OpenClaw UI
+  command: pnpm ui:build
+  args:
+    chdir: "{{ openclaw_dir }}"
+  become: yes
+  become_user: "{{ openclaw_user }}"
+
+- name: Configure OpenClaw (openclaw.json)
+  template:
+    src: openclaw.json.j2
+    dest: "{{ openclaw_dir }}/openclaw.json"
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: '0644'
+  become: yes
+  notify: restart openclaw
+
+- name: Create OpenClaw config directory
+  file:
+    path: "/home/{{ openclaw_user }}/.openclaw/agents/main/agent"
+    state: directory
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: '0700'
+  become: yes
+
+- name: Configure OpenClaw Auth Profiles
+  template:
+    src: auth-profiles.json.j2
+    dest: "/home/{{ openclaw_user }}/.openclaw/agents/main/agent/auth-profiles.json"
+    owner: "{{ openclaw_user }}"
+    group: "{{ openclaw_user }}"
+    mode: '0600'
+  become: yes
+  notify: restart openclaw
+
+- name: Install OpenClaw systemd service
+  template:
+    src: openclaw.service.j2
+    dest: /etc/systemd/system/openclaw.service
+  become: yes
+  notify: restart openclaw
+
+- name: Lockdown openclaw user shell (security)
+  user:
+    name: "{{ openclaw_user }}"
+    shell: /usr/sbin/nologin
+  become: yes
+
+# RECORD OpenClaw AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'openclaw_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: openclaw
+    option: openclaw_disk_usage
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
+
+- name: "Set 'openclaw_installed: True'"
+  set_fact:
+    openclaw_installed: True
+
+- name: "Add 'openclaw_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"
+    regexp: '^openclaw_installed'
+    line: 'openclaw_installed: True'

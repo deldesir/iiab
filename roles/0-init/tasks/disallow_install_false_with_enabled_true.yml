@@ -321,3 +321,9 @@
     that: siyuan_install or not siyuan_enabled
     fail_msg: "DISALLOWED: 'siyuan_install: False' WITH 'siyuan_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
     quiet: yes
+
+- name: "DISALLOW 'litellm_install: False' WITH 'litellm_enabled: True'"
+  assert:
+    that: litellm_install or not litellm_enabled
+    fail_msg: "DISALLOWED: 'litellm_install: False' WITH 'litellm_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
+    quiet: yes

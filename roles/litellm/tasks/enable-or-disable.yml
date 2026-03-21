@@ -1,0 +1,15 @@
+---
+- name: Enable & Restart 'litellm' systemd service, if litellm_enabled
+  systemd:
+    name: litellm
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  when: litellm_enabled
+
+- name: Disable & Stop 'litellm' systemd service, if not litellm_enabled
+  systemd:
+    name: litellm
+    enabled: no
+    state: stopped
+  when: not litellm_enabled

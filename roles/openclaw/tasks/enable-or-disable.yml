@@ -1,0 +1,31 @@
+---
+- name: Enable & Restart 'openclaw' systemd service, if openclaw_enabled
+  systemd:
+    name: openclaw
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  when: openclaw_enabled
+
+- name: Disable & Stop 'openclaw' systemd service, if not openclaw_enabled
+  systemd:
+    name: openclaw
+    enabled: no
+    state: stopped
+  when: not openclaw_enabled
+
+- name: Configure Nginx for OpenClaw, if openclaw_enabled
+  template:
+    src: openclaw-nginx.conf.j2
+    dest: /etc/nginx/conf.d/openclaw.conf
+  become: yes
+  when: openclaw_enabled
+  notify: reload nginx
+
+- name: Remove Nginx config for OpenClaw, if not openclaw_enabled
+  file:
+    path: /etc/nginx/conf.d/openclaw.conf
+    state: absent
+  become: yes
+  when: not openclaw_enabled
+  notify: reload nginx

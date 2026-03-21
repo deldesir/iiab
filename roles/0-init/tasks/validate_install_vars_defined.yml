@@ -318,3 +318,15 @@
     that: siyuan_install is defined
     fail_msg: "VARIABLE MUST BE DEFINED: 'siyuan_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+
+- name: Assert that var litellm_install is defined
+  assert:
+    that: litellm_install is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'litellm_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var openclaw_install is defined
+  assert:
+    that: openclaw_install is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'openclaw_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

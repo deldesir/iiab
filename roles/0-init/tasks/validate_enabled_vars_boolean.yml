@@ -312,3 +312,15 @@
     that: siyuan_enabled | type_debug == 'bool'
     fail_msg: "VARIABLE MUST BE BOOLEAN: 'siyuan_enabled' now has type '{{ siyuan_enabled | type_debug }}' and value '{{ siyuan_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+
+- name: Assert that var litellm_enabled is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: litellm_enabled | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'litellm_enabled' now has type '{{ litellm_enabled | type_debug }}' and value '{{ litellm_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var openclaw_enabled is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: openclaw_enabled | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'openclaw_enabled' now has type '{{ openclaw_enabled | type_debug }}' and value '{{ openclaw_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

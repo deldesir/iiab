@@ -321,3 +321,15 @@
     that: siyuan_install | type_debug == 'bool'
     fail_msg: "VARIABLE MUST BE BOOLEAN: 'siyuan_install' now has type '{{ lookup('vars', 'siyuan_install') | type_debug }}' and value '{{ lookup('vars', 'siyuan_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+
+- name: Assert that var litellm_install is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: litellm_install | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'litellm_install' now has type '{{ lookup('vars', 'litellm_install') | type_debug }}' and value '{{ lookup('vars', 'litellm_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var openclaw_install is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: openclaw_install | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'openclaw_install' now has type '{{ lookup('vars', 'openclaw_install') | type_debug }}' and value '{{ lookup('vars', 'openclaw_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
