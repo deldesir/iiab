@@ -63,6 +63,22 @@
         mode: '0600'
       notify: restart ai-gateway
 
+    - name: Ensure AI Gateway data directories exist
+      file:
+        path: "{{ ai_gateway_dir }}/data/knowledge"
+        state: directory
+        owner: "{{ ai_gateway_user }}"
+        group: "{{ ai_gateway_user }}"
+        mode: '0755'
+
+    - name: Deploy TalkPrep knowledge file
+      copy:
+        src: talkprep-knowledge.md
+        dest: "{{ ai_gateway_dir }}/data/knowledge/talkprep.md"
+        owner: "{{ ai_gateway_user }}"
+        group: "{{ ai_gateway_user }}"
+        mode: '0644'
+
     - name: Install AI Gateway systemd service
       template:
         src: ai-gateway.service.j2
@@ -81,7 +97,7 @@
       include_tasks: nginx.yml
       when: ai_gateway_enabled | bool
 
-    - name: Point RapidPro LLM at AI Gateway (Phase 6 routing)
+    - name: Point RapidPro LLM at AI Gateway
       community.postgresql.postgresql_query:
         db: "{{ rapidpro_db_name | default('temba') }}"
         login_user: "{{ rapidpro_db_user | default('temba') }}"
