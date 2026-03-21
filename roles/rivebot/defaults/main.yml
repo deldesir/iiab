@@ -1,0 +1,8 @@
+---
+rivebot_install: true
+rivebot_port: 8087
+rivebot_home: /opt/iiab/rivebot
+rivebot_brains_dir: /opt/iiab/rivebot/data/brains
+rivebot_siyuan_data_dir: ""  # Set in local_vars.yml if SiYuan runs server-side
+rivebot_gateway_url: "http://127.0.0.1:8086"
+rivebot_macro_timeout_s: "10"
