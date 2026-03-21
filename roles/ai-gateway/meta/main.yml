@@ -8,5 +8,9 @@ galaxy_info:
 
 dependencies:
   - role: nginx
+  - role: postgresql
+    vars:
+      postgresql_install: true
+      postgresql_enabled: true
   - role: litellm
     when: litellm_install | bool
