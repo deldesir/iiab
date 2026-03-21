@@ -327,3 +327,9 @@
     that: litellm_install or not litellm_enabled
     fail_msg: "DISALLOWED: 'litellm_install: False' WITH 'litellm_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
     quiet: yes
+
+- name: "DISALLOW 'bagisto_install: False' WITH 'bagisto_enabled: True'"
+  assert:
+    that: bagisto_install or not bagisto_enabled
+    fail_msg: "DISALLOWED: 'bagisto_install: False' WITH 'bagisto_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
+    quiet: yes

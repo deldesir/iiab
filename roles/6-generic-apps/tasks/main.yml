@@ -103,6 +103,11 @@
     name: erpnext
   when: erpnext_install and not is_proot
 
+- name: BAGISTO
+  include_role:
+    name: bagisto
+  when: bagisto_install
+
 - name: Recording STAGE 6 HAS COMPLETED ====================
   lineinfile:
     path: "{{ iiab_env_file }}"

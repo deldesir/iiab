@@ -1,0 +1,10 @@
+{{ bagisto_abs_path }}/storage/logs/*.log {
+    weekly
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 664 {{ apache_user }} {{ apache_user }}
+    su root {{ apache_user }}
+}

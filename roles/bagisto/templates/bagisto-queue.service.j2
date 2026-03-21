@@ -1,0 +1,12 @@
+[Unit]
+Description=Bagisto Queue Worker Background Service
+After=network.target mysql.service mariadb.service
+
+[Service]
+User={{ apache_user }}
+Group={{ apache_user }}
+Restart=always
+ExecStart=/usr/bin/php {{ bagisto_abs_path }}/artisan queue:work database --sleep=3 --tries=3 --max-time=3600
+
+[Install]
+WantedBy=multi-user.target

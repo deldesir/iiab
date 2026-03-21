@@ -1,0 +1,38 @@
+# Nginx configuration for Bagisto inside IIAB
+
+location ^~ /bagisto {
+    alias {{ bagisto_abs_path }}/public;
+    index index.php index.html index.htm;
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+
+    try_files $uri $uri/ @bagisto;
+
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_pass php;
+        fastcgi_param SCRIPT_FILENAME $request_filename;
+        fastcgi_param SCRIPT_NAME /bagisto/index.php;
+        fastcgi_hide_header X-Powered-By;
+    }
+
+    location ~* \.(?:jpg|jpeg|gif|png|ico|cur|gz|svg|svgz|mp4|ogg|ogv|webm|htc|webp|woff|woff2)$ {
+        try_files $uri @bagisto;
+        expires max;
+        access_log off;
+        add_header Cache-Control "public";
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+
+location @bagisto {
+    include fastcgi_params;
+    fastcgi_pass php;
+    fastcgi_param SCRIPT_FILENAME {{ bagisto_abs_path }}/public/index.php;
+    fastcgi_param SCRIPT_NAME /bagisto/index.php;
+    fastcgi_hide_header X-Powered-By;
+}

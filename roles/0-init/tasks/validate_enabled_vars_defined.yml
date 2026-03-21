@@ -324,3 +324,9 @@
     that: openclaw_enabled is defined
     fail_msg: "VARIABLE MUST BE DEFINED: 'openclaw_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+
+- name: Assert that var bagisto_enabled is defined
+  assert:
+    that: bagisto_enabled is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'bagisto_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

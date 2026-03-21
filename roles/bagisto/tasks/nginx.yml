@@ -1,0 +1,17 @@
+---
+- name: Enable {{ bagisto_app_url }} via NGINX by installing {{ nginx_conf_dir }}/bagisto.conf from template
+  template:
+    src: bagisto.conf.j2
+    dest: "{{ nginx_conf_dir }}/bagisto.conf"
+  when: bagisto_enabled
+
+- name: Disable {{ bagisto_app_url }} via NGINX by removing {{ nginx_conf_dir }}/bagisto.conf
+  file:
+    path: "{{ nginx_conf_dir }}/bagisto.conf"
+    state: absent
+  when: not bagisto_enabled
+
+- name: Restart 'nginx' systemd service
+  systemd:
+    name: nginx
+    state: restarted

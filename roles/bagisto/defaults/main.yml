@@ -1,0 +1,18 @@
+---
+bagisto_install: False
+bagisto_enabled: False
+
+bagisto_src_dir: /opt/iiab/bagisto-source
+bagisto_install_path: /library
+bagisto_abs_path: "{{ bagisto_install_path }}/bagisto"
+
+bagisto_app_env: production
+bagisto_app_debug: false
+bagisto_app_url: http://box/bagisto
+bagisto_app_name: Bagisto
+
+bagisto_db_name: bagisto
+bagisto_db_user: bagisto
+bagisto_db_pass: bagisto_secret
+bagisto_db_host: 127.0.0.1
+bagisto_db_port: 3306

@@ -1,0 +1,130 @@
+---
+- name: "Set 'mysql_install: True' and 'mysql_enabled: True'"
+  set_fact:
+    mysql_install: True
+    mysql_enabled: True
+
+- name: MYSQL - run 'mysql' role
+  include_role:
+    name: mysql
+
+- name: FAIL IF 'mysql_installed is undefined'
+  fail:
+    msg: "Bagisto install cannot proceed, as MySQL / MariaDB is not installed."
+  when: mysql_installed is undefined
+
+- block:
+    - name: Ensure previous Bagisto installation state is wiped when reinstalling
+      file:
+        path: "{{ bagisto_abs_path }}/{{ item }}"
+        state: absent
+      with_items:
+        - .env
+        - .iiab-setup-done
+
+    - name: Drop previous Bagisto database on reinstall
+      community.mysql.mysql_db:
+        name: "{{ bagisto_db_name }}"
+        state: absent
+  when:
+    - reinstall is defined
+    - reinstall | bool
+
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+- name: Install Bagisto PHP dependencies
+  package:
+    name:
+      - php{{ php_version }}-bcmath
+      - php{{ php_version }}-curl
+      - php{{ php_version }}-intl
+      - php{{ php_version }}-mbstring
+      - php{{ php_version }}-mysql
+      - php{{ php_version }}-xml
+      - php{{ php_version }}-zip
+      - php{{ php_version }}-gd
+      - unzip
+    state: present
+
+- name: "Run roles/www_options/tasks/php-settings.yml"
+  include_tasks: roles/www_options/tasks/php-settings.yml
+  when: php_settings_done is undefined
+
+- name: Ensure Bagisto install path exists
+  file:
+    path: "{{ bagisto_install_path }}"
+    state: directory
+
+- name: Sync Bagisto source to {{ bagisto_abs_path }}
+  synchronize:
+    src: "{{ bagisto_src_dir }}/"
+    dest: "{{ bagisto_abs_path }}/"
+    archive: yes
+  delegate_to: "{{ inventory_hostname }}"
+
+- name: Set permissions on {{ bagisto_abs_path }}
+  file:
+    path: "{{ bagisto_abs_path }}"
+    owner: root
+    group: "{{ apache_user }}"
+    recurse: yes
+
+- name: Make directories writable for web server
+  command: "/usr/bin/find {{ bagisto_abs_path }}/storage {{ bagisto_abs_path }}/bootstrap/cache -type d -exec chmod 775 {} +"
+
+- name: Make files writable in storage/bootstrap
+  command: "/usr/bin/find {{ bagisto_abs_path }}/storage {{ bagisto_abs_path }}/bootstrap/cache -type f -exec chmod 664 {} +"
+
+- name: Check for composer binary
+  stat:
+    path: /usr/local/bin/composer
+  register: composer_bin
+
+- name: Download Composer installer
+  get_url:
+    url: https://getcomposer.org/installer
+    dest: /tmp/installer.php
+  when: not composer_bin.stat.exists
+
+- name: Install Composer
+  command: "php /tmp/installer.php --install-dir=/usr/local/bin --filename=composer"
+  when: not composer_bin.stat.exists
+
+- name: Install Bagisto PHP dependencies via composer
+  composer:
+    command: install
+    working_dir: "{{ bagisto_abs_path }}"
+    no_dev: yes
+  environment:
+    COMPOSER_ALLOW_SUPERUSER: "1"
+
+- name: Provision MySQL DB
+  include_tasks: setup.yml
+
+- name: Storage Link
+  command: php artisan storage:link
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'bagisto_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: bagisto
+    option: bagisto_disk_usage
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
+
+- name: "Set 'bagisto_installed: True'"
+  set_fact:
+    bagisto_installed: True
+
+- name: "Add 'bagisto_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"
+    regexp: '^bagisto_installed'
+    line: 'bagisto_installed: True'

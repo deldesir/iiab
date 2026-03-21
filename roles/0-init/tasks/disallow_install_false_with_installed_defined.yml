@@ -338,3 +338,9 @@
     that: litellm_install or litellm_installed is undefined
     fail_msg: "DISALLOWED: 'litellm_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'litellm_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
     quiet: yes
+
+- name: "DISALLOW 'bagisto_install: False' WHEN bagisto_installed is defined"
+  assert:
+    that: bagisto_install or bagisto_installed is undefined
+    fail_msg: "DISALLOWED: 'bagisto_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'bagisto_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
+    quiet: yes

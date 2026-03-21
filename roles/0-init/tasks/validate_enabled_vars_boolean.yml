@@ -324,3 +324,9 @@
     that: openclaw_enabled | type_debug == 'bool'
     fail_msg: "VARIABLE MUST BE BOOLEAN: 'openclaw_enabled' now has type '{{ openclaw_enabled | type_debug }}' and value '{{ openclaw_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+
+- name: Assert that var bagisto_enabled is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: bagisto_enabled | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'bagisto_enabled' now has type '{{ bagisto_enabled | type_debug }}' and value '{{ bagisto_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

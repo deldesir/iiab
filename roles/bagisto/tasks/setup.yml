@@ -1,0 +1,118 @@
+---
+- name: Create Bagisto database
+  community.mysql.mysql_db:
+    name: "{{ bagisto_db_name }}"
+    state: present
+
+- name: Create Bagisto database user
+  community.mysql.mysql_user:
+    name: "{{ bagisto_db_user }}"
+    password: "{{ bagisto_db_pass }}"
+    priv: "{{ bagisto_db_name }}.*:ALL"
+    host: "{{ bagisto_db_host }}"
+    state: present
+
+- name: Check if .env already exists
+  stat:
+    path: "{{ bagisto_abs_path }}/.env"
+  register: env_file
+
+- name: Check if Bagisto setup completed
+  stat:
+    path: "{{ bagisto_abs_path }}/.iiab-setup-done"
+  register: bagisto_setup_done
+
+- name: Template Bagisto .env file
+  template:
+    src: env.j2
+    dest: "{{ bagisto_abs_path }}/.env"
+    owner: root
+    group: "{{ apache_user }}"
+    mode: '0660'
+  when: not env_file.stat.exists
+
+- name: Generate Application Key
+  command: php artisan key:generate --force
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+  when: not bagisto_setup_done.stat.exists
+
+- name: Update APP_URL in .env (if it changed)
+  lineinfile:
+    path: "{{ bagisto_abs_path }}/.env"
+    regexp: '^APP_URL='
+    line: 'APP_URL={{ bagisto_app_url }}'
+
+- name: Clear cached configs
+  command: php artisan config:clear
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+
+- name: Bypass Laravel Production Prompts Temporarily
+  lineinfile:
+    path: "{{ bagisto_abs_path }}/.env"
+    regexp: '^APP_ENV='
+    line: 'APP_ENV=local'
+  when: not bagisto_setup_done.stat.exists
+
+- name: Clear cached configs for environment update
+  command: php artisan config:clear
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+  when: not bagisto_setup_done.stat.exists
+
+- name: Execute Bagisto Native Installer (Scaffolding & UI Seeding)
+  shell: echo -e "yes\nlocalhost\nadmin\nadmin@bagisto.com\nadmin123\n\n" | php artisan bagisto:install
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+  when: not bagisto_setup_done.stat.exists
+
+- name: Restore APP_ENV to Production
+  lineinfile:
+    path: "{{ bagisto_abs_path }}/.env"
+    regexp: '^APP_ENV='
+    line: 'APP_ENV={{ bagisto_app_env | default("production") }}'
+  when: not bagisto_setup_done.stat.exists
+
+- name: Optimize Bagisto Application
+  command: php artisan optimize:clear
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+  when: not bagisto_setup_done.stat.exists
+  ignore_errors: yes
+
+- name: Mark Bagisto setup as complete
+  file:
+    path: "{{ bagisto_abs_path }}/.iiab-setup-done"
+    state: touch
+  when: not bagisto_setup_done.stat.exists
+
+- name: Setup Bagisto Cron Scheduler
+  cron:
+    name: "Bagisto Schedule Run"
+    user: "{{ apache_user }}"
+    job: "cd {{ bagisto_abs_path }} && php artisan schedule:run >> /dev/null 2>&1"
+    minute: "*"
+
+- name: Template Bagisto Logrotate configuration
+  template:
+    src: bagisto-logrotate.j2
+    dest: /etc/logrotate.d/bagisto
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Template Bagisto Queue Worker Systemd Service
+  template:
+    src: bagisto-queue.service.j2
+    dest: /etc/systemd/system/bagisto-queue.service
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Enable and Restart Bagisto Queue Worker
+  systemd:
+    name: bagisto-queue
+    enabled: yes
+    state: restarted
+    daemon_reload: yes
