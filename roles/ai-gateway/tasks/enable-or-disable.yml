@@ -1,0 +1,38 @@
+---
+- name: Enable & Restart 'ai-gateway' systemd service, if ai_gateway_enabled
+  systemd:
+    name: ai-gateway
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  when: ai_gateway_enabled
+
+- name: Disable & Stop 'ai-gateway' systemd service, if not ai_gateway_enabled
+  systemd:
+    name: ai-gateway
+    enabled: no
+    state: stopped
+  when: not ai_gateway_enabled
+
+- name: Configure Nginx for AI Gateway
+  include_tasks: nginx.yml
+  when: ai_gateway_enabled
+
+- name: Remove Nginx config for AI Gateway, if not ai_gateway_enabled
+  file:
+    path: "{{ nginx_conf_dir }}/ai-gateway-nginx.conf"
+    state: absent
+  when: not ai_gateway_enabled
+  notify: reload nginx
+
+- name: Point RapidPro LLM at AI Gateway
+  community.postgresql.postgresql_query:
+    db: "{{ rapidpro_db_name | default('temba') }}"
+    login_user: "{{ rapidpro_db_user | default('temba') }}"
+    login_host: "localhost"
+    query: >
+      UPDATE ai_llm
+      SET config = jsonb_set(config::jsonb, '{endpoint}', '"http://localhost:{{ ai_gateway_port }}"')::json
+      WHERE config->>'endpoint' != 'http://localhost:{{ ai_gateway_port }}'
+  when: ai_gateway_enabled
+  ignore_errors: yes  # Non-fatal: RapidPro may not be installed

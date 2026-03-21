@@ -1,104 +1,46 @@
 ---
-- name: Install build dependencies
-  apt:
-    name:
-      - git
-      - make
-      - ffmpeg
-      - sqlite3
-      - libsqlite3-dev
-    state: present
-  become: yes
+- name: Assert that "wuzapi_install is sameas true" (boolean not string etc)
+  assert:
+    that: wuzapi_install is sameas true
+    fail_msg: "PLEASE SET 'wuzapi_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-- name: Create Wuzapi directory
-  file:
-    path: "{{ wuzapi_dir }}"
-    state: directory
-
-- name: Install Wuzapi Binary from Release
-  get_url:
-    url: "https://github.com/deldesir/wuzapi/releases/download/v1.0.7/wuzapi-linux-{{ wuzapi_go_arch }}"
-    dest: "{{ wuzapi_dir }}/wuzapi"
-    mode: '0755'
-    force: yes
-  become: yes
-  notify: restart wuzapi
-
-- name: Clone Wuzapi repository (for static assets)
-  git:
-    repo: "https://github.com/deldesir/wuzapi.git"
-    dest: "/opt/iiab/wuzapi-src"
-    version: "main"
-    update: yes
-  become: yes
-
-- name: Copy static assets to install directory
-  copy:
-    src: "/opt/iiab/wuzapi-src/static"
-    dest: "{{ wuzapi_dir }}/"
-    remote_src: yes
-    owner: "{{ iiab_admin_user }}"
-    group: "{{ iiab_admin_user }}"
-  become: yes
-  notify: restart wuzapi
-
-- name: Ensure correct ownership for Wuzapi directory
-  file:
-    path: "{{ wuzapi_dir }}"
-    owner: "{{ iiab_admin_user }}"
-    group: "{{ iiab_admin_user }}"
-    recurse: yes
-    state: directory
-  become: yes
-  notify: restart wuzapi
-
-- name: Install Wuzapi systemd service
-  template:
-    src: wuzapi.service.j2
-    dest: /etc/systemd/system/wuzapi.service
-  become: yes
-  notify: restart wuzapi
-
-- name: Enable and start Wuzapi service (systemd)
-  systemd:
-    name: wuzapi
-    state: started
-    enabled: yes
-    daemon_reload: yes
-  become: yes
-  when: not is_proot
-
-- name: Enable & start Wuzapi service via pdsm (Android/Proot)
-  when: is_proot
-  block:
-    - name: pdsm - Enable wuzapi
-      command: /usr/local/bin/pdsm enable wuzapi
-
-    - name: pdsm - Start wuzapi
-      command: /usr/local/bin/pdsm start wuzapi
-      register: pdsm_wuzapi_start
-      changed_when: "'already running' not in pdsm_wuzapi_start.stdout"
-
-- name: Configure Nginx for Wuzapi
-  template:
-    src: wuzapi-nginx.conf.j2
-    dest: /etc/nginx/conf.d/wuzapi.conf
-  become: yes
-  notify: reload nginx
-
-- name: Mark wuzapi as installed
-  lineinfile:
-    path: /etc/iiab/iiab_state.yml
-    line: "wuzapi_installed: True"
-    create: yes
-  become: yes
-
-- name: Symlink Wuzapi binary to path (Android)
-  file:
-    src: "{{ wuzapi_dir }}/wuzapi"
-    dest: /usr/local/bin/wuzapi
-    state: link
-  become: yes
-  when: is_proot
+- name: Assert that "wuzapi_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: wuzapi_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'wuzapi_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
 
+- block:
+
+    - name: Install WuzAPI if 'wuzapi_installed' not defined, e.g. in {{ iiab_state_file }}
+      include_tasks: install.yml
+      when: wuzapi_installed is undefined
+
+    - include_tasks: enable-or-disable.yml
+
+    - name: Add 'wuzapi' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"
+        section: wuzapi
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: WuzAPI
+        - option: description
+          value: '"WuzAPI is a WhatsApp Web bridge using the whatsmeow Go library"'
+        - option: wuzapi_install
+          value: "{{ wuzapi_install }}"
+        - option: wuzapi_enabled
+          value: "{{ wuzapi_enabled }}"
+        - option: wuzapi_port
+          value: "{{ wuzapi_port }}"
+
+  rescue:
+
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error

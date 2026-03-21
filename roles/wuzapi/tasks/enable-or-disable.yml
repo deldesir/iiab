@@ -1,0 +1,48 @@
+---
+- name: Enable & Restart 'wuzapi' systemd service, if wuzapi_enabled
+  systemd:
+    name: wuzapi
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  when:
+    - wuzapi_enabled
+    - not is_proot
+
+- name: Disable & Stop 'wuzapi' systemd service, if not wuzapi_enabled
+  systemd:
+    name: wuzapi
+    enabled: no
+    state: stopped
+  when:
+    - not wuzapi_enabled
+    - not is_proot
+
+- name: Enable & start Wuzapi service via pdsm (Android/Proot)
+  when:
+    - wuzapi_enabled
+    - is_proot
+  block:
+    - name: pdsm - Enable wuzapi
+      command: /usr/local/bin/pdsm enable wuzapi
+
+    - name: pdsm - Start wuzapi
+      command: /usr/local/bin/pdsm start wuzapi
+      register: pdsm_wuzapi_start
+      changed_when: "'already running' not in pdsm_wuzapi_start.stdout"
+
+- name: Configure Nginx for Wuzapi, if wuzapi_enabled
+  template:
+    src: wuzapi-nginx.conf.j2
+    dest: /etc/nginx/conf.d/wuzapi.conf
+  become: yes
+  when: wuzapi_enabled
+  notify: reload nginx
+
+- name: Remove Nginx config for Wuzapi, if not wuzapi_enabled
+  file:
+    path: /etc/nginx/conf.d/wuzapi.conf
+    state: absent
+  become: yes
+  when: not wuzapi_enabled
+  notify: reload nginx

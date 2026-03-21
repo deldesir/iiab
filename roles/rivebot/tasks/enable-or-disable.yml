@@ -1,0 +1,15 @@
+---
+- name: Enable & Restart 'rivebot' systemd service, if rivebot_enabled
+  systemd:
+    name: rivebot
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  when: rivebot_enabled
+
+- name: Disable & Stop 'rivebot' systemd service, if not rivebot_enabled
+  systemd:
+    name: rivebot
+    enabled: no
+    state: stopped
+  when: not rivebot_enabled

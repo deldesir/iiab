@@ -1,99 +1,49 @@
 ---
-- when: rivebot_install | bool
-  block:
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.
 
-    - name: Install RiveBot system dependencies
-      apt:
-        name:
-          - git
-          - curl
-        state: present
-      become: yes
+- name: Assert that "rivebot_install is sameas true" (boolean not string etc)
+  assert:
+    that: rivebot_install is sameas true
+    fail_msg: "PLEASE SET 'rivebot_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-    - name: Ensure uv is installed
-      shell: which uv || curl -LsSf https://astral.sh/uv/install.sh | sh
-      args:
-        creates: "{{ rivebot_uv_bin }}"
-      become: yes
+- name: Assert that "rivebot_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: rivebot_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'rivebot_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-    - name: Create RiveBot home directory
-      file:
-        path: "{{ rivebot_home }}"
-        state: directory
-        owner: "{{ rivebot_user }}"
-        group: "{{ rivebot_user }}"
-        mode: '0755'
-      become: yes
 
-    - name: Check if rivebot directory is already safe
-      command: git config --global --get-all safe.directory
-      register: git_safe_dirs
-      changed_when: false
-      ignore_errors: yes
+- block:
 
-    - name: Add rivebot directory to git safe directories
-      command: git config --global --add safe.directory {{ rivebot_home }}
-      become: yes
-      when: rivebot_home not in (git_safe_dirs.stdout_lines | default([]))
+    - name: Install RiveBot if 'rivebot_installed' not defined, e.g. in {{ iiab_state_file }}
+      include_tasks: install.yml
+      when: rivebot_installed is undefined
 
-    - name: Clone / update RiveBot repository
-      git:
-        repo: "{{ rivebot_repo }}"
-        dest: "{{ rivebot_home }}"
-        version: "{{ rivebot_repo_version }}"
-        force: yes
-        update: yes
-      become: yes
-      notify: restart rivebot
+    - include_tasks: enable-or-disable.yml
 
-    - name: Set ownership of RiveBot directory
-      file:
-        path: "{{ rivebot_home }}"
-        state: directory
-        owner: "{{ rivebot_user }}"
-        group: "{{ rivebot_user }}"
-        recurse: yes
-      become: yes
+    - name: Add 'rivebot' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"
+        section: rivebot
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: RiveBot
+        - option: description
+          value: '"RiveBot is a deterministic RiveScript intent router for pre-LLM pattern matching"'
+        - option: rivebot_install
+          value: "{{ rivebot_install }}"
+        - option: rivebot_enabled
+          value: "{{ rivebot_enabled }}"
+        - option: rivebot_port
+          value: "{{ rivebot_port }}"
 
-    - name: Sync RiveBot Python dependencies (uv sync)
-      command: "{{ rivebot_uv_bin }} sync"
-      args:
-        chdir: "{{ rivebot_home }}"
-      become: yes
-      become_user: "{{ rivebot_user }}"
-      environment:
-        PATH: "{{ ansible_env.HOME }}/.local/bin:{{ ansible_env.PATH }}"
+  rescue:
 
-    - name: Deploy RiveBot environment file
-      template:
-        src: rivebot.env.j2
-        dest: "{{ rivebot_home }}/.env"
-        owner: "{{ rivebot_user }}"
-        group: "{{ rivebot_user }}"
-        mode: '0600'
-      become: yes
-      notify: restart rivebot
-
-    - name: Install RiveBot systemd service
-      template:
-        src: rivebot.service.j2
-        dest: /etc/systemd/system/rivebot.service
-        mode: '0644'
-      become: yes
-      notify: restart rivebot
-
-    - name: Enable or disable RiveBot service
-      systemd:
-        name: rivebot
-        state: "{{ 'started' if rivebot_enabled | bool else 'stopped' }}"
-        enabled: "{{ rivebot_enabled | bool }}"
-        daemon_reload: yes
-      become: yes
-
-    - name: Mark rivebot as installed in iiab_state.yml
-      lineinfile:
-        path: /etc/iiab/iiab_state.yml
-        regexp: '^rivebot_installed'
-        line: "rivebot_installed: True"
-        create: yes
-      become: yes
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error

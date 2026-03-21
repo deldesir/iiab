@@ -1,117 +1,46 @@
 ---
-- when: ai_gateway_install | bool
-  become: yes
-  block:
+- name: Assert that "ai_gateway_install is sameas true" (boolean not string etc)
+  assert:
+    that: ai_gateway_install is sameas true
+    fail_msg: "PLEASE SET 'ai_gateway_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-    - name: Install AI Gateway system dependencies
-      apt:
-        name:
-          - git
-          - libpq-dev
-        state: present
+- name: Assert that "ai_gateway_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: ai_gateway_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'ai_gateway_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-    - name: Ensure uv is installed
-      shell: which uv || curl -LsSf https://astral.sh/uv/install.sh | sh
-      args:
-        creates: "{{ ai_gateway_uv_bin }}"
 
-    - name: Create AI Gateway directory
-      file:
-        path: "{{ ai_gateway_dir }}"
-        state: directory
-        owner: "{{ ai_gateway_user }}"
-        group: "{{ ai_gateway_user }}"
-        mode: '0755'
+- block:
 
-    - name: Add AI Gateway directory to git safe directories
-      community.general.git_config:
-        name: safe.directory
-        scope: global
-        value: "{{ ai_gateway_dir }}"
+    - name: Install AI Gateway if 'ai_gateway_installed' not defined, e.g. in {{ iiab_state_file }}
+      include_tasks: install.yml
+      when: ai_gateway_installed is undefined
 
-    - name: Clone AI Gateway repository
-      git:
-        repo: "{{ ai_gateway_repo }}"
-        dest: "{{ ai_gateway_dir }}"
-        version: "{{ ai_gateway_repo_version }}"
-        force: yes
-        update: yes
-      notify: restart ai-gateway
+    - include_tasks: enable-or-disable.yml
 
-    - name: Set ownership of AI Gateway directory
-      file:
-        path: "{{ ai_gateway_dir }}"
-        state: directory
-        owner: "{{ ai_gateway_user }}"
-        group: "{{ ai_gateway_user }}"
-        recurse: yes
+    - name: Add 'ai_gateway' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"
+        section: ai-gateway
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: AI Gateway
+        - option: description
+          value: '"AI Gateway is an OpenAI-compatible conversational AI orchestrator for IIAB"'
+        - option: ai_gateway_install
+          value: "{{ ai_gateway_install }}"
+        - option: ai_gateway_enabled
+          value: "{{ ai_gateway_enabled }}"
+        - option: ai_gateway_port
+          value: "{{ ai_gateway_port }}"
 
-    - name: Install AI Gateway dependencies (uv sync)
-      command: "{{ ai_gateway_uv_bin }} sync"
-      args:
-        chdir: "{{ ai_gateway_dir }}"
-      become_user: "{{ ai_gateway_user }}"
-      environment:
-        PATH: "{{ ansible_env.HOME }}/.local/bin:{{ ansible_env.PATH }}"
+  rescue:
 
-    - name: Deploy AI Gateway environment file from local_vars.yml
-      template:
-        src: ai-gateway.env.j2
-        dest: "{{ ai_gateway_dir }}/.env"
-        owner: "{{ ai_gateway_user }}"
-        group: "{{ ai_gateway_user }}"
-        mode: '0600'
-      notify: restart ai-gateway
-
-    - name: Ensure AI Gateway data directories exist
-      file:
-        path: "{{ ai_gateway_dir }}/data/knowledge"
-        state: directory
-        owner: "{{ ai_gateway_user }}"
-        group: "{{ ai_gateway_user }}"
-        mode: '0755'
-
-    - name: Deploy TalkPrep knowledge file
-      copy:
-        src: talkprep-knowledge.md
-        dest: "{{ ai_gateway_dir }}/data/knowledge/talkprep.md"
-        owner: "{{ ai_gateway_user }}"
-        group: "{{ ai_gateway_user }}"
-        mode: '0644'
-
-    - name: Install AI Gateway systemd service
-      template:
-        src: ai-gateway.service.j2
-        dest: /etc/systemd/system/ai-gateway.service
-        mode: '0644'
-      notify: restart ai-gateway
-
-    - name: Enable or disable AI Gateway service
-      systemd:
-        name: ai-gateway
-        state: "{{ 'started' if ai_gateway_enabled | bool else 'stopped' }}"
-        enabled: "{{ ai_gateway_enabled | bool }}"
-        daemon_reload: yes
-
-    - name: Configure Nginx for AI Gateway
-      include_tasks: nginx.yml
-      when: ai_gateway_enabled | bool
-
-    - name: Point RapidPro LLM at AI Gateway
-      community.postgresql.postgresql_query:
-        db: "{{ rapidpro_db_name | default('temba') }}"
-        login_user: "{{ rapidpro_db_user | default('temba') }}"
-        login_host: "localhost"
-        query: >
-          UPDATE ai_llm
-          SET config = jsonb_set(config::jsonb, '{endpoint}', '"http://localhost:{{ ai_gateway_port }}"')::json
-          WHERE config->>'endpoint' != 'http://localhost:{{ ai_gateway_port }}'
-      when: ai_gateway_enabled | bool
-      ignore_errors: yes  # Non-fatal: RapidPro may not be installed
-
-    - name: Mark ai-gateway as installed in iiab_state.yml
-      lineinfile:
-        path: /etc/iiab/iiab_state.yml
-        regexp: '^ai_gateway_installed'
-        line: "ai_gateway_installed: True"
-        create: yes
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error

@@ -1,0 +1,15 @@
+---
+- name: Enable & Restart 'siyuan' systemd service, if siyuan_enabled
+  systemd:
+    name: siyuan
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  when: siyuan_enabled
+
+- name: Disable & Stop 'siyuan' systemd service, if not siyuan_enabled
+  systemd:
+    name: siyuan
+    enabled: no
+    state: stopped
+  when: not siyuan_enabled

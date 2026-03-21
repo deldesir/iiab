@@ -1,0 +1,75 @@
+---
+- name: Install build dependencies
+  apt:
+    name:
+      - git
+      - make
+      - ffmpeg
+      - sqlite3
+      - libsqlite3-dev
+    state: present
+  become: yes
+
+- name: Create Wuzapi directory
+  file:
+    path: "{{ wuzapi_dir }}"
+    state: directory
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+  become: yes
+
+- name: Install Wuzapi Binary from Release
+  get_url:
+    url: "https://github.com/deldesir/wuzapi/releases/download/v1.0.7/wuzapi-linux-{{ wuzapi_go_arch }}"
+    dest: "{{ wuzapi_dir }}/wuzapi"
+    mode: '0755'
+    force: yes
+  become: yes
+
+- name: Clone Wuzapi repository (for static assets)
+  git:
+    repo: "https://github.com/deldesir/wuzapi.git"
+    dest: "/opt/iiab/wuzapi-src"
+    version: "main"
+    update: yes
+  become: yes
+
+- name: Copy static assets to install directory
+  copy:
+    src: "/opt/iiab/wuzapi-src/static"
+    dest: "{{ wuzapi_dir }}/"
+    remote_src: yes
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+  become: yes
+
+- name: Ensure correct ownership for Wuzapi directory
+  file:
+    path: "{{ wuzapi_dir }}"
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+    recurse: yes
+    state: directory
+  become: yes
+
+- name: Install Wuzapi systemd service
+  template:
+    src: wuzapi.service.j2
+    dest: /etc/systemd/system/wuzapi.service
+  become: yes
+
+- name: Symlink Wuzapi binary to path (Android)
+  file:
+    src: "{{ wuzapi_dir }}/wuzapi"
+    dest: /usr/local/bin/wuzapi
+    state: link
+  become: yes
+  when: is_proot
+
+- name: Mark wuzapi as installed in {{ iiab_state_file }}
+  lineinfile:
+    path: "{{ iiab_state_file }}"
+    regexp: '^wuzapi_installed'
+    line: "wuzapi_installed: True"
+    create: yes
+  become: yes

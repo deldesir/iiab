@@ -1,67 +1,51 @@
 ---
-- when: siyuan_install | bool
-  become: yes
-  block:
+# We assume 0-init/tasks/validate_vars.yml has DEFINITELY been run, so no need
+# to re-check whether vars are defined here.
 
-    - name: Create SiYuan directories
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: "{{ siyuan_user }}"
-        group: "{{ siyuan_user }}"
-        mode: '0755'
-      loop:
-        - "{{ siyuan_dir }}"
-        - "{{ siyuan_workspace }}"
+- name: Assert that "siyuan_install is sameas true" (boolean not string etc)
+  assert:
+    that: siyuan_install is sameas true
+    fail_msg: "PLEASE SET 'siyuan_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-    - name: Download SiYuan release tarball
-      get_url:
-        url: "https://github.com/siyuan-note/siyuan/releases/download/v{{ siyuan_version }}/siyuan-{{ siyuan_version }}-{{ siyuan_arch }}.tar.gz"
-        dest: "/tmp/siyuan-{{ siyuan_version }}.tar.gz"
-        mode: '0644'
-      register: siyuan_download
+- name: Assert that "siyuan_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: siyuan_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'siyuan_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-    - name: Extract SiYuan tarball
-      unarchive:
-        src: "/tmp/siyuan-{{ siyuan_version }}.tar.gz"
-        dest: "{{ siyuan_dir }}"
-        remote_src: yes
-        extra_opts: ['--strip-components=1']
-        owner: "{{ siyuan_user }}"
-        group: "{{ siyuan_user }}"
-      when: siyuan_download.changed
-      notify: restart siyuan
 
-    - name: Clean up tarball
-      file:
-        path: "/tmp/siyuan-{{ siyuan_version }}.tar.gz"
-        state: absent
+- block:
 
-    - name: Set ownership of SiYuan directory
-      file:
-        path: "{{ siyuan_dir }}"
-        owner: "{{ siyuan_user }}"
-        group: "{{ siyuan_user }}"
-        recurse: yes
-        state: directory
+    - name: Install SiYuan if 'siyuan_installed' not defined, e.g. in {{ iiab_state_file }}
+      include_tasks: install.yml
+      when: siyuan_installed is undefined
 
-    - name: Install SiYuan systemd service
-      template:
-        src: siyuan.service.j2
-        dest: /etc/systemd/system/siyuan.service
-        mode: '0644'
-      notify: restart siyuan
+    - include_tasks: enable-or-disable.yml
 
-    - name: Enable or disable SiYuan service
-      systemd:
-        name: siyuan
-        state: "{{ 'started' if siyuan_enabled | bool else 'stopped' }}"
-        enabled: "{{ siyuan_enabled | bool }}"
-        daemon_reload: yes
+    - name: Add 'siyuan' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"
+        section: siyuan
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: SiYuan
+        - option: description
+          value: '"SiYuan is a note-taking and knowledge authoring server for IIAB"'
+        - option: siyuan_install
+          value: "{{ siyuan_install }}"
+        - option: siyuan_enabled
+          value: "{{ siyuan_enabled }}"
+        - option: siyuan_port
+          value: "{{ siyuan_port }}"
+        - option: siyuan_version
+          value: "{{ siyuan_version }}"
 
-    - name: Mark siyuan as installed in iiab_state.yml
-      lineinfile:
-        path: /etc/iiab/iiab_state.yml
-        regexp: '^siyuan_installed'
-        line: "siyuan_installed: True"
-        create: yes
+  rescue:
+
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error
