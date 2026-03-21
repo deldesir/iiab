@@ -1,0 +1,23 @@
+[Unit]
+Description=SiYuan Note-Taking Server
+After=network.target
+
+[Service]
+Type=simple
+User={{ siyuan_user }}
+Group={{ siyuan_user }}
+WorkingDirectory={{ siyuan_dir }}
+ExecStart={{ siyuan_dir }}/kernel \
+  --workspace={{ siyuan_workspace }} \
+  --port={{ siyuan_port }} \
+{% if siyuan_access_auth_code %}
+  --accessAuthCode={{ siyuan_access_auth_code }} \
+{% endif %}
+  --mode=prod
+
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

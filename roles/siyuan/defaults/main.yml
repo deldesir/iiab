@@ -1,0 +1,20 @@
+---
+siyuan_install: True
+siyuan_enabled: True
+
+# Version — update to pull a newer release
+siyuan_version: "3.6.1"
+
+# Install location
+siyuan_dir: /opt/iiab/siyuan-server
+siyuan_data_dir: "{{ siyuan_dir }}/data"
+siyuan_user: "{{ iiab_admin_user }}"
+
+# Service
+siyuan_port: 6806
+
+# Auth — leave empty to disable auth (local-only access)
+siyuan_access_auth_code: ""
+
+# Workspace (where notebooks live)
+siyuan_workspace: "{{ siyuan_dir }}/workspace"

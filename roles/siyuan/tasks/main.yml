@@ -1,0 +1,85 @@
+---
+# Detect architecture for download URL
+- name: Set architecture variable
+  set_fact:
+    siyuan_arch: "{{ 'linux-arm64' if ansible_architecture == 'aarch64' else 'linux' }}"
+
+- name: Create SiYuan directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ siyuan_user }}"
+    group: "{{ siyuan_user }}"
+  become: yes
+  loop:
+    - "{{ siyuan_dir }}"
+    - "{{ siyuan_workspace }}"
+
+- name: Download SiYuan release tarball
+  get_url:
+    url: "https://github.com/siyuan-note/siyuan/releases/download/v{{ siyuan_version }}/siyuan-{{ siyuan_version }}-{{ siyuan_arch }}.tar.gz"
+    dest: "/tmp/siyuan-{{ siyuan_version }}.tar.gz"
+    mode: '0644'
+  become: yes
+  register: siyuan_download
+
+- name: Extract SiYuan tarball
+  unarchive:
+    src: "/tmp/siyuan-{{ siyuan_version }}.tar.gz"
+    dest: "{{ siyuan_dir }}"
+    remote_src: yes
+    extra_opts: ['--strip-components=1']
+    owner: "{{ siyuan_user }}"
+    group: "{{ siyuan_user }}"
+  become: yes
+  when: siyuan_download.changed
+  notify: restart siyuan
+
+- name: Clean up tarball
+  file:
+    path: "/tmp/siyuan-{{ siyuan_version }}.tar.gz"
+    state: absent
+  become: yes
+
+- name: Ensure correct ownership
+  file:
+    path: "{{ siyuan_dir }}"
+    owner: "{{ siyuan_user }}"
+    group: "{{ siyuan_user }}"
+    recurse: yes
+    state: directory
+  become: yes
+
+- name: Install SiYuan systemd service
+  template:
+    src: siyuan.service.j2
+    dest: /etc/systemd/system/siyuan.service
+  become: yes
+  notify: restart siyuan
+
+- name: Enable and start SiYuan service
+  systemd:
+    name: siyuan
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  become: yes
+  when: not is_proot
+
+- name: Enable & start SiYuan via pdsm (Android/Proot)
+  when: is_proot
+  block:
+    - name: pdsm - Enable siyuan
+      command: /usr/local/bin/pdsm enable siyuan
+
+    - name: pdsm - Start siyuan
+      command: /usr/local/bin/pdsm start siyuan
+      register: pdsm_siyuan_start
+      changed_when: "'already running' not in pdsm_siyuan_start.stdout"
+
+- name: Mark siyuan as installed
+  lineinfile:
+    path: /etc/iiab/iiab_state.yml
+    line: "siyuan_installed: True"
+    create: yes
+  become: yes
