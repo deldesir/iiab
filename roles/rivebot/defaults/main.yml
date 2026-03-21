@@ -1,9 +1,31 @@
 ---
-rivebot_install: true
-rivebot_port: 8087
+rivebot_install: True
+rivebot_enabled: True
+
+# Install location
 rivebot_home: /opt/iiab/rivebot
+rivebot_user: "{{ iiab_admin_user }}"
+rivebot_uv_bin: "{{ ansible_env.HOME }}/.local/bin/uv"
+
+# Source repository
 rivebot_repo: "https://github.com/deldesir/rivebot.git"
-rivebot_brains_dir: /opt/iiab/rivebot/data/brains
-rivebot_siyuan_data_dir: ""  # Set in local_vars.yml if SiYuan runs server-side
+rivebot_repo_version: "main"
+
+# Service
+rivebot_port: 8087
+rivebot_brains_dir: "{{ rivebot_home }}/data/brains"
+
+# Gateway integration
 rivebot_gateway_url: "http://127.0.0.1:8086"
 rivebot_macro_timeout_s: "10"
+
+# SiYuan sync — Mode B (local filesystem watch)
+# Set to SiYuan's data directory if SiYuan runs on the same machine.
+rivebot_siyuan_data_dir: ""
+
+# SiYuan sync — Mode C (remote HTTP poll)
+# Set these in local_vars.yml to enable polling a remote SiYuan instance.
+rivebot_siyuan_api_url: ""            # e.g. http://100.64.0.11:56260
+rivebot_siyuan_api_token: ""          # Settings → About → API token
+rivebot_siyuan_notebook_id: ""        # e.g. 20260321012908-iej1pzy
+rivebot_siyuan_poll_interval_s: "30"  # How often to poll (seconds)

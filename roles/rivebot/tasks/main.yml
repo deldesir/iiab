@@ -1,46 +1,99 @@
 ---
-# IIAB Ansible role — rivebot
-# Deploys the RiveScript brain service as a systemd unit.
-#
-# Controls:
-#   rivebot_install: true   # set false to skip entirely
-#   rivebot_home: /opt/iiab/rivebot
-#   rivebot_repo: https://github.com/deldesir/rivebot.git
+- when: rivebot_install | bool
+  block:
 
-- name: Clone / update rivebot repository
-  git:
-    repo: "{{ rivebot_repo | default('https://github.com/deldesir/rivebot.git') }}"
-    dest: "{{ rivebot_home }}"
-    version: main
-    force: false
-    update: true
-  when: rivebot_install | bool
+    - name: Install RiveBot system dependencies
+      apt:
+        name:
+          - git
+          - curl
+        state: present
+      become: yes
 
-- name: Ensure rivebot directory has correct permissions
-  file:
-    path: "{{ rivebot_home }}"
-    state: directory
-    mode: '0755'
-  when: rivebot_install | bool
+    - name: Ensure uv is installed
+      shell: which uv || curl -LsSf https://astral.sh/uv/install.sh | sh
+      args:
+        creates: "{{ rivebot_uv_bin }}"
+      become: yes
 
-- name: Sync rivebot Python dependencies with uv
-  command: uv sync
-  args:
-    chdir: "{{ rivebot_home }}"
-  changed_when: false
-  when: rivebot_install | bool
+    - name: Create RiveBot home directory
+      file:
+        path: "{{ rivebot_home }}"
+        state: directory
+        owner: "{{ rivebot_user }}"
+        group: "{{ rivebot_user }}"
+        mode: '0755'
+      become: yes
 
-- name: Write systemd unit
-  template:
-    src: rivebot.service.j2
-    dest: /etc/systemd/system/rivebot.service
-  notify: restart rivebot
-  when: rivebot_install | bool
+    - name: Check if rivebot directory is already safe
+      command: git config --global --get-all safe.directory
+      register: git_safe_dirs
+      changed_when: false
+      ignore_errors: yes
 
-- name: Enable and start rivebot service
-  systemd:
-    name: rivebot
-    enabled: yes
-    state: started
-    daemon_reload: yes
-  when: rivebot_install | bool
+    - name: Add rivebot directory to git safe directories
+      command: git config --global --add safe.directory {{ rivebot_home }}
+      become: yes
+      when: rivebot_home not in (git_safe_dirs.stdout_lines | default([]))
+
+    - name: Clone / update RiveBot repository
+      git:
+        repo: "{{ rivebot_repo }}"
+        dest: "{{ rivebot_home }}"
+        version: "{{ rivebot_repo_version }}"
+        force: yes
+        update: yes
+      become: yes
+      notify: restart rivebot
+
+    - name: Set ownership of RiveBot directory
+      file:
+        path: "{{ rivebot_home }}"
+        state: directory
+        owner: "{{ rivebot_user }}"
+        group: "{{ rivebot_user }}"
+        recurse: yes
+      become: yes
+
+    - name: Sync RiveBot Python dependencies (uv sync)
+      command: "{{ rivebot_uv_bin }} sync"
+      args:
+        chdir: "{{ rivebot_home }}"
+      become: yes
+      become_user: "{{ rivebot_user }}"
+      environment:
+        PATH: "{{ ansible_env.HOME }}/.local/bin:{{ ansible_env.PATH }}"
+
+    - name: Deploy RiveBot environment file
+      template:
+        src: rivebot.env.j2
+        dest: "{{ rivebot_home }}/.env"
+        owner: "{{ rivebot_user }}"
+        group: "{{ rivebot_user }}"
+        mode: '0600'
+      become: yes
+      notify: restart rivebot
+
+    - name: Install RiveBot systemd service
+      template:
+        src: rivebot.service.j2
+        dest: /etc/systemd/system/rivebot.service
+        mode: '0644'
+      become: yes
+      notify: restart rivebot
+
+    - name: Enable or disable RiveBot service
+      systemd:
+        name: rivebot
+        state: "{{ 'started' if rivebot_enabled | bool else 'stopped' }}"
+        enabled: "{{ rivebot_enabled | bool }}"
+        daemon_reload: yes
+      become: yes
+
+    - name: Mark rivebot as installed in iiab_state.yml
+      lineinfile:
+        path: /etc/iiab/iiab_state.yml
+        regexp: '^rivebot_installed'
+        line: "rivebot_installed: True"
+        create: yes
+      become: yes

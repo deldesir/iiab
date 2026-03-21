@@ -8,9 +8,17 @@ User=root
 WorkingDirectory={{ rivebot_home }}
 Environment="RIVEBOT_PORT={{ rivebot_port }}"
 Environment="RIVEBOT_BRAINS_DIR={{ rivebot_brains_dir }}"
-Environment="SIYUAN_DATA_DIR={{ rivebot_siyuan_data_dir }}"
 Environment="RIVEBOT_GATEWAY_URL={{ rivebot_gateway_url }}"
 Environment="RIVEBOT_MACRO_TIMEOUT_S={{ rivebot_macro_timeout_s }}"
+
+# SiYuan sync — Mode B (local filesystem, optional)
+Environment="SIYUAN_DATA_DIR={{ rivebot_siyuan_data_dir }}"
+
+# SiYuan sync — Mode C (remote HTTP poll, optional)
+Environment="SIYUAN_API_URL={{ rivebot_siyuan_api_url }}"
+Environment="SIYUAN_API_TOKEN={{ rivebot_siyuan_api_token }}"
+Environment="SIYUAN_NOTEBOOK_ID={{ rivebot_siyuan_notebook_id }}"
+Environment="SIYUAN_POLL_INTERVAL_S={{ rivebot_siyuan_poll_interval_s }}"
 
 ExecStart=/root/.local/bin/uv run uvicorn rivebot.main:app --host 127.0.0.1 --port {{ rivebot_port }} --log-level info
 Restart=always
