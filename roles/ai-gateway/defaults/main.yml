@@ -42,6 +42,10 @@ ai_gateway_embedding_model: "nomic-ai/nomic-embed-text-v1.5"
 ai_gateway_rapidpro_host: "http://localhost:8080"
 ai_gateway_rapidpro_token: "{{ rapidpro_auth_token | default('change-me') }}"
 
+# SiYuan Integration (used by talkmaster/jwlinker for notebook sync)
+ai_gateway_siyuan_url: "http://localhost:6806"
+ai_gateway_siyuan_token: "{{ siyuan_api_token | default('') }}"
+
 # Optional admin contact (e.g. for debug webhooks)
 ai_gateway_admin_phone: ""
 

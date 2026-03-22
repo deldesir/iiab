@@ -20,12 +20,12 @@ rivebot_gateway_url: "http://127.0.0.1:8086"
 rivebot_macro_timeout_s: "10"
 
 # SiYuan sync — Mode B (local filesystem watch)
-# Set to SiYuan's data directory if SiYuan runs on the same machine.
-rivebot_siyuan_data_dir: ""
+# Defaults to SiYuan's workspace data dir on the same machine
+rivebot_siyuan_data_dir: "/opt/iiab/siyuan-server/workspace/data"
 
 # SiYuan sync — Mode C (remote HTTP poll)
-# Set these in local_vars.yml to enable polling a remote SiYuan instance.
-rivebot_siyuan_api_url: ""            # e.g. http://100.64.0.11:56260
-rivebot_siyuan_api_token: ""          # Settings → About → API token
+# Uses the shared siyuan_api_token from the siyuan role
+rivebot_siyuan_api_url: "http://localhost:6806"
+rivebot_siyuan_api_token: "{{ siyuan_api_token | default('') }}"
 rivebot_siyuan_notebook_id: ""        # e.g. 20260321012908-iej1pzy
 rivebot_siyuan_poll_interval_s: "30"  # How often to poll (seconds)
