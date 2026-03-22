@@ -66,6 +66,32 @@
     mode: '0644'
   become: yes
 
+- name: Ensure SiYuan workspace conf directory exists
+  file:
+    path: "{{ siyuan_workspace }}/conf"
+    state: directory
+    owner: "{{ siyuan_user }}"
+    group: "{{ siyuan_user }}"
+    mode: '0755'
+  become: yes
+
+- name: Set SiYuan API token in workspace conf
+  shell: |
+    python3 -c "
+    import json, os
+    conf_path = '{{ siyuan_workspace }}/conf/conf.json'
+    conf = {}
+    if os.path.exists(conf_path):
+        with open(conf_path) as f:
+            conf = json.load(f)
+    conf.setdefault('api', {})['token'] = '{{ siyuan_api_token }}'
+    with open(conf_path, 'w') as f:
+        json.dump(conf, f, indent=2)
+    "
+  become: yes
+  become_user: "{{ siyuan_user }}"
+  when: siyuan_api_token | length > 0
+
 # RECORD SiYuan AS INSTALLED
 
 - name: Record (final) disk space used
