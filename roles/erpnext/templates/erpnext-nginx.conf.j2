@@ -38,7 +38,15 @@ location ^~ /files/ {
     try_files $uri =404;
 }
 
-location ^~ /api/ {
+# ERPNext API — only match ERPNext-specific paths (not all /api/)
+# This allows SiYuan to handle /api/system/, /api/notebook/, etc. via regex
+location ^~ /api/method/ {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
+}
+
+location ^~ /api/resource/ {
     proxy_pass http://127.0.0.1:8000;
     proxy_set_header Host $host;
     proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
