@@ -8,6 +8,9 @@ User={{ rivebot_user }}
 WorkingDirectory={{ rivebot_home }}
 EnvironmentFile={{ rivebot_home }}/.env
 
+# Kill any orphan process holding the port (prevents crash loops)
+ExecStartPre=-/usr/bin/fuser -k {{ rivebot_port }}/tcp
+
 ExecStart={{ rivebot_uv_bin }} run uvicorn rivebot.main:app --host 127.0.0.1 --port {{ rivebot_port }} --log-level info
 Restart=always
 RestartSec=3
