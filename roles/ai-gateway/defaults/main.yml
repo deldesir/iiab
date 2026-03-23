@@ -30,8 +30,8 @@ ai_gateway_app: "app.api.app:create_app"
 # LLM Integration (points to litellm proxy)
 ai_gateway_openai_api_base: "http://localhost:4000"
 ai_gateway_openai_api_key: "{{ litellm_master_key | default('change-me') }}"
-ai_gateway_llm_model: "openai/custom_ai"
-ai_gateway_llm_model_summarize: "openai/custom_ai"
+ai_gateway_llm_model: "custom_ai"
+ai_gateway_llm_model_summarize: "custom_ai"
 ai_gateway_llm_temperature: "0.3"
 
 # Embeddings (#5 — nomic-embed-text-v1.5 is 2x better than MiniLM at same size)
@@ -48,6 +48,14 @@ ai_gateway_siyuan_token: "{{ siyuan_api_token | default('') }}"
 
 # Optional admin contact (e.g. for debug webhooks)
 ai_gateway_admin_phone: ""
+
+# RiveBot intent-matching service
+ai_gateway_rivebot_url: "http://localhost:8087"
+
+# Public URLs (for download links / SiYuan links sent to users via WhatsApp)
+ai_gateway_public_url: "http://localhost:8086"
+ai_gateway_siyuan_public_url: "{{ ai_gateway_siyuan_url }}"
+ai_gateway_siyuan_notebook_id: ""
 
 # jwlinker DB path — empty uses platform default (~/.local/share/jwlinker/jw_library.db)
 ai_gateway_jwlinker_db_path: ""
