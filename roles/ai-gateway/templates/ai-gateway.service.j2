@@ -11,27 +11,15 @@ WorkingDirectory={{ ai_gateway_dir }}
 StandardOutput=journal
 StandardError=journal
 
-# Environment — managed by Ansible, edit via local_vars.yml
-Environment="OPENAI_API_BASE={{ ai_gateway_openai_api_base }}"
-Environment="OPENAI_API_KEY={{ ai_gateway_openai_api_key }}"
-Environment="LLM_MODEL={{ ai_gateway_llm_model }}"
-Environment="LLM_MODEL_SUMMARIZE={{ ai_gateway_llm_model_summarize }}"
-Environment="LLM_TEMPERATURE={{ ai_gateway_llm_temperature | default('0.3') }}"
-Environment="EMBEDDING_PROVIDER={{ ai_gateway_embedding_provider }}"
-Environment="EMBEDDING_MODEL={{ ai_gateway_embedding_model }}"
-Environment="RAPIDPRO_HOST={{ ai_gateway_rapidpro_host }}"
-Environment="RAPIDPRO_API_TOKEN={{ ai_gateway_rapidpro_token }}"
+# Secrets loaded from restricted file (mode 0600, owned by service user)
+EnvironmentFile={{ ai_gateway_dir }}/.env
+
+# Non-sensitive config — managed by Ansible, edit via local_vars.yml
 Environment="RIVEBOT_URL={{ ai_gateway_rivebot_url | default('http://localhost:8087') }}"
 Environment="GATEWAY_PUBLIC_URL={{ ai_gateway_public_url | default('http://localhost:8086') }}"
 Environment="SIYUAN_PUBLIC_URL={{ ai_gateway_siyuan_public_url | default(ai_gateway_siyuan_url) }}"
 {% if ai_gateway_siyuan_notebook_id | default('') %}
 Environment="SIYUAN_NOTEBOOK_ID={{ ai_gateway_siyuan_notebook_id }}"
-{% endif %}
-{% if ai_gateway_admin_phone %}
-Environment="ADMIN_PHONE={{ ai_gateway_admin_phone }}"
-{% endif %}
-{% if ai_gateway_postgres_uri %}
-Environment="POSTGRES_URI={{ ai_gateway_postgres_uri }}"
 {% endif %}
 Environment="DEFAULT_PERSONA={{ ai_gateway_default_persona | default('konex-support') }}"
 
