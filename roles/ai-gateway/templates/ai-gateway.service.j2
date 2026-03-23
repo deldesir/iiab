@@ -33,6 +33,7 @@ Environment="ADMIN_PHONE={{ ai_gateway_admin_phone }}"
 {% if ai_gateway_postgres_uri %}
 Environment="POSTGRES_URI={{ ai_gateway_postgres_uri }}"
 {% endif %}
+Environment="DEFAULT_PERSONA={{ ai_gateway_default_persona | default('konex-support') }}"
 
 ExecStart={{ ai_gateway_uv_bin }} run uvicorn {{ ai_gateway_app }} \
     --host 0.0.0.0 \

@@ -1,4 +1,53 @@
 ---
+# Create konex_* tables in Postgres (idempotent safety net).
+# The gateway's init_db() also does this on startup, but this ensures
+# tables + permissions exist before the first boot.
+- name: Create Konex tables in Postgres
+  community.postgresql.postgresql_query:
+    db: "{{ rapidpro_db_name | default('temba') }}"
+    login_user: "postgres"
+    login_host: "localhost"
+    query: |
+      CREATE TABLE IF NOT EXISTS konex_personas (
+          id VARCHAR PRIMARY KEY,
+          slug VARCHAR UNIQUE,
+          name VARCHAR NOT NULL,
+          personality TEXT NOT NULL,
+          style TEXT NOT NULL,
+          language VARCHAR DEFAULT 'ht',
+          system_prompt TEXT,
+          allowed_tools JSON DEFAULT '[]'
+      );
+      CREATE TABLE IF NOT EXISTS konex_channel_configs (
+          id VARCHAR PRIMARY KEY,
+          channel_phone VARCHAR UNIQUE NOT NULL,
+          persona_id VARCHAR REFERENCES konex_personas(id),
+          knowledge_base_id VARCHAR,
+          system_prompt_override TEXT
+      );
+      CREATE TABLE IF NOT EXISTS konex_admins (
+          id VARCHAR PRIMARY KEY,
+          user_phone VARCHAR NOT NULL,
+          channel_phone VARCHAR NOT NULL,
+          permissions VARCHAR DEFAULT '*',
+          created_by VARCHAR,
+          created_at INTEGER DEFAULT 0
+      );
+      CREATE TABLE IF NOT EXISTS konex_knowledge_items (
+          id VARCHAR PRIMARY KEY,
+          title VARCHAR NOT NULL,
+          content TEXT NOT NULL,
+          source_uri VARCHAR,
+          created_at INTEGER DEFAULT 0,
+          updated_at INTEGER DEFAULT 0
+      );
+      GRANT ALL PRIVILEGES ON TABLE konex_personas TO {{ rapidpro_db_user | default('temba') }};
+      GRANT ALL PRIVILEGES ON TABLE konex_channel_configs TO {{ rapidpro_db_user | default('temba') }};
+      GRANT ALL PRIVILEGES ON TABLE konex_admins TO {{ rapidpro_db_user | default('temba') }};
+      GRANT ALL PRIVILEGES ON TABLE konex_knowledge_items TO {{ rapidpro_db_user | default('temba') }};
+  when: ai_gateway_enabled and ai_gateway_postgres_uri | default('') | length > 0
+  ignore_errors: yes
+
 - name: Enable & Restart 'ai-gateway' systemd service, if ai_gateway_enabled
   systemd:
     name: ai-gateway

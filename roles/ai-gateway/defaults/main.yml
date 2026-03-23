@@ -60,5 +60,10 @@ ai_gateway_siyuan_notebook_id: ""
 # jwlinker DB path — empty uses platform default (~/.local/share/jwlinker/jw_library.db)
 ai_gateway_jwlinker_db_path: ""
 
-# Optional PostgreSQL URI (leave empty to use SQLite)
-ai_gateway_postgres_uri: ""
+# PostgreSQL URI for persona/channel/admin data (shares RapidPro's temba DB)
+# The konex_* tables are auto-created on first boot via init_db().
+# Set to "" to fall back to local SQLite (dev only).
+ai_gateway_postgres_uri: "postgresql+asyncpg://{{ rapidpro_db_user | default('temba') }}:{{ rapidpro_db_pass | default('temba') }}@localhost:5432/{{ rapidpro_db_name | default('temba') }}"
+
+# Fallback persona when no channel→persona mapping exists
+ai_gateway_default_persona: "konex-support"
