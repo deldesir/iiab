@@ -12,7 +12,10 @@ Environment='COURIER_DB=postgres://{{ rapidpro_db_user }}:{{ rapidpro_db_pass }}
 Environment='COURIER_VALKEY=valkey://localhost:6379/0'
 Environment='COURIER_SPOOL_DIR={{ rapidpro_dir }}/spool/courier'
 Environment='COURIER_DYNAMO_ENDPOINT=http://localhost:4567'
+# S3 endpoint intentionally invalid — forces local disk storage at {{ rapidpro_dir }}/media/
+# Attachments are served by nginx at /rp/media/
 Environment='COURIER_S3_ENDPOINT=http://localhost:1'
+Environment='COURIER_MEDIA_BASE_URL=http://localhost/rp/media'
 # Dummy AWS credentials so AWS SDK skips EC2 IMDS lookup and uses local Dynalite
 Environment='COURIER_AWS_ACCESS_KEY_ID=localtest'
 Environment='COURIER_AWS_SECRET_ACCESS_KEY=localtest'
