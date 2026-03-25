@@ -74,6 +74,7 @@ CELERY_BROKER_URL = "redis://127.0.0.1:6379/15"
 # DynamoDB
 # ----------------------------------------------------------------------------------
 DYNAMO_TABLE_PREFIX = "{{ rapidpro_dynamo_table_prefix }}"
+DYNAMO_ENDPOINT_URL = None  # Override settings_common.py localhost:6000 (LocalStack) — use real AWS DynamoDB
 
 # ----------------------------------------------------------------------------------
 # AWS S3 Storage
