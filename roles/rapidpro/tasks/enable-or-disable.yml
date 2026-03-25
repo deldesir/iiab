@@ -19,7 +19,6 @@
   loop:
     - rapidpro-mailroom
     - rapidpro-courier
-    - rapidpro-dynamo
     - rapidpro-celery
   become: yes
   when: not is_proot
@@ -37,7 +36,6 @@
         - rapidpro-gunicorn
         - rapidpro-mailroom
         - rapidpro-courier
-        - rapidpro-dynamo
         - rapidpro-celery
 
     - name: pdsm - Start all RapidPro services
@@ -46,7 +44,6 @@
         - rapidpro-gunicorn
         - rapidpro-mailroom
         - rapidpro-courier
-        - rapidpro-dynamo
         - rapidpro-celery
       register: pdsm_start
       changed_when: "'already running' not in pdsm_start.stdout"
@@ -62,7 +59,6 @@
         - rapidpro-gunicorn
         - rapidpro-mailroom
         - rapidpro-courier
-        - rapidpro-dynamo
         - rapidpro-celery
       register: pdsm_stop
       changed_when: "'not running' not in pdsm_stop.stdout"
@@ -74,6 +70,5 @@
         - rapidpro-gunicorn
         - rapidpro-mailroom
         - rapidpro-courier
-        - rapidpro-dynamo
         - rapidpro-celery
       failed_when: false

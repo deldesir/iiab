@@ -82,7 +82,6 @@
         - wuzapi
         - postgresql
         - valkey
-        - rapidpro-dynamo
         - rapidpro-watchdog
 
     - name: Enable pdsm services with ordered dependencies (Fixes startup race conditions)
@@ -93,7 +92,6 @@
       loop:
         - { name: 'valkey', prio: '00' }
         - { name: 'postgresql', prio: '01' }
-        - { name: 'rapidpro-dynamo', prio: '05' }
         - { name: 'nginx', prio: '10' }
         - { name: 'rapidpro-server', prio: '20' }
         - { name: 'rapidpro-celery', prio: '20' }

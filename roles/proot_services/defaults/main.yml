@@ -16,7 +16,7 @@ pdsm_enabled_services:
 #  - kiwix
   - postgresql
   - valkey
-  - rapidpro-dynamo
+
 #  - calibre-web
 
 # RapidPro & Wuzapi defaults (required for PDSM templates as proot_services runs before rapidpro role)
