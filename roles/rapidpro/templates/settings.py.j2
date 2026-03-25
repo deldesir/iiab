@@ -30,9 +30,13 @@ from .settings_common import *  # noqa
 # Disable debug mode for production
 DEBUG = False
 
+# SECURITY: Use a unique secret key per deployment
+{% if rapidpro_secret_key %}
+SECRET_KEY = "{{ rapidpro_secret_key }}"
+{% endif %}
 
 
-# The hostname of the IIAB box
+
 # The hostname of the IIAB box
 # Hardcoded for Android/Proot stability
 ALLOWED_HOSTS = ["*"]
@@ -157,3 +161,16 @@ SECURE_PROXY_SSL_HEADER = None
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
 {% endif %}
+
+# Cookie security
+SESSION_COOKIE_AGE = 1209600  # 2 weeks
+CSRF_COOKIE_SAMESITE = "Strict"
+CSRF_COOKIE_AGE = 1209600  # 2 weeks
+
+# Password requirements
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 8}},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
