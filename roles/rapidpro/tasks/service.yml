@@ -11,7 +11,6 @@
   loop:
     - postgresql
     - "{{ valkey_service_name }}"
-    - rapidpro-dynamo
   become: yes
   when: not is_proot
   ignore_errors: yes
@@ -36,7 +35,6 @@
   loop:
     - postgresql
     - valkey
-    - rapidpro-dynamo
     - rapidpro-gunicorn
     - rapidpro-courier
     - rapidpro-mailroom
@@ -49,7 +47,6 @@
   loop:
     - postgresql
     - valkey
-    - rapidpro-dynamo
   register: pdsm_infra_start
   changed_when: "'already running' not in pdsm_infra_start.stdout"
   become: yes

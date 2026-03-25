@@ -71,9 +71,43 @@ CACHES = {
 CELERY_BROKER_URL = "redis://127.0.0.1:6379/15"
 
 # ----------------------------------------------------------------------------------
-# DynamoDB (Mock)
+# DynamoDB
 # ----------------------------------------------------------------------------------
-DYNAMO_ENDPOINT_URL = "http://127.0.0.1:4567"
+DYNAMO_TABLE_PREFIX = "{{ rapidpro_dynamo_table_prefix }}"
+
+# ----------------------------------------------------------------------------------
+# AWS S3 Storage
+# ----------------------------------------------------------------------------------
+AWS_ACCESS_KEY_ID = "{{ rapidpro_aws_access_key_id }}"
+AWS_SECRET_ACCESS_KEY = "{{ rapidpro_aws_secret_access_key }}"
+AWS_REGION = "{{ rapidpro_aws_region }}"
+AWS_S3_REGION_NAME = AWS_REGION
+AWS_S3_ENDPOINT_URL = f"https://s3.{AWS_REGION}.amazonaws.com"
+AWS_S3_ADDRESSING_STYLE = "path"
+AWS_S3_FILE_OVERWRITE = False
+BUCKET_PREFIX = "{{ rapidpro_s3_bucket_prefix }}"
+
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {"bucket_name": f"{BUCKET_PREFIX}-default"},
+    },
+    "archives": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {"bucket_name": f"{BUCKET_PREFIX}-archives"},
+    },
+    "public": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {
+            "bucket_name": f"{BUCKET_PREFIX}-default",
+            "default_acl": "public-read",
+            "querystring_auth": False,
+        },
+    },
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
+
+STORAGE_URL = f"{AWS_S3_ENDPOINT_URL}/{BUCKET_PREFIX}-default"
 
 # ----------------------------------------------------------------------------------
 # Mailroom - localhost for dev, no auth token
@@ -85,21 +119,6 @@ MAILROOM_AUTH_TOKEN = os.environ.get("MAILROOM_AUTH_TOKEN")
 # Use Celery for background tasks
 # ----------------------------------------------------------------------------------
 CELERY_TASK_ALWAYS_EAGER = False
-
-# ----------------------------------------------------------------------------------
-# Local filesystem storage
-# ----------------------------------------------------------------------------------
-# Use local file storage for media (exports, etc) instead of S3
-STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "archives": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "public": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
-}
-
-# Ensure new files (exports) are readable by Nginx
-FILE_UPLOAD_PERMISSIONS = 0o644
-FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 
 FORCE_SCRIPT_NAME = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}"
 STATIC_URL = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}static/"

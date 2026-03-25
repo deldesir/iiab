@@ -7,19 +7,17 @@ User={{ iiab_admin_user }}
 Group={{ iiab_admin_user }}
 WorkingDirectory={{ rapidpro_dir }}
 
-# Use Valkey and disable cloud dependencies
 Environment='COURIER_DB=postgres://{{ rapidpro_db_user }}:{{ rapidpro_db_pass }}@localhost/{{ rapidpro_db_name }}?sslmode=disable'
 Environment='COURIER_VALKEY=valkey://localhost:6379/0'
 Environment='COURIER_SPOOL_DIR={{ rapidpro_dir }}/spool/courier'
-Environment='COURIER_DYNAMO_ENDPOINT=http://localhost:4567'
-# S3 endpoint intentionally invalid — forces local disk storage at {{ rapidpro_dir }}/media/
-# Attachments are served by nginx at /rp/media/
-Environment='COURIER_S3_ENDPOINT=http://localhost:1'
-Environment='COURIER_MEDIA_BASE_URL=http://localhost/rp/media'
-# Dummy AWS credentials so AWS SDK skips EC2 IMDS lookup and uses local Dynalite
-Environment='COURIER_AWS_ACCESS_KEY_ID=localtest'
-Environment='COURIER_AWS_SECRET_ACCESS_KEY=localtest'
-Environment='COURIER_AWS_REGION=us-east-1'
+
+# AWS Configuration (S3 + DynamoDB)
+Environment='COURIER_AWS_ACCESS_KEY_ID={{ rapidpro_aws_access_key_id }}'
+Environment='COURIER_AWS_SECRET_ACCESS_KEY={{ rapidpro_aws_secret_access_key }}'
+Environment='COURIER_AWS_REGION={{ rapidpro_aws_region }}'
+Environment='COURIER_S3_ENDPOINT=https://s3.{{ rapidpro_aws_region }}.amazonaws.com'
+Environment='COURIER_S3_ATTACHMENTS_BUCKET={{ rapidpro_s3_bucket_prefix }}-attachments'
+Environment='COURIER_DYNAMO_TABLE_PREFIX={{ rapidpro_dynamo_table_prefix }}'
 
 ExecStart=/usr/local/bin/courier
 Restart=on-failure
