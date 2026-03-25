@@ -90,73 +90,9 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-  when: rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: (reinstall is defined and reinstall) or rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
-- name: Create DynamoDB systemd service
-  template:
-    src: rapidpro-dynamo.service.j2
-    dest: /etc/systemd/system/rapidpro-dynamo.service
-  become: yes
 
-- name: Force start rapidpro-dynamo for migrations
-  systemd:
-    name: rapidpro-dynamo
-    state: started
-    enabled: yes
-    daemon_reload: yes
-  become: yes
-  when: not is_proot
-
-- name: Force Deploy RapidPro Dynamo PDSM Wrapper (Ensure IPv4 Runner)
-  template:
-    src: ../../proot_services/templates/pdsm/rapidpro-dynamo.j2
-    dest: /usr/local/pdsm/services-available/rapidpro-dynamo
-    owner: root
-    group: root
-    mode: '0755'
-  become: yes
-  when: is_proot
-
-- name: Deploy Dynalite IPv4 Runner (Android Fix)
-  copy:
-    src: dynalite_runner.js
-    dest: "{{ rapidpro_dir }}/dynalite_runner.js"
-    owner: "{{ iiab_admin_user }}"
-    mode: '0755'
-  become: yes
-
-- name: Deploy DynamoDB Launcher Script (Android Fix)
-  template:
-    src: start_dynamo.sh.j2
-    dest: "{{ rapidpro_dir }}/start_dynamo.sh"
-    owner: "{{ iiab_admin_user }}"
-    mode: '0755'
-  become: yes
-  when: is_proot
-
-- name: Restart RapidPro DynamoDB (Android)
-  shell: /usr/local/bin/pdsm restart rapidpro-dynamo
-  become: yes
-  when: is_proot
-
-- name: Wait for DynamoDB to accept connections
-  wait_for:
-    port: 4567
-    host: 127.0.0.1
-    delay: 2
-    timeout: 60
-  when: rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
-
-- name: Run DynamoDB migrations
-  shell: |
-    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    poetry run python manage.py migrate_dynamo
-  args:
-    chdir: "{{ rapidpro_dir }}"
-  become: yes
-  become_user: "{{ iiab_admin_user }}"
-  run_once: yes
-  when: rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
 - name: Collect static files
   shell: |
