@@ -233,7 +233,7 @@
 - name: Allow Nginx traversal of RapidPro directory (Professional Fix)
   file:
     path: "{{ rapidpro_dir }}"
-    mode: '0751'
+    mode: '0755'
     state: directory
   become: yes
 
