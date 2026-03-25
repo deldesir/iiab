@@ -10,10 +10,7 @@ location {{ rapidpro_url }}/media/ {
     alias {{ rapidpro_dir }}/media/;
 }
 
-
-# Forward /api/v2/ requests to RapidPro
-# Uses /api/v2/ (not /api/) so it coexists with ERPNext's ^~ /api/
-# nginx always prefers longer prefix matches, so this wins for RapidPro API calls
+# Forward /api/v2/ requests to RapidPro (not /api/ — ERPNext uses that)
 location /api/v2/ {
     rewrite ^/api/v2/(.*)$ {{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}api/v2/$1 break;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -23,37 +20,16 @@ location /api/v2/ {
     proxy_pass http://unix:{{ rapidpro_dir }}/run/gunicorn.sock;
 }
 
-# Forward /relayers/ requests (Android App Registration/Sync)
-location /relayers/ {
-    rewrite ^/relayers/(.*)$ {{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}relayers/$1 break;
+# Catch-all for RapidPro SPA paths — temba-components constructs URLs
+# without the {{ rapidpro_url }} subpath prefix for all these top-level routes
+location ~ ^/(flow|contact|msg|ticket|trigger|campaign|org|settings|staff|accounts|relayers|android|c|broadcast|channels|notification|globals|jsi18n|user)/ {
+    rewrite ^/(.*)$ {{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}$1 break;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header Host $http_host;
     proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
     proxy_pass http://unix:{{ rapidpro_dir }}/run/gunicorn.sock;
 }
-
-# Forward /android/ requests (APK checks)
-location /android/ {
-    rewrite ^/android/(.*)$ {{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}android/$1 break;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header Host $http_host;
-    proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
-    proxy_pass http://unix:{{ rapidpro_dir }}/run/gunicorn.sock;
-}
-
-# Forward /c/ requests (Channel Webhooks like Wuzapi)
-location ^~ /c/ {
-    rewrite ^/c/(.*)$ {{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}c/$1 break;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header Host $http_host;
-    proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
-    proxy_pass http://unix:{{ rapidpro_dir }}/run/gunicorn.sock;
-}
-
-
 
 location {{ rapidpro_url }}/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
