@@ -125,6 +125,17 @@ MAILROOM_AUTH_TOKEN = os.environ.get("MAILROOM_AUTH_TOKEN")
 # ----------------------------------------------------------------------------------
 CELERY_TASK_ALWAYS_EAGER = False
 
+# ----------------------------------------------------------------------------------
+# Asset compression — reduces page load time
+# ----------------------------------------------------------------------------------
+COMPRESS_ENABLED = True
+COMPRESS_OFFLINE = True
+
+# ----------------------------------------------------------------------------------
+# Default user timezone
+# ----------------------------------------------------------------------------------
+USER_TIME_ZONE = "America/Port-au-Prince"
+
 FORCE_SCRIPT_NAME = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}"
 STATIC_URL = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}static/"
 MEDIA_URL = "{{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}media/"
