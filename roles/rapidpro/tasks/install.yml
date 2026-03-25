@@ -1,8 +1,6 @@
 ---
 # This file will contain all the installation tasks for RapidPro.
 
-# This file will contain all the installation tasks for RapidPro.
-
 
 - name: Drop RapidPro database if requested
   when: rapidpro_force_drop_db | default(false)
@@ -13,7 +11,6 @@
         - rapidpro-gunicorn
         - rapidpro-courier
         - rapidpro-mailroom
-        - rapidpro-dynamo
         - rapidpro-celery
       become: yes
       changed_when: false
@@ -136,7 +133,7 @@
     repo: 'https://github.com/deldesir/rapidpro.git'
     dest: "{{ rapidpro_dir }}"
     force: yes
-    version: v26.1.65
+    version: v26.1.68
   become: yes
   register: rapidpro_git_clone
 
@@ -200,15 +197,6 @@
   npm:
     name: yarn
     global: yes
-  become: yes
-
-
-- name: Install dynalite (Memory-safe)
-  shell: |
-    export UV_THREADPOOL_SIZE=1
-    npm install --global dynalite --no-optional
-  args:
-    creates: /usr/bin/dynalite
   become: yes
 
 
