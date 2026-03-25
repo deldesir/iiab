@@ -27,11 +27,11 @@
   include_tasks: download_large_file.yml
   vars:
     dest_base_path: "{{ maps_serve_path }}"
-    item: "{{ maps_dot_black_naturalearth6_tiles }}"
+    item: "{{ maps_dot_black_naturalearth6_tiles[maps_ne6_zoom] }}"
 
 - name: Select naturalearth6 tiles
   file:
-    src: "{{ maps_serve_path }}/{{ maps_dot_black_naturalearth6_tiles }}"
+    src: "{{ maps_serve_path }}/{{ maps_dot_black_naturalearth6_tiles[maps_ne6_zoom] }}"
     dest: "{{ maps_serve_path }}/{{ maps_dot_black_naturalearth6_symlink_name }}"
     state: link
 
@@ -98,6 +98,20 @@
         src: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_tiles[maps_terrain_zoom] }}"
         dest: "{{ maps_serve_path }}/{{ maps_dot_black_terrain_symlink_name }}"
         state: link
+
+- name: Initiate the extracts json
+  copy:
+    content: '{"regions": {}}'
+    dest: "{{ maps_serve_path }}/{{ tile_extract.info_file }}"
+    mode: "0644"
+    force: false
+
+- name: "Download preset full quality regions"
+  # TODO - Is there a safer way to pass in item.name and item.bbox?
+  shell: |
+    set -euo pipefail
+    {{ tile_extract.working_dir }}/tile-extract.py extract {{ item.name }} {{ item.bbox }} noninteractive
+  with_items: "{{ maps_preset_full_quality_regions }}"
 
 # If the user goes back to "none", we want to delete the symlink that gives them terrain.
 # However, it will not delete the pmtiles file that it points to.
