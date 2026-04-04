@@ -28,7 +28,14 @@ wuzapi_admintoken: ""
 rapidpro_secret_key: ""
 custom_ai_admin_token: ""
 
-# AWS Configuration (S3 + DynamoDB)
+# nanoRP mode: local-first monolith without AWS dependencies
+# Set to true to disable S3 + DynamoDB and use local filesystem/PostgreSQL only
+rapidpro_nanorp: false
+
+# Domain for courier (used in attachment URLs)
+rapidpro_domain: "{{ rapidpro_hostname }}"
+
+# AWS Configuration (S3 + DynamoDB) — ignored when rapidpro_nanorp is true
 rapidpro_aws_access_key_id: ""
 rapidpro_aws_secret_access_key: ""
 rapidpro_aws_region: "us-east-1"
