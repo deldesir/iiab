@@ -74,25 +74,7 @@ CACHES = {
 
 CELERY_BROKER_URL = "redis://127.0.0.1:6379/15"
 
-{% if rapidpro_nanorp %}
-# ----------------------------------------------------------------------------------
-# DynamoDB — disabled (nanoRP: all data stays in PostgreSQL)
-# ----------------------------------------------------------------------------------
-DYNAMO_TABLE_PREFIX = ""
-DYNAMO_ENDPOINT_URL = None
-
-# ----------------------------------------------------------------------------------
-# Storage — Local Filesystem (nanoRP: no AWS dependencies)
-# ----------------------------------------------------------------------------------
-STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "archives": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "public": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
-}
-
-STORAGE_URL = "/rp/media"
-{% else %}
+{% if rapidpro_aws_enabled %}
 # ----------------------------------------------------------------------------------
 # DynamoDB
 # ----------------------------------------------------------------------------------
@@ -132,6 +114,24 @@ STORAGES = {
 }
 
 STORAGE_URL = f"{AWS_S3_ENDPOINT_URL}/{BUCKET_PREFIX}-default"
+{% else %}
+# ----------------------------------------------------------------------------------
+# DynamoDB — disabled (local-first: all data stays in PostgreSQL)
+# ----------------------------------------------------------------------------------
+DYNAMO_TABLE_PREFIX = ""
+DYNAMO_ENDPOINT_URL = None
+
+# ----------------------------------------------------------------------------------
+# Storage — Local Filesystem (no AWS dependencies)
+# ----------------------------------------------------------------------------------
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "archives": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "public": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
+
+STORAGE_URL = "/rp/media"
 {% endif %}
 
 # ----------------------------------------------------------------------------------

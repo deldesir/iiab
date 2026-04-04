@@ -13,11 +13,7 @@ Environment='COURIER_SPOOL_DIR={{ rapidpro_dir }}/spool/courier'
 Environment='COURIER_DOMAIN={{ rapidpro_domain }}'
 Environment='COURIER_MEDIA_BASE_URL=/rp/media'
 
-{% if rapidpro_nanorp %}
-# nanoRP: DynamoDB and S3 disabled — local-first mode
-Environment='COURIER_DYNAMO_TABLE_PREFIX='
-Environment='COURIER_AWS_ACCESS_KEY_ID='
-{% else %}
+{% if rapidpro_aws_enabled %}
 # AWS Configuration (S3 + DynamoDB)
 Environment='COURIER_AWS_ACCESS_KEY_ID={{ rapidpro_aws_access_key_id }}'
 Environment='COURIER_AWS_SECRET_ACCESS_KEY={{ rapidpro_aws_secret_access_key }}'
@@ -25,6 +21,10 @@ Environment='COURIER_AWS_REGION={{ rapidpro_aws_region }}'
 Environment='COURIER_S3_ENDPOINT=https://s3.{{ rapidpro_aws_region }}.amazonaws.com'
 Environment='COURIER_S3_ATTACHMENTS_BUCKET={{ rapidpro_s3_bucket_prefix }}-attachments'
 Environment='COURIER_DYNAMO_TABLE_PREFIX={{ rapidpro_dynamo_table_prefix }}'
+{% else %}
+# Local-first mode: DynamoDB and S3 disabled
+Environment='COURIER_DYNAMO_TABLE_PREFIX='
+Environment='COURIER_AWS_ACCESS_KEY_ID='
 {% endif %}
 
 ExecStart=/usr/local/bin/courier

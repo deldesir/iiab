@@ -99,7 +99,7 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-  when: not rapidpro_nanorp
+  when: rapidpro_aws_enabled
 
 
 - name: Collect static files
