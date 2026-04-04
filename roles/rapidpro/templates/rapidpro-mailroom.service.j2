@@ -13,13 +13,9 @@ Environment='MAILROOM_SESSION_STORAGE=db'
 Environment='MAILROOM_SPOOL_DIR={{ rapidpro_dir }}/spool/mailroom'
 Environment='MAILROOM_ELASTIC='
 
-# AWS Configuration (S3 + DynamoDB)
-Environment='MAILROOM_AWS_ACCESS_KEY_ID={{ rapidpro_aws_access_key_id }}'
-Environment='MAILROOM_AWS_SECRET_ACCESS_KEY={{ rapidpro_aws_secret_access_key }}'
-Environment='MAILROOM_AWS_REGION={{ rapidpro_aws_region }}'
-Environment='MAILROOM_S3_ENDPOINT=https://s3.{{ rapidpro_aws_region }}.amazonaws.com'
-Environment='MAILROOM_S3_ATTACHMENTS_BUCKET={{ rapidpro_s3_bucket_prefix }}-attachments'
-Environment='MAILROOM_DYNAMO_TABLE_PREFIX={{ rapidpro_dynamo_table_prefix }}'
+# nanoRP: DynamoDB and S3 disabled — empty prefix/key means local-first mode
+Environment='MAILROOM_DYNAMO_TABLE_PREFIX='
+Environment='MAILROOM_AWS_ACCESS_KEY_ID='
 
 ExecStart=/usr/local/bin/mailroom
 Restart=on-failure
