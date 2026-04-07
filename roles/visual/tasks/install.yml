@@ -45,6 +45,7 @@
     repo: https://github.com/bagistoplus/visual-debut.git
     dest: "{{ bagisto_abs_path }}/packages/Themes/VisualDebut"
     version: v2
+    force: yes
 
 - name: Fix Vite livewire TS imports for IIAB edge deployment
   replace:

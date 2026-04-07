@@ -14,7 +14,7 @@
 - block:
     - name: Install Visual if 'visual_installed' not defined
       include_tasks: install.yml
-      when: visual_installed is undefined
+      when: (visual_installed is undefined) or (reinstall | default(False) | bool)
 
     - name: Run enable-or-disable process
       include_tasks: enable-or-disable.yml
