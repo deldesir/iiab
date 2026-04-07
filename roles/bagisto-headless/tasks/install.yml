@@ -1,0 +1,69 @@
+---
+- name: FAIL IF 'bagisto_installed is undefined'
+  fail:
+    msg: "Bagisto Headless install cannot proceed, as Bagisto is not installed."
+  when: bagisto_installed is undefined
+
+- name: Relax Bagisto core version requirement temporarily to avoid conflicts
+  replace:
+    path: "{{ bagisto_abs_path }}/composer.json"
+    regexp: '"bagisto/bagisto": ".*"'
+    replace: '"bagisto/bagisto": "*"'
+  ignore_errors: yes
+
+- name: Install Bagisto GraphQL API Extension via composer
+  command: composer require "{{ bagisto_api_package }}" --with-all-dependencies
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+  environment:
+    COMPOSER_ALLOW_SUPERUSER: "1"
+
+- name: Run Bagisto API Migrations
+  command: php artisan migrate --force
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+
+- name: Clone Next.js Commerce codebase
+  git:
+    repo: "{{ bagisto_headless_repo }}"
+    dest: "{{ bagisto_headless_dir }}"
+    version: "{{ bagisto_headless_version }}"
+    force: yes
+
+- name: Template Next.js .env.local file
+  template:
+    src: env.local.j2
+    dest: "{{ bagisto_headless_dir }}/.env.local"
+
+- name: Install NPM dependencies for Next.js Commerce
+  command: npm install --legacy-peer-deps
+  args:
+    chdir: "{{ bagisto_headless_dir }}"
+
+- name: Build Next.js Application
+  command: npm run build
+  args:
+    chdir: "{{ bagisto_headless_dir }}"
+
+- name: Setup Systemd Service for Bagisto Headless
+  template:
+    src: bagisto-headless.service.j2
+    dest: /etc/systemd/system/bagisto-headless.service
+    mode: '0644'
+
+- name: Enable and restart Bagisto Headless service
+  systemd:
+    name: bagisto-headless
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+
+- name: "Set 'bagisto_headless_installed: True'"
+  set_fact:
+    bagisto_headless_installed: True
+
+- name: "Add 'bagisto_headless_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"
+    regexp: '^bagisto_headless_installed'
+    line: 'bagisto_headless_installed: True'

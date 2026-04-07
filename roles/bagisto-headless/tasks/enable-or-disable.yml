@@ -1,0 +1,7 @@
+---
+- name: Restart 'bagisto-headless' systemd service
+  systemd:
+    name: bagisto-headless
+    state: restarted
+  when: bagisto_headless_enabled | bool
+  ignore_errors: yes

@@ -943,3 +943,5 @@ is_debuntu: True    # 2025-09-16: OBSOLETE VARIABLE, BUT ADMIN CONSOLE STILL
 
 visual_install: False
 visual_enabled: False
+bagisto_headless_install: False
+bagisto_headless_enabled: False

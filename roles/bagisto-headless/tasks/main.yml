@@ -1,0 +1,42 @@
+---
+- name: Assert that "bagisto_headless_install is sameas true"
+  assert:
+    that: bagisto_headless_install is sameas true
+    fail_msg: "PLEASE SET 'bagisto_headless_install: True'"
+    quiet: yes
+
+- name: Assert that "bagisto_headless_enabled | type_debug == 'bool'"
+  assert:
+    that: bagisto_headless_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'bagisto_headless_enabled' A PROPER BOOLEAN VALUE"
+    quiet: yes
+
+- block:
+    - name: Install Bagisto Headless if not defined or reinstalling
+      include_tasks: install.yml
+      when: (bagisto_headless_installed is undefined) or (reinstall | default(False) | bool)
+
+    - name: Run enable-or-disable process
+      include_tasks: enable-or-disable.yml
+
+    - name: Add 'bagisto_headless' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"
+        section: bagisto_headless
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: Bagisto Headless (Next.js)
+        - option: description
+          value: '"Next.js Headless eCommerce Storefront for Bagisto"'
+        - option: bagisto_headless_install
+          value: "{{ bagisto_headless_install }}"
+        - option: bagisto_headless_enabled
+          value: "{{ bagisto_headless_enabled }}"
+
+  rescue:
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error

@@ -1,6 +1,45 @@
 # Nginx configuration for Bagisto inside IIAB
 
-location ^~ /bagisto {
+{% if bagisto_headless_enabled | default(False) %}
+# ----------------------------------------------------
+# HEADLESS MODE (Next.js Proxied Front, PHP Backend)
+# ----------------------------------------------------
+
+location ^~ {{ bagisto_app_url }}/admin {
+    alias {{ bagisto_abs_path }}/public/admin;
+    try_files $uri $uri/ @bagisto;
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_pass php;
+        fastcgi_param SCRIPT_FILENAME $request_filename;
+        fastcgi_param SCRIPT_NAME {{ bagisto_app_url }}/index.php;
+        fastcgi_hide_header X-Powered-By;
+    }
+}
+
+location ^~ {{ bagisto_app_url }}/api {
+    try_files $uri $uri/ @bagisto;
+}
+
+location ^~ {{ bagisto_app_url }}/graphql {
+    try_files $uri $uri/ @bagisto;
+}
+
+location ^~ {{ bagisto_app_url }} {
+    proxy_pass http://127.0.0.1:{{ bagisto_headless_port | default(3000) }};
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_cache_bypass $http_upgrade;
+}
+
+{% else %}
+# ----------------------------------------------------
+# MONOLITHIC MODE (Standard Laravel/Livewire PHP Front)
+# ----------------------------------------------------
+
+location ^~ {{ bagisto_app_url }} {
     alias {{ bagisto_abs_path }}/public;
     index index.php index.html index.htm;
 
@@ -13,7 +52,7 @@ location ^~ /bagisto {
         include fastcgi_params;
         fastcgi_pass php;
         fastcgi_param SCRIPT_FILENAME $request_filename;
-        fastcgi_param SCRIPT_NAME /bagisto/index.php;
+        fastcgi_param SCRIPT_NAME {{ bagisto_app_url }}/index.php;
         fastcgi_hide_header X-Powered-By;
     }
 
@@ -28,21 +67,22 @@ location ^~ /bagisto {
         deny all;
     }
 }
+{% endif %}
 
 location @bagisto {
     include fastcgi_params;
     fastcgi_pass php;
     fastcgi_param SCRIPT_FILENAME {{ bagisto_abs_path }}/public/index.php;
-    fastcgi_param SCRIPT_NAME /bagisto/index.php;
+    fastcgi_param SCRIPT_NAME {{ bagisto_app_url }}/index.php;
     fastcgi_hide_header X-Powered-By;
 }
 
 # Livewire AJAX endpoint - Livewire generates absolute /livewire/update URLs
-# that fall outside the /bagisto subpath location block
+# that fall outside the {{ bagisto_app_url }} subpath location block
 location ^~ /livewire {
     include fastcgi_params;
     fastcgi_pass php;
     fastcgi_param SCRIPT_FILENAME {{ bagisto_abs_path }}/public/index.php;
-    fastcgi_param SCRIPT_NAME /bagisto/index.php;
+    fastcgi_param SCRIPT_NAME {{ bagisto_app_url }}/index.php;
     fastcgi_hide_header X-Powered-By;
 }

@@ -1,0 +1,15 @@
+[Unit]
+Description=Next.js Commerce Daemon for Bagisto Headless
+After=network.target
+
+[Service]
+Type=simple
+User={{ apache_user | default('www-data') }}
+WorkingDirectory={{ bagisto_headless_dir }}
+ExecStart=/usr/bin/npm run start -- -p {{ bagisto_headless_port }}
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
