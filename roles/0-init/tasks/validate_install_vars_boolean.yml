@@ -333,3 +333,10 @@
     that: bagisto_install | type_debug == 'bool'
     fail_msg: "VARIABLE MUST BE BOOLEAN: 'bagisto_install' now has type '{{ lookup('vars', 'bagisto_install') | type_debug }}' and value '{{ lookup('vars', 'bagisto_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+
+
+- name: Assert that var visual_install is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: visual_install | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'visual_install' now has type '{{ lookup('vars', 'visual_install') | type_debug }}' and value '{{ lookup('vars', 'visual_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

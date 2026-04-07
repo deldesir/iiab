@@ -108,6 +108,11 @@
     name: bagisto
   when: bagisto_install
 
+- name: VISUAL (Bagisto Module)
+  include_role:
+    name: visual
+  when: visual_install
+
 - name: Recording STAGE 6 HAS COMPLETED ====================
   lineinfile:
     path: "{{ iiab_env_file }}"

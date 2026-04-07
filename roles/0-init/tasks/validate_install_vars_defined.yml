@@ -330,3 +330,10 @@
     that: bagisto_install is defined
     fail_msg: "VARIABLE MUST BE DEFINED: 'bagisto_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+
+
+- name: Assert that var visual_install is defined
+  assert:
+    that: visual_install is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'visual_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

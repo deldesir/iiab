@@ -1,0 +1,9 @@
+---
+visual_install: False
+visual_enabled: False
+
+visual_source_dir: /opt/iiab/visual
+visual_composer_package: "bagistoplus/visual:@dev"
+
+bagisto_install_path: /library
+bagisto_abs_path: "{{ bagisto_install_path }}/bagisto"

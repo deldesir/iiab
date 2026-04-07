@@ -1,0 +1,143 @@
+---
+- name: FAIL IF 'bagisto_installed is undefined'
+  fail:
+    msg: "Visual install cannot proceed, as Bagisto is not installed."
+  when: bagisto_installed is undefined
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+- name: Configure Bagisto composer to use local visual repository
+  command: composer config repositories.visual path "{{ visual_source_dir }}"
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+
+- name: Install Visual PHP dependencies via composer in Bagisto
+  composer:
+    command: require
+    arguments: "{{ visual_composer_package }}"
+    working_dir: "{{ bagisto_abs_path }}"
+    no_dev: yes
+  environment:
+    COMPOSER_ALLOW_SUPERUSER: "1"
+
+- name: Publish Visual assets to Bagisto public directory
+  command: php artisan vendor:publish --tag="visual-assets"
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+
+- name: Ensure correct permissions for published assets
+  file:
+    path: "{{ bagisto_abs_path }}/public/vendor/bagistoplus"
+    owner: root
+    group: "{{ apache_user | default('www-data') }}"
+    recurse: yes
+
+- name: Ensure packages/Themes directory exists
+  file:
+    path: "{{ bagisto_abs_path }}/packages/Themes"
+    state: directory
+    owner: root
+    group: "{{ apache_user | default('www-data') }}"
+
+- name: Clone Visual Debut starter theme (v2)
+  git:
+    repo: https://github.com/bagistoplus/visual-debut.git
+    dest: "{{ bagisto_abs_path }}/packages/Themes/VisualDebut"
+    version: v2
+
+- name: Fix Vite livewire TS imports for IIAB edge deployment
+  replace:
+    path: "{{ bagisto_abs_path }}/packages/Themes/VisualDebut/resources/assets/ts/shop/index.ts"
+    regexp: "'\\.\\./\\.\\./\\.\\./\\.\\./vendor/livewire/livewire/dist/livewire\\.esm';"
+    replace: "'../../../../../../../vendor/livewire/livewire/dist/livewire.esm.js';"
+
+- name: Add path repository pointer to local visual package in visual-debut template
+  replace:
+    path: "{{ bagisto_abs_path }}/packages/Themes/VisualDebut/composer.json"
+    regexp: '"bagistoplus/visual".*'
+    replace: '"bagistoplus/visual": "*",'
+
+- name: Relax livewire version constraint in visual-debut template
+  replace:
+    path: "{{ bagisto_abs_path }}/packages/Themes/VisualDebut/composer.json"
+    regexp: '"livewire/livewire".*'
+    replace: '"livewire/livewire": "*",'
+
+- name: Inject x-cloak FOUC prevention into head partial
+  blockinfile:
+    path: "{{ bagisto_abs_path }}/packages/Themes/VisualDebut/resources/views/partials/head.blade.php"
+    insertafter: "@bagistoVite"
+    marker: "<!-- {mark} IIAB FOUC FIX -->"
+    block: |
+      <style>
+        [x-cloak] { display: none !important; }
+      </style>
+
+- name: Add Cart block import to VisualDebut ServiceProvider
+  lineinfile:
+    path: "{{ bagisto_abs_path }}/packages/Themes/VisualDebut/src/ServiceProvider.php"
+    insertafter: "use BagistoPlus\\\\VisualDebut\\\\Components\\\\Livewire\\\\AddToWishlistButton;"
+    line: "use BagistoPlus\\VisualDebut\\Blocks\\Header\\Cart;"
+
+- name: Register Cart block eagerly for Livewire subpath compatibility
+  replace:
+    path: "{{ bagisto_abs_path }}/packages/Themes/VisualDebut/src/ServiceProvider.php"
+    regexp: "'estimate-shipping' => EstimateShipping::class,"
+    replace: "'estimate-shipping' => EstimateShipping::class,\n        'craftile-visual-debut-header-cart' => Cart::class,"
+
+- name: Ensure Bagisto composer recognizes internal packages
+  command: composer config repositories.packages '{"type": "path", "url": "packages/*/*", "options": {"symlink": true}}'
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+
+- name: Install Visual Debut theme dependencies via Composer
+  composer:
+    command: require
+    arguments: "bagistoplus/visual-debut:*@dev"
+    working_dir: "{{ bagisto_abs_path }}"
+    no_dev: yes
+  environment:
+    COMPOSER_ALLOW_SUPERUSER: "1"
+
+- name: Build Vite assets for Visual Debut theme
+  shell: npm install && npm run build
+  args:
+    chdir: "{{ bagisto_abs_path }}/packages/Themes/VisualDebut"
+    creates: "{{ bagisto_abs_path }}/packages/Themes/VisualDebut/public/themes/shop/visual-debut/manifest.json"
+
+- name: Publish Visual Debut assets to public directory
+  command: php artisan vendor:publish --tag="visual-debut" --force
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+
+- name: Discover active packages in Bagisto
+  command: php artisan package:discover
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+
+- name: Set visual-debut as the active theme in the channel configuration
+  command: php artisan tinker --execute="DB::table('channels')->update(['theme' => 'visual-debut']);"
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'visual_disk_usage = ...' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: visual
+    option: visual_disk_usage
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
+
+- name: "Set 'visual_installed: True'"
+  set_fact:
+    visual_installed: True
+
+- name: "Add 'visual_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"
+    regexp: '^visual_installed'
+    line: 'visual_installed: True'

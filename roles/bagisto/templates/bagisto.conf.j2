@@ -36,3 +36,13 @@ location @bagisto {
     fastcgi_param SCRIPT_NAME /bagisto/index.php;
     fastcgi_hide_header X-Powered-By;
 }
+
+# Livewire AJAX endpoint - Livewire generates absolute /livewire/update URLs
+# that fall outside the /bagisto subpath location block
+location ^~ /livewire {
+    include fastcgi_params;
+    fastcgi_pass php;
+    fastcgi_param SCRIPT_FILENAME {{ bagisto_abs_path }}/public/index.php;
+    fastcgi_param SCRIPT_NAME /bagisto/index.php;
+    fastcgi_hide_header X-Powered-By;
+}

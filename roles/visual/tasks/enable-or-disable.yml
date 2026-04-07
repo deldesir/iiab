@@ -1,0 +1,14 @@
+---
+# Disabling a composer-based Bagisto extension dynamically is difficult
+# without running `composer remove` which is destructive.
+# We'll run view/route clears to ensure states are clean.
+
+- name: Clear Bagisto caches (when visual enabled/disabled)
+  command: php artisan {{ item }}
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+  with_items:
+    - view:clear
+    - route:clear
+    - cache:clear
+    - package:discover

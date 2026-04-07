@@ -1,0 +1,42 @@
+---
+- name: Assert that "visual_install is sameas true"
+  assert:
+    that: visual_install is sameas true
+    fail_msg: "PLEASE SET 'visual_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "visual_enabled | type_debug == 'bool'"
+  assert:
+    that: visual_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'visual_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- block:
+    - name: Install Visual if 'visual_installed' not defined
+      include_tasks: install.yml
+      when: visual_installed is undefined
+
+    - name: Run enable-or-disable process
+      include_tasks: enable-or-disable.yml
+
+    - name: Add 'visual' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"
+        section: visual
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: Visual (Bagisto Theme Editor)
+        - option: description
+          value: '"Visual theme builder and framework for Bagisto"'
+        - option: visual_install
+          value: "{{ visual_install }}"
+        - option: visual_enabled
+          value: "{{ visual_enabled }}"
+
+  rescue:
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error
