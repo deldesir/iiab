@@ -37,6 +37,11 @@
         - option: bagisto_abs_path
           value: "{{ bagisto_abs_path }}"
 
+    - name: "VISUAL - run 'visual' role"
+      include_role:
+        name: visual
+      when: visual_install | default(False)
+
   rescue:
     - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
       fail:
