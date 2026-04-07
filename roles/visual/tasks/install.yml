@@ -105,12 +105,18 @@
   shell: npm install && npm run build
   args:
     chdir: "{{ bagisto_abs_path }}/packages/Themes/VisualDebut"
-    creates: "{{ bagisto_abs_path }}/packages/Themes/VisualDebut/public/themes/shop/visual-debut/manifest.json"
 
 - name: Publish Visual Debut assets to public directory
   command: php artisan vendor:publish --tag="visual-debut" --force
   args:
     chdir: "{{ bagisto_abs_path }}"
+
+- name: Ensure correct permissions for published visual-debut assets
+  file:
+    path: "{{ bagisto_abs_path }}/public/themes/shop/visual-debut"
+    owner: root
+    group: "{{ apache_user | default('www-data') }}"
+    recurse: yes
 
 - name: Discover active packages in Bagisto
   command: php artisan package:discover
