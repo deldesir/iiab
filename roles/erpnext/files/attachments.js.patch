@@ -1,0 +1,11 @@
+--- /tmp/p_orig	2026-04-09 20:37:54.832863084 +0200
++++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/form/sidebar/attachments.js	2026-04-09 20:36:45.669520091 +0200
+@@ -147,7 +147,7 @@
+ 			};
+ 		}
+ 
+-		const icon = `<a href="/desk/file/${fileid}" class="attachment-icon">
++		const icon = `<a href="${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/file/${fileid}" class="attachment-icon">
+ 				${frappe.utils.icon(attachment.is_private ? "es-line-lock" : "es-line-unlock", "sm ml-0")}
+ 			</a>`;
+ 

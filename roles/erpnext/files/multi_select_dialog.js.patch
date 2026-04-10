@@ -1,0 +1,11 @@
+--- /tmp/p_orig	2026-04-09 20:37:54.728864073 +0200
++++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/form/multi_select_dialog.js	2026-04-09 20:36:45.669520091 +0200
+@@ -469,7 +469,7 @@
+ 								result[column] || ""
+ 						  )}">${__(result[column] || "")}</span>`
+ 						: `<a href="${
+-								"/desk/" + frappe.router.slug(me.doctype) + "/" + result[column] ||
++								((frappe.router && frappe.router._subpath_prefix) || "") + "/desk/" + frappe.router.slug(me.doctype) + "/" + result[column] ||
+ 								""
+ 						  }" class="list-id ellipsis" title="${__(result[column] || "")}">
+ 							${__(result[column] || "")}</a>`

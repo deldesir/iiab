@@ -55,6 +55,20 @@
     state: present
   when: erpnext_enabled | bool
 
+- name: Ensure vm.overcommit_memory=1 persists across reboots (Redis requirement)
+  copy:
+    dest: /etc/sysctl.d/99-iiab-erpnext-redis.conf
+    content: "vm.overcommit_memory=1\n"
+    mode: '0644'
+  become: yes
+  when: erpnext_enabled | bool
+
+- name: Apply vm.overcommit_memory=1 immediately (no module, no deprecation)
+  command: sysctl -w vm.overcommit_memory=1
+  become: yes
+  changed_when: false
+  when: erpnext_enabled | bool
+
 - name: Configure MariaDB for ERPNext
   template:
     src: erpnext-mysqld.cnf.j2
@@ -93,10 +107,20 @@
     creates: /home/{{ erpnext_user_name }}/.local/bin/uv
   when: erpnext_enabled | bool
 
+- name: Instruct uv to fetch specific Python version if needed
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  command: ~/.local/bin/uv python install 3.14
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when:
+    - erpnext_enabled | bool
+    - erpnext_version == 'version-16'
+
 - name: Init frappe bench
   become: yes
   become_user: "{{ erpnext_user_name }}"
-  command: ~/.local/bin/bench init frappe-bench --frappe-branch {{ erpnext_version }}
+  command: ~/.local/bin/bench init frappe-bench --frappe-branch {{ erpnext_version }} {% if erpnext_version == 'version-16' %}--python 3.14{% endif %}
   args:
     chdir: /home/{{ erpnext_user_name }}
     creates: /home/{{ erpnext_user_name }}/frappe-bench
@@ -114,6 +138,78 @@
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   when: erpnext_enabled | bool
+
+- name: Install extra Frappe apps in bench (HR, CRM, etc.)
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  command: ~/.local/bin/bench get-app {{ item.name }} --branch {{ item.branch }}
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+    creates: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item.app_name }}
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  loop: "{{ erpnext_extra_apps }}"
+  when: erpnext_enabled | bool
+
+- name: Shut down Frappe services before DB drop if reinstalling (prevents metadata lock hangs)
+  service:
+    name: frappe-bench.target
+    state: stopped
+  when: erpnext_enabled | bool and reinstall | default(False) | bool
+  ignore_errors: yes
+
+- name: Drop ERPNext DB if reinstalling
+  mysql_db:
+    name: "{{ erpnext_db_name }}"
+    state: absent
+    login_unix_socket: /run/mysqld/mysqld.sock
+  when: erpnext_enabled | bool and reinstall | default(False) | bool
+
+- name: Drop ERPNext Site Directory if reinstalling
+  file:
+    path: /home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}
+    state: absent
+  when: erpnext_enabled | bool and reinstall | default(False) | bool
+
+- name: Flush Redis cache + queue on reinstall (eliminates stale assets_json, doctype_meta, boot data)
+  command: redis-cli -p {{ item }} FLUSHDB
+  loop:
+    - 13000
+    - 11000
+  when: erpnext_enabled | bool and reinstall | default(False) | bool
+
+- name: Git-reset frappe/erpnext source on reinstall (reverts stale IIAB patches)
+  command: git checkout -- .
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item }}
+  loop:
+    - frappe
+    - erpnext
+  when: erpnext_enabled | bool and reinstall | default(False) | bool
+  ignore_errors: yes
+
+- name: Git-reset extra app sources on reinstall (reverts stale IIAB patches)
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  command: git checkout -- .
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item.app_name }}
+  loop: "{{ erpnext_extra_apps }}"
+  when: erpnext_enabled | bool and reinstall | default(False) | bool
+  ignore_errors: yes
+
+- name: Remove IIAB .bak files on reinstall (allows patches to re-apply after frappe version bumps)
+  shell: |
+    find /home/{{ erpnext_user_name }}/frappe-bench/apps \
+      -name "*.iiab-bak" -delete
+  when: erpnext_enabled | bool and reinstall | default(False) | bool
+
+- name: Wipe compiled JS/CSS bundles on reinstall (forces clean bench build, avoids stale hashes)
+  shell: |
+    rm -rf /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/*/dist
+    rm -f  /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/assets.json
+    rm -f  /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/assets-rtl.json
+  when: erpnext_enabled | bool and reinstall | default(False) | bool
 
 - name: Create ERPNext database
   mysql_db:
@@ -142,6 +238,26 @@
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   when: erpnext_enabled | bool
 
+- name: Ensure currentsite.txt exists (Frappe needs this to resolve the active site)
+  copy:
+    content: "{{ erpnext_site_name }}\n"
+    dest: /home/{{ erpnext_user_name }}/frappe-bench/sites/currentsite.txt
+    owner: "{{ erpnext_user_name }}"
+    group: "{{ erpnext_user_name }}"
+    mode: '0644'
+    force: no
+  when: erpnext_enabled | bool
+
+- name: Set site host_name for IIAB subpath (only when erpnext_host_name is defined)
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  command: ~/.local/bin/bench --site {{ erpnext_site_name }} set-config host_name "{{ erpnext_host_name }}"
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool and erpnext_host_name != ''
+
 - name: Generate Systemd Services (replaces Supervisor)
   become: yes
   become_user: "{{ erpnext_user_name }}"
@@ -151,6 +267,25 @@
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+
+- name: Increase gunicorn worker timeout to 300s (setup_wizard.setup_complete needs >120s)
+  replace:
+    path: /home/{{ erpnext_user_name }}/frappe-bench/config/systemd/frappe-bench-frappe-web.service
+    regexp: '-t 120'
+    replace: '-t 300'
+  when: erpnext_enabled | bool
+
+- name: Fix bench setup systemd bug (ExecStart=None in worker/scheduler services)
+  replace:
+    path: "/home/{{ erpnext_user_name }}/frappe-bench/config/systemd/{{ item }}"
+    regexp: 'ExecStart=None '
+    replace: 'ExecStart=/home/{{ erpnext_user_name }}/.local/bin/bench '
+  loop:
+    - frappe-bench-frappe-schedule.service
+    - frappe-bench-frappe-default-worker@.service
+    - frappe-bench-frappe-short-worker@.service
+    - frappe-bench-frappe-long-worker@.service
   when: erpnext_enabled | bool
 
 - name: Setup Systemd Symlinks
@@ -170,23 +305,62 @@
     - frappe-bench-redis-queue.service
   when: erpnext_enabled | bool
 
-- name: Install ERPNext App in Site
+
+- name: Install ERPNext App in Site (--force on reinstall to repopulate DB data)
   become: yes
   become_user: "{{ erpnext_user_name }}"
-  shell: |
-    ~/.local/bin/bench --site {{ erpnext_site_name }} install-app erpnext && \
-    ~/.local/bin/bench --site {{ erpnext_site_name }} migrate
+  command: >-
+    ~/.local/bin/bench --site {{ erpnext_site_name }} install-app erpnext
+    {{ '--force' if (reinstall | default(False) | bool) else '' }}
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   when: erpnext_enabled | bool
 
-- name: Enable ERPNext Systemd Target
+- name: Install extra apps in site (HR, CRM, etc.)
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  command: >-
+    ~/.local/bin/bench --site {{ erpnext_site_name }} install-app {{ item.app_name }}
+    {{ '--force' if (reinstall | default(False) | bool) else '' }}
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  loop: "{{ erpnext_extra_apps }}"
+  when: erpnext_enabled | bool
+
+- name: Run migrate + clear-cache after all apps installed
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  shell: |
+    ~/.local/bin/bench --site {{ erpnext_site_name }} migrate
+    ~/.local/bin/bench --site {{ erpnext_site_name }} clear-cache
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+
+- name: Enable scheduler for the site
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  command: ~/.local/bin/bench --site {{ erpnext_site_name }} scheduler enable
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+
+- name: Enable ERPNext Systemd Targets (web + workers)
   systemd:
-    name: "frappe-bench.target"
+    name: "{{ item }}"
     enabled: yes
     state: started
+  loop:
+    - frappe-bench.target
+    - frappe-bench-workers.target
   when: erpnext_enabled | bool
 
 - name: Grant Nginx access to Frappe static assets
@@ -199,6 +373,138 @@
     dest: /etc/nginx/conf.d/erpnext-nginx.conf
   notify:
     - restart nginx
+  when: erpnext_enabled | bool
+
+# ── IIAB subpath patches ───────────────────────────────────────────────────────
+# Frappe hard-codes /desk/ paths in 13 JS source files.  These patches teach
+# each file to prepend frappe.router._subpath_prefix (e.g. "/erpnext") so that
+# all internally generated links stay within the /erpnext/ mount point.
+- name: Define IIAB JS patch targets
+  set_fact:
+    iiab_js_patches:
+      # Core router & realtime
+      - { src: "frappe/router.js",             patch: "router.js.patch" }
+      - { src: "frappe/socketio_client.js",    patch: "socketio_client.js.patch" }
+      # Link-generation utilities
+      - { src: "frappe/utils/utils.js",        patch: "utils.js.patch" }
+      - { src: "frappe/utils/dashboard_utils.js", patch: "dashboard_utils.js.patch" }
+      # Sidebar & navigation
+      - { src: "frappe/ui/sidebar/sidebar_item.js", patch: "sidebar_item.js.patch" }
+      - { src: "frappe/ui/notifications/notifications.js", patch: "notifications.js.patch" }
+      - { src: "frappe/views/breadcrumbs.js",  patch: "breadcrumbs.js.patch" }
+      - { src: "frappe/ui/dropdown_console.js", patch: "dropdown_console.js.patch" }
+      - { src: "frappe/logtypes.js",           patch: "logtypes.js.patch" }
+      - { src: "frappe/ui/dialog.js",          patch: "dialog.js.patch" }
+      # Form helpers
+      - { src: "frappe/form/form.js",          patch: "form.js.patch" }
+      - { src: "frappe/form/formatters.js",    patch: "formatters.js.patch" }
+      - { src: "frappe/form/linked_with.js",   patch: "linked_with.js.patch" }
+      - { src: "frappe/form/multi_select_dialog.js", patch: "multi_select_dialog.js.patch" }
+      - { src: "frappe/form/sidebar/attachments.js", patch: "attachments.js.patch" }
+      - { src: "frappe/ui/like.js",            patch: "like.js.patch" }
+      # List views
+      - { src: "frappe/list/list_view.js",     patch: "list_view.js.patch" }
+      - { src: "frappe/list/list_view_select.js", patch: "list_view_select.js.patch" }
+  when: erpnext_enabled | bool
+
+- name: Back up Frappe JS source files before patching (idempotent)
+  copy:
+    src: "/home/{{ erpnext_user_name }}/frappe-bench/apps/frappe/frappe/public/js/{{ item.src }}"
+    dest: "/home/{{ erpnext_user_name }}/frappe-bench/apps/frappe/frappe/public/js/{{ item.src }}.iiab-bak"
+    remote_src: yes
+    force: no
+  loop: "{{ iiab_js_patches }}"
+  when: erpnext_enabled | bool
+
+- name: Copy IIAB JS patches to /tmp
+  copy:
+    src: "{{ role_path }}/files/{{ item.patch }}"
+    dest: "/tmp/{{ item.patch }}"
+  loop: "{{ iiab_js_patches }}"
+  when: erpnext_enabled | bool
+
+- name: Apply IIAB subpath JS patches (idempotent via --forward)
+  shell: |
+    patch --forward --reject-file=/dev/null -p0 \
+      "/home/{{ erpnext_user_name }}/frappe-bench/apps/frappe/frappe/public/js/{{ item.src }}" \
+      "/tmp/{{ item.patch }}"
+  loop: "{{ iiab_js_patches }}"
+  register: js_patch_results
+  failed_when: js_patch_results.rc not in [0, 1]
+  when: erpnext_enabled | bool
+
+# ── HRMS subpath patch (must happen BEFORE the build) ──────────────────────────
+# hrms/public/js/utils/index.js hard-codes window.location.href = "/hr/roster".
+# Under the /erpnext/ subpath this must become frappe.router._subpath_prefix + "/hr/roster".
+- name: Back up hrms utils/index.js before patching (idempotent)
+  copy:
+    src: "/home/{{ erpnext_user_name }}/frappe-bench/apps/hrms/hrms/public/js/utils/index.js"
+    dest: "/home/{{ erpnext_user_name }}/frappe-bench/apps/hrms/hrms/public/js/utils/index.js.iiab-bak"
+    remote_src: yes
+    force: no
+  when: erpnext_enabled | bool
+  ignore_errors: yes  # skip gracefully if hrms not installed
+
+- name: Copy hrms-utils.js.patch to /tmp
+  copy:
+    src: "{{ role_path }}/files/hrms-utils.js.patch"
+    dest: /tmp/hrms-utils.js.patch
+  when: erpnext_enabled | bool
+
+- name: Apply HRMS /hr/roster subpath patch (idempotent via --forward)
+  shell: |
+    patch --forward --reject-file=/dev/null -p1 \
+      "/home/{{ erpnext_user_name }}/frappe-bench/apps/hrms/hrms/public/js/utils/index.js" \
+      /tmp/hrms-utils.js.patch
+  register: hrms_patch_result
+  failed_when: hrms_patch_result.rc not in [0, 1]
+  when: erpnext_enabled | bool
+  ignore_errors: yes  # skip gracefully if hrms not installed
+
+# ── Stop services before build ─────────────────────────────────────────────────
+# 1) Frees ~900 MB of RAM held by gunicorn workers + background jobs, which is
+#    critical for CRM's heavy Vite/Rollup build on low-RAM deployments.
+# 2) gunicorn --preload forks workers from a master that loads all Python modules
+#    and reads assets.json at startup.  If workers are live during the build they
+#    will serve stale code.  Stopping first guarantees a clean slate.
+- name: Stop Frappe services before build (frees RAM for Vite, prevents stale workers)
+  systemd:
+    name: frappe-bench.target
+    state: stopped
+  when: erpnext_enabled | bool
+
+- name: Flush Redis caches before build (clear stale boot data and asset references)
+  command: redis-cli -p {{ item }} FLUSHDB
+  loop:
+    - 13000
+    - 11000
+  when: erpnext_enabled | bool
+
+# ── Rebuild ALL JS bundles in one pass ─────────────────────────────────────────
+# All patches (frappe, erpnext, hrms) are applied above.  A single 'bench build'
+# (without --app flags) generates a unified assets.json covering every installed
+# app.  Using --app causes each app to overwrite assets.json with only its own
+# entries, breaking CSS/JS references for all other apps (404s).
+# NOTE: NODE_OPTIONS is NOT set here.  Frappe's build.py auto-calculates the
+# V8 heap limit to 75% of total RAM via get_safe_max_old_space_size() and passes
+# it via popen(env=get_node_env()), which replaces the entire inherited environment.
+# Any NODE_OPTIONS set in the shell or Ansible environment: block is ignored.
+- name: Rebuild all JS bundles (unified assets.json, all IIAB patches applied)
+  shell: |
+    /home/{{ erpnext_user_name }}/.local/bin/bench build
+  args:
+    chdir: "/home/{{ erpnext_user_name }}/frappe-bench"
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+
+# ── Start services with clean workers ──────────────────────────────────────────
+- name: Start Frappe services with fresh workers (all apps + patches loaded cleanly)
+  systemd:
+    name: frappe-bench.target
+    state: started
   when: erpnext_enabled | bool
 
 - name: Record (final) disk space used

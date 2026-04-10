@@ -1,0 +1,11 @@
+--- /tmp/p_orig	2026-04-09 20:37:54.500866240 +0200
++++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/form/formatters.js	2026-04-09 20:36:28.669681465 +0200
+@@ -202,7 +202,7 @@
+ 		} else if (docfield && doctype) {
+ 			if (frappe.model.can_read(doctype)) {
+ 				const a = document.createElement("a");
+-				a.href = `/desk/${encodeURIComponent(
++				a.href = `${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/${encodeURIComponent(
+ 					frappe.router.slug(doctype)
+ 				)}/${encodeURIComponent(original_value)}`;
+ 				a.dataset.doctype = doctype;

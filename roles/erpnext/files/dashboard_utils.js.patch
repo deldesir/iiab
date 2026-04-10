@@ -1,0 +1,11 @@
+--- /tmp/p_orig	2026-04-09 20:37:54.660864719 +0200
++++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/utils/dashboard_utils.js	2026-04-09 20:36:45.668520100 +0200
+@@ -265,7 +265,7 @@
+ 				values.name = docname;
+ 				values.set_standard = frappe.boot.developer_mode;
+ 				frappe.xcall(method, { args: values }).then(() => {
+-					let dashboard_route_html = `<a href = "/desk/dashboard/${values.dashboard}">${values.dashboard}</a>`;
++					let dashboard_route_html = `<a href = "${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/dashboard/${values.dashboard}">${values.dashboard}</a>`;
+ 					let message = __("{0} {1} added to Dashboard {2}", [
+ 						doctype,
+ 						values.name,

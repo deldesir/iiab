@@ -1,0 +1,11 @@
+--- /tmp/p_orig	2026-04-09 20:37:54.527865983 +0200
++++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/ui/like.js	2026-04-09 20:36:28.669681465 +0200
+@@ -126,7 +126,7 @@
+ 		}
+ 
+ 		const liked_by_list = $('<ul class="list-unstyled"></ul>');
+-		const link_base = "/desk/user/";
++		const link_base = ((frappe.router && frappe.router._subpath_prefix) || "") + "/desk/user/";
+ 
+ 		liked_by.forEach((user) => {
+ 			liked_by_list.append(`

@@ -1,0 +1,22 @@
+diff --git a/hrms/public/js/utils/index.js b/hrms/public/js/utils/index.js
+index 4377370..22f9a32 100644
+--- a/hrms/public/js/utils/index.js
++++ b/hrms/public/js/utils/index.js
+@@ -251,7 +251,7 @@ $.extend(hrms, {
+ 		list_view.page.add_inner_button(
+ 			__("Roster"),
+ 			() => {
+-				window.location.href = "/hr/roster";
++				window.location.href = (frappe.router._subpath_prefix || "") + "/hr/roster";
+ 			},
+ 			__("Shift Tools"),
+ 		);
+@@ -272,7 +272,7 @@ $.extend(hrms, {
+ 		frm.add_custom_button(
+ 			__("Roster"),
+ 			() => {
+-				window.location.href = "/hr/roster";
++				window.location.href = (frappe.router._subpath_prefix || "") + "/hr/roster";
+ 			},
+ 			__("Shift Tools"),
+ 		);

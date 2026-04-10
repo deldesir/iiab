@@ -1,0 +1,13 @@
+diff --git a/frappe/public/js/frappe/ui/dialog.js b/frappe/public/js/frappe/ui/dialog.js
+index 036dc0c1cd..f4ea7b4e4c 100644
+--- a/frappe/public/js/frappe/ui/dialog.js
++++ b/frappe/public/js/frappe/ui/dialog.js
+@@ -257,7 +257,7 @@ frappe.ui.Dialog = class Dialog extends frappe.ui.FieldGroup {
+ 
+ 	show() {
+ 		// show it
+-		if (window.location.pathname.startsWith("/desk")) {
++		if (window.location.pathname.includes("/desk")) {
+ 			this.handle_focus();
+ 		}
+ 

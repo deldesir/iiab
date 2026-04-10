@@ -1,0 +1,11 @@
+--- /tmp/p_orig	2026-04-09 20:37:54.553865736 +0200
++++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/form/linked_with.js	2026-04-09 20:36:28.669681465 +0200
+@@ -101,7 +101,7 @@
+ 		return `<div class="list-row-container">
+ 			<div class="level list-row small">
+ 				<div class="level-left bold">
+-					<a href="/desk/${frappe.router.slug(doctype)}/${doc.name}">${doc.name}</a>
++					<a href="${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/${frappe.router.slug(doctype)}/${doc.name}">${doc.name}</a>
+ 				</div>
+ 			</div>
+ 		</div>`;

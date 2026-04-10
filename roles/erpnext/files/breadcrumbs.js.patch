@@ -1,0 +1,29 @@
+--- /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/views/breadcrumbs.js.iiab-bak	2026-04-09 20:35:08.132445405 +0200
++++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/views/breadcrumbs.js	2026-04-09 20:36:04.242913280 +0200
+@@ -213,7 +213,7 @@
+ 			} else {
+ 				route = doctype_route;
+ 			}
+-			this.append_breadcrumb_element(`/desk/${route}`, __(doctype), "title-text");
++			this.append_breadcrumb_element(`${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/${route}`, __(doctype), "title-text");
+ 		}
+ 
+ 		let list_crumb = this.$breadcrumbs.find("li a.title-text");
+@@ -224,7 +224,7 @@
+ 		const doctype = breadcrumbs.doctype;
+ 		let docname = frappe.get_route().slice(2).join("/");
+ 		let doc = frappe.get_doc(doctype, docname);
+-		let form_route = `/desk/${frappe.router.slug(doctype)}/${encodeURIComponent(docname)}`;
++		let form_route = `${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/${frappe.router.slug(doctype)}/${encodeURIComponent(docname)}`;
+ 
+ 		let docname_title;
+ 		let is_new_doc = false;
+@@ -253,7 +253,7 @@
+ 	set_dashboard_breadcrumb(breadcrumbs) {
+ 		const doctype = breadcrumbs.doctype;
+ 		const docname = frappe.get_route()[1];
+-		let dashboard_route = `/desk/${frappe.router.slug(doctype)}/${docname}`;
++		let dashboard_route = `${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/${frappe.router.slug(doctype)}/${docname}`;
+ 		$(`<li><a href="${dashboard_route}">${__(docname)}</a></li>`).appendTo(this.$breadcrumbs);
+ 	},
+ 

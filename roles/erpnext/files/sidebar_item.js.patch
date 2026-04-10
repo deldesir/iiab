@@ -1,0 +1,14 @@
+--- /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/ui/sidebar/sidebar_item.js.iiab-bak	2026-04-09 20:35:08.061446078 +0200
++++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/ui/sidebar/sidebar_item.js	2026-04-09 20:36:04.213913555 +0200
+@@ -34,9 +34,9 @@
+ 			} else if (this.item.link_type == "Workspace") {
+ 				let workspaces = frappe.workspaces[frappe.router.slug(this.item.link_to)];
+ 				if (workspaces.public) {
+-					path = "/desk/" + frappe.router.slug(this.item.link_to);
++					path = ((frappe.router && frappe.router._subpath_prefix) || "") + "/desk/" + frappe.router.slug(this.item.link_to);
+ 				} else {
+-					path = "/desk/private/" + frappe.router.slug(this.item.link_to);
++					path = ((frappe.router && frappe.router._subpath_prefix) || "") + "/desk/private/" + frappe.router.slug(this.item.link_to);
+ 				}
+ 
+ 				if (this.item.route) {

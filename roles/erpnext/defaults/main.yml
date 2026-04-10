@@ -5,9 +5,18 @@ erpnext_install: False
 erpnext_enabled: False
 erpnext_db_root_password: "" # Should ideally be {{ mysql_root_password }}
 erpnext_admin_password: "admin"
-erpnext_version: "version-15"
+erpnext_version: "version-16"
 erpnext_site_name: "site.local"
 erpnext_user_name: "frappe"
 erpnext_db_name: "_site_local"
 erpnext_db_user: "_site_local"
 erpnext_db_password: "CHANGEME" # User should ideally override this
+# Public URL for email/PDF links (e.g. "https://garantie.boutique/erpnext").
+# Leave empty ("") to let Frappe use the HTTP Host header dynamically.
+erpnext_host_name: ""
+
+# Extra Frappe apps to install alongside ERPNext (HR, CRM, etc.)
+# Each entry needs: name (pip/git name), branch, and app_name (bench install-app name).
+erpnext_extra_apps:
+  - { name: "hrms",       branch: "version-16", app_name: "hrms" }
+  - { name: "crm",        branch: "main",       app_name: "crm" }

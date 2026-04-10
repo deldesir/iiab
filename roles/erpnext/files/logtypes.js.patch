@@ -1,0 +1,11 @@
+--- /tmp/p_orig	2026-04-09 20:37:54.467866553 +0200
++++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/logtypes.js	2026-04-09 20:36:04.269913024 +0200
+@@ -17,7 +17,7 @@
+ 		$(`<div>${message}</div>`).appendTo(sidebar_entry);
+ 	};
+ 
+-	const log_settings_link = `<a href='/desk/log-settings'>${__("Log Settings")}</a>`;
++	const log_settings_link = `<a href='${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/log-settings'>${__("Log Settings")}</a>`;
+ 	const cta = __("You can change the retention policy from {0}.", [log_settings_link]);
+ 	let message = __("{0} records are not automatically deleted.", [__(doctype)]);
+ 

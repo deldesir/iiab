@@ -1,0 +1,52 @@
+--- /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/socketio_client.js.iiab-bak	2026-04-09 04:22:01.051353793 +0200
++++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/socketio_client.js	2026-04-09 13:28:15.191631793 +0200
+@@ -48,22 +48,28 @@
+ 		this.lazy_connect = lazy_connect;
+ 		let me = this;
+ 
++		// IIAB: derive the subpath prefix (e.g. "/erpnext") from the current
++		// URL so socket.io connects through Nginx at /erpnext/socket.io/
++		// instead of the root /socket.io/.
++		var pathname = window.location.pathname;
++		var match = pathname.match(/^\/([^\/]+)\/(?:desk|login|app)/);
++		var iiab_subpath = match ? "/" + match[1] : "";
++		var socket_path = iiab_subpath ? iiab_subpath + "/socket.io" : "/socket.io";
++
++		var socket_opts = {
++			withCredentials: true,
++			reconnectionAttempts: 3,
++			autoConnect: !lazy_connect,
++			path: socket_path,
++		};
++
+ 		// Enable secure option when using HTTPS
+ 		if (window.location.protocol == "https:") {
+-			this.socket = io(this.get_host(port), {
+-				secure: true,
+-				withCredentials: true,
+-				reconnectionAttempts: 3,
+-				autoConnect: !lazy_connect,
+-			});
+-		} else if (window.location.protocol == "http:") {
+-			this.socket = io(this.get_host(port), {
+-				withCredentials: true,
+-				reconnectionAttempts: 3,
+-				autoConnect: !lazy_connect,
+-			});
++			socket_opts.secure = true;
+ 		}
+ 
++		this.socket = io(this.get_host(port), socket_opts);
++
+ 		if (!this.socket) {
+ 			console.log("Unable to connect to " + this.get_host(port));
+ 			return;
+@@ -127,7 +133,7 @@
+ 			}
+ 			host = host + ":" + port;
+ 		}
+-		return host + `/${frappe.boot.sitename}`;
++		return host;
+ 	}
+ 
+ 	subscribe(task_id, opts) {

@@ -1,0 +1,29 @@
+--- /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/ui/notifications/notifications.js.iiab-bak	2026-04-09 20:35:08.107445642 +0200
++++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/ui/notifications/notifications.js	2026-04-09 20:36:04.213913555 +0200
+@@ -254,7 +254,7 @@
+ 		if (this.container.find(".activity-status")) {
+ 			this.container.find(".activity-status").replaceWith(
+ 				`<a class="recent-item text-center text-muted"
+-					href="/desk/List/Notification Log">
++					href="${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/List/Notification Log">
+ 					<div class="full-log-btn">${__("View Full Log")}</div>
+ 				</a>`
+ 			);
+@@ -343,7 +343,7 @@
+ 					this.container.append(this.get_dropdown_item_html(notification_log));
+ 				});
+ 				this.container.append(`<a class="list-footer"
+-					href="/desk/List/Notification Log">
++					href="${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/List/Notification Log">
+ 						<div class="full-log-btn">${__("See all Activity")}</div>
+ 					</a>`);
+ 			} else {
+@@ -464,7 +464,7 @@
+ 					location = `, ${event.location}`;
+ 				}
+ 
+-				return `<a class="recent-item event" href="/desk/event/${event.name}">
++				return `<a class="recent-item event" href="${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/event/${event.name}">
+ 					<div class="event-border" style="border-color: ${event.color}"></div>
+ 					<div class="event-item">
+ 						<div class="event-subject">${event.subject}</div>

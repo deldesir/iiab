@@ -1,58 +1,210 @@
 # ERPNext Subdirectory Nginx Configuration for IIAB
-# Prevents Frappe from dominating Port 80, keeping IIAB's box.lan/erpnext structure
+# Mounts ERPNext at /erpnext/ in accordance with IIAB subpath philosophy.
+#
+# Design principles:
+#   1. All ERPNext traffic goes through /erpnext/ (primary proxy)
+#   2. Root-level locations are scoped as narrowly as possible to avoid
+#      conflicts with other IIAB apps sharing the same Nginx server
+#   3. sub_filter rewrites HTML-level hard-coded paths so browsers fetch
+#      assets/files through /erpnext/ rather than root
+#   4. JS source patches (router.js, socketio_client.js) handle SPA routing
 
+# ── Primary application proxy ──────────────────────────────────────────────────
 location /erpnext/ {
     rewrite ^/erpnext/(.*) /$1 break;
     proxy_pass http://127.0.0.1:8000/;
 
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
-    proxy_set_header Host $host;
+    proxy_set_header Host              $host;
     proxy_set_header X-Use-X-Accel-Redirect True;
-    proxy_read_timeout 120;
-    proxy_redirect off;
+
+    # Rewrite backend HTTP Location: headers so redirects stay within /erpnext/
+    proxy_redirect ~^/(.*)$ /erpnext/$1;
+    proxy_redirect / /erpnext/;
+
+    proxy_read_timeout 300;
+
+    # ── HTML-level path rewriting ──────────────────────────────────────────
+    # Frappe's Python/Jinja templates hard-code root-level paths in HTML.
+    # Rewrite them so browsers fetch through /erpnext/ instead of polluting
+    # the root namespace. Only applied to text/html responses (not JS/JSON).
+    sub_filter_once off;
+    sub_filter_types text/html;
+    sub_filter '/assets/' '/erpnext/assets/';
+    sub_filter '/files/'  '/erpnext/files/';
 }
 
-# Socket.io proxying for realtime events
-location /erpnext/socket.io {
-    rewrite ^/erpnext/socket.io/(.*) /socket.io/$1 break;
-    proxy_pass http://127.0.0.1:9000/socket.io/;
+# ── Realtime / socket.io ───────────────────────────────────────────────────────
+location ^~ /erpnext/socket.io/ {
+    rewrite ^/erpnext/(.*) /$1 break;
+    proxy_pass http://127.0.0.1:9000;
 
     proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Upgrade    $http_upgrade;
     proxy_set_header Connection "upgrade";
     proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
     proxy_set_header Origin $scheme://$http_host;
-    proxy_set_header Host $http_host;
+    proxy_set_header Host   $http_host;
 }
 
-# Serve Frappe's hardcoded root paths from the filesystem
-location ^~ /assets/ {
+# ── Static assets ─────────────────────────────────────────────────────────────
+# Primary: served via /erpnext/assets/ (sub_filter rewrites HTML paths here).
+location ^~ /erpnext/assets/ {
+    alias /home/frappe/frappe-bench/sites/assets/;
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+
+# Root-level fallbacks: Frappe's JS bundles dynamically load additional assets
+# at runtime (via assets.js) using root-level /assets/ paths. sub_filter only
+# rewrites the initial HTML; it can't intercept paths constructed in JavaScript.
+# Scoped to /assets/frappe/ and /assets/erpnext/ ONLY – other apps' /assets/
+# namespaces (e.g. /assets/kolibri/) remain free.
+location ^~ /assets/frappe/ {
     root /home/frappe/frappe-bench/sites;
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+
+location ^~ /assets/erpnext/ {
+    root /home/frappe/frappe-bench/sites;
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+
+# hrms assets — served at /assets/hrms/ when Frappe HR is installed
+location ^~ /assets/hrms/ {
+    root /home/frappe/frappe-bench/sites;
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+
+# crm assets — served at /assets/crm/ when Frappe CRM is installed
+location ^~ /assets/crm/ {
+    root /home/frappe/frappe-bench/sites;
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+
+# CSS @font-face and other assets reference paths like /assets/css/InterVariable.woff2
+# which live under /assets/css/ – a shared Frappe build output directory.
+location ^~ /assets/css/ {
+    root /home/frappe/frappe-bench/sites;
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+
+location ^~ /assets/js/ {
+    root /home/frappe/frappe-bench/sites;
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+
+location ^~ /assets/locale/ {
+    root /home/frappe/frappe-bench/sites;
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+
+# ── User-uploaded files ────────────────────────────────────────────────────────
+location ^~ /erpnext/files/ {
+    alias /home/frappe/frappe-bench/sites/{{ erpnext_site_name }}/public/files/;
     try_files $uri =404;
 }
 
+# Root-level /files/ fallback for Frappe JS that constructs file URLs at runtime.
 location ^~ /files/ {
     root /home/frappe/frappe-bench/sites/{{ erpnext_site_name }}/public;
     try_files $uri =404;
 }
 
-# ERPNext API — only match ERPNext-specific paths (not all /api/)
-# This allows SiYuan to handle /api/system/, /api/notebook/, etc. via regex
+# ── Root-level Frappe endpoints (minimal, unavoidable) ─────────────────────────
+# These exist because Frappe's login.js template hard-codes XHR POST targets
+# as absolute paths. sub_filter can't fix XHR targets in executed JavaScript.
+# Each is scoped as narrowly as possible (exact match where possible).
+
+# Login/logout: login.js POSTs to "/login" via XHR (hardcoded in Jinja template)
+location = /login {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_set_header Host               $host;
+    proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
+}
+
+location = /logout {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_set_header Host               $host;
+    proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
+}
+
+# Dynamic JS generated by Frappe (referenced in login.html as src="/website_script.js")
+location = /website_script.js {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_set_header Host               $host;
+    proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
+}
+
+# ── Frappe API endpoints ────────────────────────────────────────────────────────
+# /api/method/ covers ALL Frappe RPC calls: frappe.*, erpnext.*, upload_file,
+# run_doc_method, print format downloads, zip_files, telemetry, etc.
+# No other IIAB app uses /api/method/ so this block is safe at root level.
 location ^~ /api/method/ {
     proxy_pass http://127.0.0.1:8000;
-    proxy_set_header Host $host;
+    proxy_set_header Host               $host;
     proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
+    proxy_read_timeout 300;
 }
 
+# /api/resource/ covers Frappe REST API (used by external integrations)
 location ^~ /api/resource/ {
     proxy_pass http://127.0.0.1:8000;
-    proxy_set_header Host $host;
+    proxy_set_header Host               $host;
     proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
 }
 
-# Internal location for X-Accel-Redirect from backend (Private Files)
+# /api/v2/method/ covers Frappe v2 RPC API (frappe.call with api_version: "v2").
+# RapidPro owns the broader /api/v2/ prefix, but nginx longest-prefix matching
+# means /api/v2/method/ (24 chars) wins over /api/v2/ (9 chars) for Frappe calls.
+# RapidPro's /api/v2/contacts/, /api/v2/messages/ etc. are unaffected.
+location ^~ /api/v2/method/ {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_set_header Host               $host;
+    proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
+    proxy_read_timeout 300;
+}
+
+# ── Bounce-back redirects (SPA navigation safety net) ──────────────────────────
+location ^~ /desk { return 302 /erpnext$request_uri; }
+location ^~ /app  { return 302 /erpnext$request_uri; }
+# /hr/ is served by Frappe when hrms is installed — proxy through /erpnext/ mount
+location ^~ /hr/ {
+    rewrite ^/hr/(.*) /hr/$1 break;
+    proxy_pass http://127.0.0.1:8000;
+    proxy_set_header Host               $host;
+    proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
+}
+
+# ── Frappe CRM standalone SPA ──────────────────────────────────────────────────
+# CRM is a separate Vue app served by Frappe at /crm/ via website_route_rules.
+# It has its own Vue Router (createWebHistory('/crm')) and talks to /api/method/
+# directly (already proxied above). No JS patches required.
+location ^~ /crm {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_set_header Host               $host;
+    proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
+    proxy_read_timeout 300;
+}
+
+# ── Private files (X-Accel-Redirect) ──────────────────────────────────────────
 location ~ ^/protected/(.*) {
     internal;
     root /home/frappe/frappe-bench/sites;

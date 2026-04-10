@@ -1,0 +1,11 @@
+--- /tmp/p_orig	2026-04-09 20:37:54.586865422 +0200
++++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/list/list_view.js	2026-04-09 20:36:28.671681446 +0200
+@@ -1274,7 +1274,7 @@
+ 			return this.settings.get_form_link(doc);
+ 		}
+ 
+-		return `/desk/${encodeURIComponent(
++		return `${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/${encodeURIComponent(
+ 			frappe.router.slug(frappe.router.doctype_layout || this.doctype)
+ 		)}/${encodeURIComponent(cstr(doc.name))}`;
+ 	}

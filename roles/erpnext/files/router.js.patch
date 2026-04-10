@@ -1,0 +1,93 @@
+--- /tmp/router_orig.js	2026-04-11 03:44:00.194102907 +0200
++++ frappe/public/js/frappe/router.js	2026-04-11 03:33:34.929633359 +0200
+@@ -393,7 +393,7 @@
+ 
+ 		if (route.length === 1 && route[0] && route[0].includes("/")) {
+ 			// called as frappe.set_route('a/b/c')
+-			route = $.map(route[0].split("/"), this.decode_component);
++			route = $.map(this.strip_prefix(route[0]).split("/"), this.decode_component);
+ 		}
+ 
+ 		if (route && route[0] == "") {
+@@ -456,7 +456,17 @@
+ 		return route;
+ 	},
+ 
++	// IIAB subpath prefix — keeps the SPA router aware of the /erpnext mount point
++	_subpath_prefix: (function () {
++		// Derive prefix from the current URL at boot time so this file
++		// never needs to hard-code the value.
++		var p = window.location.pathname;
++		var m = p.match(/^\/([^\/]+)\/(?:desk|login|app)/);
++		return m ? "/" + m[1] : "";
++	})(),
++
+ 	make_url(params) {
++		const prefix = this._subpath_prefix; // e.g. "/erpnext"
+ 		let path_string = $.map(params, function (a) {
+ 			if ($.isPlainObject(a)) {
+ 				frappe.route_options = a;
+@@ -467,11 +477,11 @@
+ 		}).join("/");
+ 
+ 		if (path_string) {
+-			return "/desk/" + path_string;
++			return prefix + "/desk/" + path_string;
+ 		}
+ 
+ 		if (params.length == 0) {
+-			return "/desk";
++			return prefix + "/desk";
+ 		}
+ 		// Resolution order
+ 		// 1. User's default workspace in user doctype
+@@ -491,13 +501,13 @@
+ 
+ 		if (workspace) {
+ 			return (
+-				"/desk/" +
++				prefix + "/desk/" +
+ 				(workspace.public ? "" : "private/") +
+ 				frappe.router.slug(workspace.name)
+ 			);
+ 		}
+ 
+-		return "/desk";
++		return prefix + "/desk";
+ 	},
+ 
+ 	/**
+@@ -509,10 +519,15 @@
+ 	 * @returns {void}
+ 	 */
+ 	push_state(path, query_params = "") {
++		// Normalise: ensure path always carries the IIAB subpath prefix
++		const prefix = this._subpath_prefix;
++		if (prefix && path.startsWith("/desk")) {
++			path = prefix + path;
++		}
+ 		if (window.location.pathname !== path || window.location.search !== query_params) {
+ 			// push/replace state so the browser looks fine
+ 			const method = frappe.route_flags.replace_route ? "replaceState" : "pushState";
+-			history[method](null, null, path);
++			history[method](null, null, path + query_params);
+ 
+ 			// now process the route
+ 			this.route();
+@@ -529,9 +544,13 @@
+ 	},
+ 
+ 	strip_prefix(route) {
+-		if (route.substr(0, 1) == "/") route = route.substr(1); // for /desk/sub
+-		if (route == "desk") route = route.substr(4); // for app
+-		if (route.startsWith("desk/")) route = route.substr(4); // for desk/sub
++		if (route.substr(0, 1) == "/") route = route.substr(1); // remove leading /
++		// Strip IIAB subpath prefix (e.g. "erpnext/desk/foo" → "desk/foo")
++		const prefix = this._subpath_prefix.replace(/^\//, ""); // e.g. "erpnext"
++		if (prefix && route.startsWith(prefix + "/")) route = route.substr(prefix.length + 1);
++		if (route.substr(0, 1) == "/") route = route.substr(1);
++		if (route == "desk") route = ""; // bare /desk → root
++		if (route.startsWith("desk/")) route = route.substr(5); // strip desk/ segment
+ 		if (route.substr(0, 1) == "/") route = route.substr(1);
+ 		if (route.substr(0, 1) == "#") route = route.substr(1);
+ 		if (route.substr(0, 1) == "!") route = route.substr(1);

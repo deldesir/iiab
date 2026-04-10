@@ -1,0 +1,11 @@
+--- /tmp/p_orig	2026-04-09 20:37:54.695864386 +0200
++++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/ui/dropdown_console.js	2026-04-09 20:36:45.669520091 +0200
+@@ -136,7 +136,7 @@
+ 		this.dialog.set_value("output", output);
+ 		const time_taken = moment(end).diff(start, "milliseconds");
+ 		output_field.set_description(`Executed in ${time_taken} milliseconds.
+-			<a target="_blank" href="/desk/console-log?owner=${frappe.session.user}" >View Logs</a>`);
++			<a target="_blank" href="${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/console-log?owner=${frappe.session.user}" >View Logs</a>`);
+ 	}
+ 
+ 	async load_completions() {

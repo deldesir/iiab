@@ -1,0 +1,38 @@
+--- /tmp/p_orig	2026-04-09 20:37:54.625865052 +0200
++++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/list/list_view_select.js	2026-04-09 20:36:45.668520100 +0200
+@@ -204,8 +204,8 @@
+ 				if (!r.ref_doctype || r.ref_doctype == this.doctype) {
+ 					const report_type =
+ 						r.report_type === "Report Builder"
+-							? `/desk/list/${r.ref_doctype}/report`
+-							: "/desk/query-report";
++							? `${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/list/${r.ref_doctype}/report`
++							: ((frappe.router && frappe.router._subpath_prefix) || "") + "/desk/query-report";
+ 
+ 					const route = r.route || report_type + "/" + (r.title || r.name);
+ 
+@@ -286,13 +286,13 @@
+ 					// has standard calendar view
+ 					calendars.push({
+ 						name: "Default",
+-						route: `/desk/${this.slug()}/view/calendar/default`,
++						route: `${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/${this.slug()}/view/calendar/default`,
+ 					});
+ 				}
+ 				result.map((calendar) => {
+ 					calendars.push({
+ 						name: calendar.name,
+-						route: `/desk/${this.slug()}/view/calendar/${calendar.name}`,
++						route: `${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/${this.slug()}/view/calendar/${calendar.name}`,
+ 					});
+ 				});
+ 
+@@ -306,7 +306,7 @@
+ 		accounts.forEach((account) => {
+ 			let email_account =
+ 				account.email_id == "All Accounts" ? "All Accounts" : account.email_account;
+-			let route = `/desk/communication/view/inbox/${email_account}`;
++			let route = `${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/communication/view/inbox/${email_account}`;
+ 			let display_name = ["All Accounts", "Sent Mail", "Spam", "Trash"].includes(
+ 				account.email_id
+ 			)
