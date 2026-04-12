@@ -1,0 +1,11 @@
+--- frappe/utils/logout.js
++++ frappe/utils/logout.js
+@@ -5,7 +5,7 @@
+ 			if (r.exc) {
+ 				return;
+ 			}
+-			window.location.href = "/login";
++			window.location.href = (frappe.router && frappe.router._subpath_prefix || "") + "/login";
+ 		},
+ 	});
+ };
