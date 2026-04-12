@@ -106,11 +106,19 @@
     mode: "0644"
     force: false
 
+- name: "Make sure maps_region_downloader is true if maps_preset_full_quality_regions has items"
+  assert:
+    that: maps_region_downloader or (maps_preset_full_quality_regions | length <= 0)
+    fail_msg: "Error: you have maps_preset_full_quality_regions. Either set maps_region_downloader to true or unset maps_preset_full_quality_regions (this will not delete any already downloaded regions)."
+    quiet: yes
+
 - name: "Download preset full quality regions"
   # TODO - Is there a safer way to pass in item.name and item.bbox?
   shell: |
     set -euo pipefail
     {{ tile_extract.working_dir }}/tile-extract.py extract {{ item.name }} {{ item.bbox }} noninteractive
+  args:
+    executable: /bin/bash
   with_items: "{{ maps_preset_full_quality_regions }}"
 
 # If the user goes back to "none", we want to delete the symlink that gives them terrain.
