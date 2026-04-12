@@ -483,24 +483,51 @@
     - 11000
   when: erpnext_enabled | bool
 
-# ── Rebuild ALL JS bundles in one pass ─────────────────────────────────────────
-# All patches (frappe, erpnext, hrms) are applied above.  A single 'bench build'
-# (without --app flags) generates a unified assets.json covering every installed
-# app.  Using --app causes each app to overwrite assets.json with only its own
-# entries, breaking CSS/JS references for all other apps (404s).
-# NOTE: NODE_OPTIONS is NOT set here.  Frappe's build.py auto-calculates the
-# V8 heap limit to 75% of total RAM via get_safe_max_old_space_size() and passes
-# it via popen(env=get_node_env()), which replaces the entire inherited environment.
-# Any NODE_OPTIONS set in the shell or Ansible environment: block is ignored.
-- name: Rebuild all JS bundles (unified assets.json, all IIAB patches applied)
-  shell: |
-    /home/{{ erpnext_user_name }}/.local/bin/bench build
-  args:
-    chdir: "/home/{{ erpnext_user_name }}/frappe-bench"
-  become: yes
-  become_user: "{{ erpnext_user_name }}"
-  environment:
-    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+# ── Build JS bundles with temporary swap ───────────────────────────────────────
+# CRM's Vite/Rollup build needs 4-6 GB during its "rendering chunks" phase.
+# On systems where other services consume 5+ GB, the build is OOM-killed (exit
+# 137) even with Frappe services stopped.  A temporary 4 GB swapfile on /var/tmp
+# (never tmpfs, guaranteed on-disk) provides overflow headroom.
+# The block/always structure guarantees the swapfile is cleaned up even if the
+# build fails.
+- block:
+    - name: Create temporary 4 GB swapfile for Vite build
+      shell: |
+        SWAPFILE=/var/tmp/.erpnext_build_swap
+        if [ ! -f "$SWAPFILE" ]; then
+          fallocate -l 4G "$SWAPFILE" 2>/dev/null || \
+            dd if=/dev/zero of="$SWAPFILE" bs=1M count=4096 status=none
+          chmod 600 "$SWAPFILE"
+          mkswap "$SWAPFILE" >/dev/null
+          swapon "$SWAPFILE"
+        fi
+
+    # All patches (frappe, erpnext, hrms) are applied above.  A single 'bench
+    # build' (without --app flags) generates a unified assets.json covering
+    # every installed app.  Using --app causes each app to overwrite assets.json
+    # with only its own entries, breaking CSS/JS references for all other apps.
+    # NOTE: NODE_OPTIONS is NOT set here.  Frappe's build.py auto-calculates
+    # the V8 heap limit to 75 % of total RAM via get_safe_max_old_space_size()
+    # and passes it via popen(env=get_node_env()), which replaces the entire
+    # inherited environment.
+    - name: Rebuild all JS bundles (unified assets.json, all IIAB patches applied)
+      shell: |
+        /home/{{ erpnext_user_name }}/.local/bin/bench build
+      args:
+        chdir: "/home/{{ erpnext_user_name }}/frappe-bench"
+      become: yes
+      become_user: "{{ erpnext_user_name }}"
+      environment:
+        PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+  always:
+    - name: Remove temporary swapfile after build
+      shell: |
+        SWAPFILE=/var/tmp/.erpnext_build_swap
+        if [ -f "$SWAPFILE" ]; then
+          swapoff "$SWAPFILE" 2>/dev/null || true
+          rm -f "$SWAPFILE"
+        fi
   when: erpnext_enabled | bool
 
 # ── Start services with clean workers ──────────────────────────────────────────
