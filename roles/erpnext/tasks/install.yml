@@ -464,6 +464,32 @@
   when: erpnext_enabled | bool
   ignore_errors: yes  # skip gracefully if hrms not installed
 
+# ── Frappe setup_wizard.py patch (upstream bug: args.lang → args.language) ─────
+# Without this, the setup wizard's language selection silently fails because
+# args.lang is undefined (the attribute is args.language).
+- name: Backup setup_wizard.py before patching
+  copy:
+    src: "/home/{{ erpnext_user_name }}/frappe-bench/apps/frappe/frappe/desk/page/setup_wizard/setup_wizard.py"
+    dest: "/home/{{ erpnext_user_name }}/frappe-bench/apps/frappe/frappe/desk/page/setup_wizard/setup_wizard.py.iiab-bak"
+    remote_src: yes
+    force: no
+  when: erpnext_enabled | bool
+
+- name: Copy setup_wizard.py patch to /tmp
+  copy:
+    src: "{{ role_path }}/files/setup_wizard.py.patch"
+    dest: /tmp/setup_wizard.py.patch
+  when: erpnext_enabled | bool
+
+- name: Apply setup_wizard.py patch (idempotent via --forward)
+  shell: |
+    patch --forward --reject-file=/dev/null -p1 \
+      "/home/{{ erpnext_user_name }}/frappe-bench/apps/frappe/frappe/desk/page/setup_wizard/setup_wizard.py" \
+      /tmp/setup_wizard.py.patch
+  register: wizard_patch_result
+  failed_when: wizard_patch_result.rc not in [0, 1]
+  when: erpnext_enabled | bool
+
 # ── Stop services before build ─────────────────────────────────────────────────
 # 1) Frees ~900 MB of RAM held by gunicorn workers + background jobs, which is
 #    critical for CRM's heavy Vite/Rollup build on low-RAM deployments.
