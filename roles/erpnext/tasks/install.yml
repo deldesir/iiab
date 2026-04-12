@@ -152,11 +152,15 @@
   when: erpnext_enabled | bool
 
 - name: Shut down Frappe services before DB drop if reinstalling (prevents metadata lock hangs)
-  service:
-    name: frappe-bench.target
-    state: stopped
+  shell: |
+    systemctl stop frappe-bench-frappe-web.service \
+                   frappe-bench-node-socketio.service \
+                   frappe-bench-frappe-schedule.service \
+                   'frappe-bench-frappe-default-worker@*.service' \
+                   'frappe-bench-frappe-short-worker@*.service' \
+                   'frappe-bench-frappe-long-worker@*.service' \
+                   frappe-bench.target 2>/dev/null || true
   when: erpnext_enabled | bool and reinstall | default(False) | bool
-  ignore_errors: yes
 
 - name: Drop ERPNext DB if reinstalling
   mysql_db:
@@ -490,16 +494,24 @@
   failed_when: wizard_patch_result.rc not in [0, 1]
   when: erpnext_enabled | bool
 
-# ── Stop services before build ─────────────────────────────────────────────────
+# ── Stop ALL services before build ─────────────────────────────────────────────
 # 1) Frees ~900 MB of RAM held by gunicorn workers + background jobs, which is
 #    critical for CRM's heavy Vite/Rollup build on low-RAM deployments.
 # 2) gunicorn --preload forks workers from a master that loads all Python modules
-#    and reads assets.json at startup.  If workers are live during the build they
-#    will serve stale code.  Stopping first guarantees a clean slate.
-- name: Stop Frappe services before build (frees RAM for Vite, prevents stale workers)
-  systemd:
-    name: frappe-bench.target
-    state: stopped
+#    at startup.  Workers that preloaded before patches/installs will serve stale
+#    code and crash on missing modules (e.g. hrms, crm).  Killing every process
+#    guarantees a clean slate when we restart after the build.
+# NOTE: We stop individual services explicitly because systemd targets with
+# Wants= do NOT propagate stop/start to already-running member services.
+- name: Stop Frappe services before build (kill stale gunicorn workers + free RAM)
+  shell: |
+    systemctl stop frappe-bench-frappe-web.service \
+                   frappe-bench-node-socketio.service \
+                   frappe-bench-frappe-schedule.service \
+                   'frappe-bench-frappe-default-worker@*.service' \
+                   'frappe-bench-frappe-short-worker@*.service' \
+                   'frappe-bench-frappe-long-worker@*.service' \
+                   frappe-bench.target 2>/dev/null || true
   when: erpnext_enabled | bool
 
 - name: Flush Redis caches before build (clear stale boot data and asset references)
@@ -557,10 +569,19 @@
   when: erpnext_enabled | bool
 
 # ── Start services with clean workers ──────────────────────────────────────────
+# Restart (not just start) every service explicitly to guarantee gunicorn
+# preloads the freshly-patched code.  A simple 'start frappe-bench.target'
+# would skip services that systemd considers "already active" from before
+# the stop, leaving stale workers that crash on missing modules (hrms, crm).
 - name: Start Frappe services with fresh workers (all apps + patches loaded cleanly)
-  systemd:
-    name: frappe-bench.target
-    state: started
+  shell: |
+    systemctl restart frappe-bench.target \
+                      frappe-bench-frappe-web.service \
+                      frappe-bench-node-socketio.service \
+                      frappe-bench-frappe-schedule.service
+    systemctl restart 'frappe-bench-frappe-default-worker@*.service' \
+                      'frappe-bench-frappe-short-worker@*.service' \
+                      'frappe-bench-frappe-long-worker@*.service' 2>/dev/null || true
   when: erpnext_enabled | bool
 
 - name: Record (final) disk space used
