@@ -24,6 +24,8 @@
 
 - name: Install Wuzapi Binary from Release
   get_url:
+    # OPTIONAL STATIC TAG (Option B): Uncomment below and comment 'latest' above to use auto-manipulator script.
+    # url: "https://github.com/deldesir/wuzapi/releases/download/v1.0.8/wuzapi-linux-{{ wuzapi_go_arch }}"
     url: "https://github.com/deldesir/wuzapi/releases/latest/download/wuzapi-linux-{{ wuzapi_go_arch }}"
     dest: "{{ wuzapi_dir }}/wuzapi"
     mode: '0755'

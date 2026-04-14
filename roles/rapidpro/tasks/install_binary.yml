@@ -3,6 +3,8 @@
 
 - name: Install Mailroom Binary from Release (Latest)
   get_url:
+    # OPTIONAL STATIC TAG (Option B): Uncomment below and comment 'latest' above to use auto-manipulator script.
+    # url: "https://github.com/deldesir/mailroom/releases/download/v26.1.91/mailroom-linux-{{ rapidpro_go_arch }}"
     url: "https://github.com/deldesir/mailroom/releases/latest/download/mailroom-linux-{{ rapidpro_go_arch }}"
     dest: /usr/local/bin/mailroom
     mode: '0755'
@@ -11,6 +13,8 @@
 
 - name: Install Courier Binary from Release (Latest)
   get_url:
+    # OPTIONAL STATIC TAG (Option B): Uncomment below and comment 'latest' above to use auto-manipulator script.
+    # url: "https://github.com/deldesir/courier/releases/download/v26.1.24/courier-linux-{{ rapidpro_go_arch }}"
     url: "https://github.com/deldesir/courier/releases/latest/download/courier-linux-{{ rapidpro_go_arch }}"
     dest: /usr/local/bin/courier
     mode: '0755'

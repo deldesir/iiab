@@ -113,6 +113,8 @@
     repo: 'https://github.com/deldesir/rapidpro.git'
     dest: "{{ rapidpro_dir }}"
     force: yes
+    # OPTIONAL STATIC TAG (Option B): Uncomment below and comment 'main' above to use auto-manipulator script.
+    # version: v26.1.87
     version: main
   become: yes
   register: rapidpro_git_clone
