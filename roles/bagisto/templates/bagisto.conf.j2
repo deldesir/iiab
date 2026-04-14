@@ -1,36 +1,89 @@
 # Nginx configuration for Bagisto inside IIAB
+# bagisto_app_url = {{ bagisto_app_url }}  (full URL, e.g. https://garantie.boutique/live)
+# bagisto_subpath = the URI-only portion used in location blocks (e.g. /live)
+{% set bagisto_subpath = bagisto_app_url | regex_replace('^https?://[^/]+', '') | regex_replace('/$', '') %}
+{% if bagisto_subpath == '' %}{% set bagisto_subpath = '/live' %}{% endif %}
 
 {% if bagisto_headless_enabled | default(False) %}
 # ----------------------------------------------------
 # HEADLESS MODE (Next.js Proxied Front, PHP Backend)
 # ----------------------------------------------------
 
-location ^~ {{ bagisto_app_url }}/admin {
-    alias {{ bagisto_abs_path }}/public/admin;
+# Admin panel → PHP-FPM
+{% if bagisto_headless_default_portal | default(False) %}
+location = / {
+    return 301 https://$host{{ bagisto_subpath }};
+}
+{% endif %}
+
+location ^~ {{ bagisto_subpath }}/admin {
     try_files $uri $uri/ @bagisto;
     location ~ \.php$ {
         include fastcgi_params;
         fastcgi_pass php;
-        fastcgi_param SCRIPT_FILENAME $request_filename;
-        fastcgi_param SCRIPT_NAME {{ bagisto_app_url }}/index.php;
+        fastcgi_param SCRIPT_FILENAME /library/bagisto/public/index.php;
+        fastcgi_param SCRIPT_NAME {{ bagisto_subpath }}/index.php;
         fastcgi_hide_header X-Powered-By;
     }
 }
 
-location ^~ {{ bagisto_app_url }}/api {
+# Next.js API routes — proxy to Next.js (^~ longest-prefix takes priority)
+location ^~ {{ bagisto_subpath }}/api/auth {
+    proxy_pass http://127.0.0.1:{{ bagisto_headless_port | default(3001) }};
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+location ^~ {{ bagisto_subpath }}/api/revalidate {
+    proxy_pass http://127.0.0.1:{{ bagisto_headless_port | default(3001) }};
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# Bagisto REST + GraphQL API → PHP-FPM (all other /api/*)
+location ^~ {{ bagisto_subpath }}/api {
     try_files $uri $uri/ @bagisto;
 }
 
-location ^~ {{ bagisto_app_url }}/graphql {
-    try_files $uri $uri/ @bagisto;
+# Static assets from bagisto public/ (images, css, js, vendor)
+location ^~ {{ bagisto_subpath }}/vendor {
+    alias {{ bagisto_abs_path }}/public/vendor;
+    expires max;
+    access_log off;
 }
 
-location ^~ {{ bagisto_app_url }} {
+location ^~ {{ bagisto_subpath }}/themes {
+    alias {{ bagisto_abs_path }}/public/themes;
+    expires max;
+    access_log off;
+}
+
+location ^~ {{ bagisto_subpath }}/storage {
+    alias {{ bagisto_abs_path }}/public/storage;
+}
+
+location ^~ {{ bagisto_subpath }}/cache {
+    alias {{ bagisto_abs_path }}/public/cache;
+    expires max;
+    access_log off;
+}
+
+# Everything else → Next.js on port {{ bagisto_headless_port | default(3000) }}
+location ^~ {{ bagisto_subpath }} {
     proxy_pass http://127.0.0.1:{{ bagisto_headless_port | default(3000) }};
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection 'upgrade';
     proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
     proxy_cache_bypass $http_upgrade;
 }
 
@@ -39,7 +92,7 @@ location ^~ {{ bagisto_app_url }} {
 # MONOLITHIC MODE (Standard Laravel/Livewire PHP Front)
 # ----------------------------------------------------
 
-location ^~ {{ bagisto_app_url }} {
+location ^~ {{ bagisto_subpath }} {
     alias {{ bagisto_abs_path }}/public;
     index index.php index.html index.htm;
 
@@ -52,7 +105,7 @@ location ^~ {{ bagisto_app_url }} {
         include fastcgi_params;
         fastcgi_pass php;
         fastcgi_param SCRIPT_FILENAME $request_filename;
-        fastcgi_param SCRIPT_NAME {{ bagisto_app_url }}/index.php;
+        fastcgi_param SCRIPT_NAME {{ bagisto_subpath }}/index.php;
         fastcgi_hide_header X-Powered-By;
     }
 
@@ -73,16 +126,15 @@ location @bagisto {
     include fastcgi_params;
     fastcgi_pass php;
     fastcgi_param SCRIPT_FILENAME {{ bagisto_abs_path }}/public/index.php;
-    fastcgi_param SCRIPT_NAME {{ bagisto_app_url }}/index.php;
+    fastcgi_param SCRIPT_NAME {{ bagisto_subpath }}/index.php;
     fastcgi_hide_header X-Powered-By;
 }
 
-# Livewire AJAX endpoint - Livewire generates absolute /livewire/update URLs
-# that fall outside the {{ bagisto_app_url }} subpath location block
+# Livewire AJAX endpoint — generates absolute /livewire/update URLs
 location ^~ /livewire {
     include fastcgi_params;
     fastcgi_pass php;
     fastcgi_param SCRIPT_FILENAME {{ bagisto_abs_path }}/public/index.php;
-    fastcgi_param SCRIPT_NAME {{ bagisto_app_url }}/index.php;
+    fastcgi_param SCRIPT_NAME {{ bagisto_subpath }}/index.php;
     fastcgi_hide_header X-Powered-By;
 }

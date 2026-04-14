@@ -1,4 +1,17 @@
 ---
-dependencies:
-  - role: nodejs
-  - role: bagisto
+dependencies: []
+
+galaxy_info:
+  role_name: bagisto_headless
+  description: "Next.js Headless eCommerce Storefront for Bagisto"
+  author: "Internet-in-a-Box project"
+  license: "GPLv3"
+  min_ansible_version: "2.12"
+  platforms:
+    - name: Debian
+      versions:
+        - all
+    - name: Ubuntu
+      versions:
+        - all
+

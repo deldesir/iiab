@@ -106,6 +106,16 @@ STORAGE_URL = f"{AWS_S3_ENDPOINT_URL}/{BUCKET_PREFIX}-default"
 # Internationalization & Localization
 # ===============================================================================
 
+# Register Haitian Creole — not in Django's built-in LANG_INFO
+from django.conf.locale import LANG_INFO
+
+LANG_INFO["ht"] = {
+    "bidi": False,
+    "code": "ht",
+    "name": "Haitian Creole",
+    "name_local": "Kreyòl Ayisyen",
+}
+
 USE_TZ = True  # Use timezone-aware datetimes
 TIME_ZONE = "UTC"  # Default server timezone
 USER_TIME_ZONE = "America/New_York"  # Default timezone for users
@@ -118,6 +128,7 @@ LANGUAGES = (
     ("cs", _("Czech")),
     ("es", _("Spanish")),
     ("fr", _("French")),
+    ("ht", _("Haitian Creole")),
     ("mn", _("Mongolian")),
     ("pt-br", _("Portuguese")),
     ("ru", _("Russian")),
@@ -395,7 +406,6 @@ PERMISSIONS = {
     "msgs.msg": ("archive", "export", "label", "menu"),
     "orgs.export": ("download",),
     "orgs.org": (
-        "country",
         "create",
         "dashboard",
         "download",
@@ -406,6 +416,7 @@ PERMISSIONS = {
         "join_accept",
         "join",
         "languages",
+        "locations",
         "manage_integrations",
         "manage",
         "menu",
@@ -500,7 +511,7 @@ GROUP_PERMISSIONS = {
         "notifications.notification.*",
         "orgs.export.*",
         "orgs.invitation.*",
-        "orgs.org_country",
+        "orgs.org_locations",
         "orgs.org_create",
         "orgs.org_dashboard",
         "orgs.org_delete",

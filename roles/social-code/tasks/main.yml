@@ -1,0 +1,7 @@
+- name: Install Social Code
+  include_tasks: install.yml
+  when: social_code_install | bool
+
+- name: Enable or Disable Social Code
+  include_tasks: enable-or-disable.yml
+  when: social_code_install | bool

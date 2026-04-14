@@ -2,7 +2,11 @@
 bagisto_headless_install: False
 bagisto_headless_enabled: False
 bagisto_headless_repo: "https://github.com/bagisto/nextjs-commerce.git"
-bagisto_headless_version: "master"
+bagisto_headless_version: "main"
 bagisto_headless_dir: "/library/nextjs-commerce"
-bagisto_headless_port: 3000
-bagisto_api_package: "bagisto/bagisto-api:dev-master"
+bagisto_headless_port: 3001
+bagisto_api_package: "bagisto/bagisto-api:dev-main"
+bagisto_headless_user: "{{ iiab_admin_user }}"
+# bagisto_abs_path and bagisto_app_url are inherited from bagisto role defaults
+# and local_vars.yml — do NOT redefine here
+

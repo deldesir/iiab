@@ -326,8 +326,9 @@
     quiet: yes
 
 
-- name: Assert that var visual_enabled is defined
+- name: Assert that var bagisto_headless_enabled is defined
   assert:
-    that: visual_enabled is defined
-    fail_msg: "VARIABLE MUST BE DEFINED: 'visual_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    that: bagisto_headless_enabled is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'bagisto_headless_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+

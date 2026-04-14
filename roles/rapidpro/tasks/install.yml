@@ -40,26 +40,6 @@
 - name: Uninstall RapidPro if reinstalling
   when: reinstall is defined and reinstall
   block:
-    - name: Get poetry environment path
-      shell: |
-        export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-        poetry env info --path
-      args:
-        chdir: "{{ rapidpro_dir }}"
-      register: poetry_env
-      become: yes
-      become_user: "{{ iiab_admin_user }}"
-      changed_when: false
-      failed_when: false
-
-    - name: Remove poetry virtualenv
-      file:
-        path: "{{ poetry_env.stdout }}"
-        state: absent
-      become: yes
-      become_user: root
-      when: poetry_env.stdout != ""
-
     - name: Remove RapidPro directory
       file:
         path: "{{ rapidpro_dir }}"
@@ -133,7 +113,7 @@
     repo: 'https://github.com/deldesir/rapidpro.git'
     dest: "{{ rapidpro_dir }}"
     force: yes
-    version: v26.1.68
+    version: v26.1.87
   become: yes
   register: rapidpro_git_clone
 
@@ -159,35 +139,28 @@
     replace: 'requires-python = ">=3.12,<3.{{ (python_version.split(''.'')[1] | int) + 1 }}"'
   become: yes
 
-- name: Install Poetry
+- name: Install uv
   shell: |
-    curl -sSL https://install.python-poetry.org | python3 -
+    curl -LsSf https://astral.sh/uv/install.sh | sh
   args:
-    creates: "/home/{{ iiab_admin_user }}/.local/bin/poetry"
+    creates: "/home/{{ iiab_admin_user }}/.local/bin/uv"
   become: yes
   become_user: "{{ iiab_admin_user }}"
 
-- name: Fix permissions on Poetry cache (fast)
-  shell: |
-    if [ -d "/home/{{ iiab_admin_user }}/.cache/pypoetry" ]; then
-      chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} /home/{{ iiab_admin_user }}/.cache/pypoetry
-    fi
-  become: yes
-  changed_when: false
-
-# Patches removed as they are integrated into deldesir/rapidpro fork
-
-
-
-
-
-- name: Install Python dependencies with Poetry
+- name: Create uv virtual environment
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    poetry env remove --all
-    poetry env use $(which python3)
-    poetry lock
-    poetry install --without dev
+    uv venv
+  args:
+    chdir: "{{ rapidpro_dir }}"
+    creates: "{{ rapidpro_dir }}/.venv"
+  become: yes
+  become_user: "{{ iiab_admin_user }}"
+
+- name: Sync dependencies with uv
+  shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    uv sync --frozen
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes

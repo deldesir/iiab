@@ -57,20 +57,9 @@ sync_and_build() {
     echo "Determining target version..."
     local TAG
     if [ "$REPO" == "wuzapi" ]; then
-        # Wuzapi: Increment local Patch version
-        LAST_TAG=$(git tag | sort -V | tail -n 1)
-        # Simple increment logic (needs manual oversight usually, but scripting for now based on pattern)
-        # Using basic semver increment of PATCH
-        if [[ $LAST_TAG =~ v([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
-             MAJOR="${BASH_REMATCH[1]}"
-             MINOR="${BASH_REMATCH[2]}"
-             PATCH="${BASH_REMATCH[3]}"
-             NEW_PATCH=$((PATCH + 1))
-             TAG="v$MAJOR.$MINOR.$NEW_PATCH"
-        else
-             TAG="v1.0.1" # Fallback
-        fi
-        echo "Custom Lifecycle detected. Next version: $TAG"
+        # Wuzapi: upstream has no semantic tags, rely on the latest local version tag
+        TAG=$(git tag | sort -V | grep -E '^v[0-9]' | tail -n 1)
+        echo "WuzAPI detected. Maintaining current version tag: $TAG"
     else
         # Mailroom/Courier: Align with Upstream
         TAG=$(git ls-remote --tags upstream | awk '{print $2}' | grep -v "{}" | grep "refs/tags/v" | sort -V | tail -n 1 | sed 's|refs/tags/||')
@@ -85,10 +74,10 @@ sync_and_build() {
     "$GO_BIN" mod tidy || true # Try to tidy, ignore failure if 1.25 strictness issues on tidy but not build
     
     echo "  - Building AMD64..."
-    GOOS=linux GOARCH=amd64 "$GO_BIN" build -v -o "$BIN_AMD" "${MAIN_PKGS[$REPO]}"
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 "$GO_BIN" build -v -ldflags="-s -w" -o "$BIN_AMD" "${MAIN_PKGS[$REPO]}"
     
     echo "  - Building ARM64..."
-    GOOS=linux GOARCH=arm64 "$GO_BIN" build -v -o "$BIN_ARM" "${MAIN_PKGS[$REPO]}"
+    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 "$GO_BIN" build -v -ldflags="-s -w" -o "$BIN_ARM" "${MAIN_PKGS[$REPO]}"
 
     # Verify
     if [ ! -f "$BIN_AMD" ] || [ ! -f "$BIN_ARM" ]; then

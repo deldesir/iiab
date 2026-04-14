@@ -9,9 +9,9 @@
     force: yes
   become: yes
 
-- name: Install Courier Binary from Release (26.1.17)
+- name: Install Courier Binary from Release (26.1.24)
   get_url:
-    url: "https://github.com/deldesir/courier/releases/download/v26.1.17/courier-linux-{{ rapidpro_go_arch }}"
+    url: "https://github.com/deldesir/courier/releases/download/v26.1.24/courier-linux-{{ rapidpro_go_arch }}"
     dest: /usr/local/bin/courier
     mode: '0755'
     force: yes

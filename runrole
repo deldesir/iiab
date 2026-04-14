@@ -98,6 +98,10 @@ if [ $ROLE_NAME == "calibre-web" ]; then
 #    ROLE_VAR=apache
 elif [ $ROLE_NAME == "osm-vector-maps" ]; then    # TO BE REMOVED in 2026/2027
     ROLE_VAR=osm_vector_maps
+elif [ $ROLE_NAME == "bagisto-headless" ]; then
+    ROLE_VAR=bagisto_headless
+elif [ $ROLE_NAME == "ai-gateway" ]; then
+    ROLE_VAR=ai_gateway
 else
     ROLE_VAR="$ROLE_NAME"
 fi

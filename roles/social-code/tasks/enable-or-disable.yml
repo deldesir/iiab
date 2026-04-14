@@ -1,0 +1,20 @@
+# social-code/tasks/enable-or-disable.yml
+
+- name: "Enable Social Code alias"
+  ansible.builtin.template:
+    src: social-code-alias.sh.j2
+    dest: /etc/profile.d/social-code.sh
+    mode: "0644"
+  when: social_code_enabled | bool
+
+- name: "Remove Social Code alias"
+  ansible.builtin.file:
+    path: /etc/profile.d/social-code.sh
+    state: absent
+  when: not (social_code_enabled | bool)
+
+- name: "Record social-code enabled state"
+  ansible.builtin.lineinfile:
+    path: /etc/iiab/iiab_state.yml
+    regexp: "^social_code_enabled:"
+    line: "social_code_enabled: {{ social_code_enabled }}"

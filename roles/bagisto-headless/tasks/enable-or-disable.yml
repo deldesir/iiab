@@ -1,7 +1,16 @@
 ---
-- name: Restart 'bagisto-headless' systemd service
+- name: Enable, Start & Restart 'bagisto-headless' systemd service
   systemd:
     name: bagisto-headless
+    daemon_reload: yes
+    enabled: yes
     state: restarted
   when: bagisto_headless_enabled | bool
+
+- name: Disable & Stop 'bagisto-headless' systemd service
+  systemd:
+    name: bagisto-headless
+    enabled: no
+    state: stopped
+  when: not (bagisto_headless_enabled | bool)
   ignore_errors: yes

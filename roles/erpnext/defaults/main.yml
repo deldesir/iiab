@@ -20,3 +20,6 @@ erpnext_host_name: ""
 erpnext_extra_apps:
   - { name: "hrms",       branch: "version-16", app_name: "hrms" }
   - { name: "crm",        branch: "main",       app_name: "crm" }
+  - { name: "builder",    branch: "develop",    app_name: "builder" }
+  - { name: "payments",   branch: "version-16", app_name: "payments" }
+  - { name: "webshop",    branch: "develop",    app_name: "webshop" }

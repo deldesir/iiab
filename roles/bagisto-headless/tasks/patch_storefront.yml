@@ -1,0 +1,53 @@
+---
+- name: Patch utils/constants.ts for image fallback base URLs
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/utils/constants.ts"
+    regexp: 'export const (SIGNUP_IMG|SIGNIN_IMG|FORGET_PASSWORD_IMG|NOT_IMAGE) = "/image/([^"]*)";'
+    replace: 'export const \1 = `${baseUrl}/image/\2`;'
+
+- name: Patch utils/fetch-handler.ts to prepend basePath
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/utils/fetch-handler.ts"
+    regexp: 'const response = await fetch\(`/api/\$\{url\}`,'
+    replace: 'const basePath = process.env.NEXT_PUBLIC_AUTH_BASEPATH || "";\n    const response = await fetch(`${basePath}/api/${url}`,'
+    
+- name: Patch utils/auth.ts to prepend basePath on custom pages
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/utils/auth.ts"
+    regexp: 'signIn: "/customer/login",'
+    replace: 'signIn: (process.env.NEXT_PUBLIC_AUTH_BASEPATH || "") + "/customer/login",'
+- name: Patch utils/auth.ts error page
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/utils/auth.ts"
+    regexp: 'error: "/login",'
+    replace: 'error: (process.env.NEXT_PUBLIC_AUTH_BASEPATH || "") + "/customer/login",'
+
+- name: Patch hooks/useCache.ts for faster revalidation
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/utils/hooks/useCache.ts"
+    regexp: 'return \d+; // \d+ hours'
+    replace: 'return 60; // 1 minute'
+
+- name: Patch app/(public)/page.tsx for 60s revalidation
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/app/(public)/page.tsx"
+    regexp: 'export const revalidate = 3600;'
+    replace: 'export const revalidate = 60;'
+
+- name: Patch providers/SessionManager.tsx to use local SessionProvider wrapper
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/providers/SessionManager.tsx"
+    regexp: 'import \{ SessionProvider \} from "next-auth/react";'
+    replace: 'import { SessionProvider } from "./SessionProvider";'
+
+- name: Remove hardcoded parentId for navbar categories
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/components/layout/navbar/CategoriesMenu.tsx"
+    regexp: '\{ parentId: 1 \}'
+    replace: '{}'
+
+- name: Remove hardcoded parentId for collections page
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/app/(public)/search/[collection]/page.tsx"
+    regexp: '\{ parentId: 1 \}'
+    replace: '{}'

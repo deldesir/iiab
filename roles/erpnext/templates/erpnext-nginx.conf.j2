@@ -93,6 +93,22 @@ location ^~ /assets/crm/ {
     add_header Cache-Control "public, immutable";
 }
 
+# builder assets — served at /assets/builder/ when Frappe Builder is installed
+location ^~ /assets/builder/ {
+    root /home/frappe/frappe-bench/sites;
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+
+# webshop assets — served at /assets/webshop/ when Frappe Webshop is installed
+location ^~ /assets/webshop/ {
+    root /home/frappe/frappe-bench/sites;
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+
 # CSS @font-face and other assets reference paths like /assets/css/InterVariable.woff2
 # which live under /assets/css/ – a shared Frappe build output directory.
 location ^~ /assets/css/ {
@@ -198,6 +214,15 @@ location ^~ /hr/ {
 # It has its own Vue Router (createWebHistory('/crm')) and talks to /api/method/
 # directly (already proxied above). No JS patches required.
 location ^~ /crm {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_set_header Host               $host;
+    proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
+    proxy_read_timeout 300;
+}
+
+# ── Frappe Builder standalone SPA ──────────────────────────────────────────────
+# Builder is a separate Vue app served by Frappe at /builder via website_route_rules.
+location ^~ /builder {
     proxy_pass http://127.0.0.1:8000;
     proxy_set_header Host               $host;
     proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};

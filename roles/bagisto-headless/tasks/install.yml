@@ -1,17 +1,38 @@
 ---
 - name: FAIL IF 'bagisto_installed is undefined'
   fail:
-    msg: "Bagisto Headless install cannot proceed, as Bagisto is not installed."
+    msg: "Bagisto Headless install cannot proceed, as Bagisto is not installed. Run './runrole bagisto' first."
   when: bagisto_installed is undefined
 
-- name: Relax Bagisto core version requirement temporarily to avoid conflicts
-  replace:
-    path: "{{ bagisto_abs_path }}/composer.json"
-    regexp: '"bagisto/bagisto": ".*"'
-    replace: '"bagisto/bagisto": "*"'
-  ignore_errors: yes
+- name: "Set 'nodejs_install: True' and 'nodejs_enabled: True'"
+  set_fact:
+    nodejs_install: True
+    nodejs_enabled: True
 
-- name: Install Bagisto GraphQL API Extension via composer
+- name: NODEJS - run 'nodejs' role (attempt to install & enable Node.js)
+  include_role:
+    name: nodejs
+
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+# -------------------------------------------------------
+# 1. Install Bagisto GraphQL API Extension (bagisto side)
+# -------------------------------------------------------
+
+- name: Bypass Laravel Production Prompts for API install
+  lineinfile:
+    path: "{{ bagisto_abs_path }}/.env"
+    regexp: '^APP_ENV='
+    line: 'APP_ENV=local'
+
+- name: Clear cached configs for API install
+  command: php artisan config:clear
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+
+- name: Install Bagisto API Platform package via composer
   command: composer require "{{ bagisto_api_package }}" --with-all-dependencies
   args:
     chdir: "{{ bagisto_abs_path }}"
@@ -22,6 +43,71 @@
   command: php artisan migrate --force
   args:
     chdir: "{{ bagisto_abs_path }}"
+
+- name: Publish Bagisto API Platform resources (api-platform config)
+  command: php artisan vendor:publish --tag=api-platform-config --force
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+
+- name: Enable GraphQL in api-platform config
+  replace:
+    path: "{{ bagisto_abs_path }}/config/api-platform.php"
+    regexp: "'enabled' => false,"
+    replace: "'enabled' => true,"
+
+- name: Register bagisto-api Models directory as API Platform resource
+  lineinfile:
+    path: "{{ bagisto_abs_path }}/config/api-platform.php"
+    insertafter: "app_path\\('Models'\\),"
+    line: "        base_path('vendor/bagisto/bagisto-api/src/Models'),\n        base_path('vendor/bagisto/bagisto-api/src/Dto'),"
+
+- name: Switch Bagisto channel to default shop theme (headless mode)
+  command: >
+    mysql --user="{{ bagisto_db_user }}"
+    --password="{{ bagisto_db_pass }}"
+    "{{ bagisto_db_name }}"
+    -e "UPDATE channels SET theme = 'default' WHERE theme = 'visual-debut';"
+  ignore_errors: yes
+
+- name: Generate Bagisto Storefront Key for headless auth
+  command: php artisan bagisto-api:generate-key
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+  register: storefront_key_result
+  ignore_errors: yes
+
+- name: Restore APP_ENV to Production
+  lineinfile:
+    path: "{{ bagisto_abs_path }}/.env"
+    regexp: '^APP_ENV='
+    line: 'APP_ENV={{ bagisto_app_env | default("production") }}'
+
+- name: Optimize Bagisto Application after API install
+  command: php artisan optimize:clear
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+  ignore_errors: yes
+
+# -------------------------------------------------------
+# 2. Deploy Nginx config FIRST so GraphQL is reachable
+#    before the Next.js build (SSR pre-rendering needs it)
+# -------------------------------------------------------
+
+- name: "Enable {{ bagisto_app_url }} (headless mode) via NGINX"
+  template:
+    src: "{{ role_path }}/../bagisto/templates/bagisto.conf.j2"
+    dest: "{{ nginx_conf_dir }}/bagisto.conf"
+  vars:
+    bagisto_headless_enabled: True
+
+- name: Reload nginx so GraphQL endpoint is live before build
+  systemd:
+    name: nginx
+    state: reloaded
+
+# -------------------------------------------------------
+# 3. Clone and build Next.js storefront
+# -------------------------------------------------------
 
 - name: Clone Next.js Commerce codebase
   git:
@@ -40,10 +126,20 @@
   args:
     chdir: "{{ bagisto_headless_dir }}"
 
+- name: Apply IIAB-specific Subpath routing & Fixes patches
+  include_tasks: patch_storefront.yml
+
 - name: Build Next.js Application
   command: npm run build
   args:
     chdir: "{{ bagisto_headless_dir }}"
+  environment:
+    NODE_ENV: production
+    NEXT_TELEMETRY_DISABLED: "1"
+
+# -------------------------------------------------------
+# 4. Systemd service
+# -------------------------------------------------------
 
 - name: Setup Systemd Service for Bagisto Headless
   template:
@@ -57,6 +153,21 @@
     daemon_reload: yes
     enabled: yes
     state: restarted
+
+# -------------------------------------------------------
+# 5. Record installation
+# -------------------------------------------------------
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'bagisto_headless_disk_usage = ...' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: bagisto_headless
+    option: bagisto_headless_disk_usage
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'bagisto_headless_installed: True'"
   set_fact:

@@ -13,14 +13,10 @@ PIDFILE="/run/rapidpro/rapidpro-server.pid"
 RAPIDPRO_DIR="{{ rapidpro_dir }}"
 
 # Dynamic Virtualenv Discovery (Root Cache)
-VENV_BASE="/root/.cache/pypoetry/virtualenvs"
-VENV_USER_BASE="/home/{{ iiab_admin_user }}/.cache/pypoetry/virtualenvs"
+VENV_PATH="{{ rapidpro_dir }}/.venv"
 
-# Find most recent temba venv
-VENV_PATH=$(ls -dt "$VENV_BASE"/temba-*-py3.13 "$VENV_USER_BASE"/temba-*-py3.13 "$VENV_BASE"/temba-*-py3.1* "$VENV_USER_BASE"/temba-*-py3.1* 2>/dev/null | head -n 1)
-
-if [ -z "$VENV_PATH" ]; then
-    echo "ERROR: Could not find Poetry virtualenv" >> "$LOGFILE"
+if [ ! -d "$VENV_PATH" ]; then
+    echo "ERROR: Could not find uv virtualenv" >> "$LOGFILE"
     exit 1
 fi
 

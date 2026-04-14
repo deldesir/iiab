@@ -1,0 +1,15 @@
+# social_code_install: False
+# social_code_enabled: False
+
+# All above are set in: github.com/iiab/iiab/blob/master/vars/default_vars.yml
+# If nec, change them by editing /etc/iiab/local_vars.yml prior to installing!
+
+social_code_src: /opt/iiab/social-code
+social_code_data_dir: /library/social-code
+
+# AI Model (LiteLLM format)
+# Default uses Gemini. For offline IIAB deployment, use Ollama:
+#   social_code_ai_model: ollama/llama3
+social_code_ai_model: "gemini/gemini-2.0-flash"
+
+social_code_url: /social-code

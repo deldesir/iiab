@@ -1,4 +1,4 @@
----
+### UNUSED - DEPRECATED - REMOVE IN NEXT UPDATE ###
 - name: Download RapidPro Assets Tarball
   get_url:
     url: "{{ rapidpro_assets_url }}"

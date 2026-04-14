@@ -329,8 +329,9 @@
     quiet: yes
 
 
-- name: "DISALLOW 'visual_install: False' WITH 'visual_enabled: True'"
+- name: "DISALLOW 'bagisto_headless_install: False' WITH 'bagisto_headless_enabled: True'"
   assert:
-    that: visual_install or not visual_enabled
-    fail_msg: "DISALLOWED: 'visual_install: False' WITH 'visual_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
+    that: bagisto_headless_install or not bagisto_headless_enabled
+    fail_msg: "DISALLOWED: 'bagisto_headless_install: False' WITH 'bagisto_headless_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
     quiet: yes
+

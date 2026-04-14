@@ -1,0 +1,54 @@
+# social-code/tasks/install.yml — Install Social Code training suite
+
+- name: "Install uv (Python package manager)"
+  ansible.builtin.shell: >
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+  args:
+    creates: /root/.local/bin/uv
+
+- name: "Ensure social-code source exists"
+  ansible.builtin.stat:
+    path: "{{ social_code_src }}/pyproject.toml"
+  register: sc_source
+
+- name: "Clone social-code repo if missing"
+  ansible.builtin.git:
+    repo: "https://github.com/iiab/social-code.git"
+    dest: "{{ social_code_src }}"
+    version: main
+  when: not sc_source.stat.exists
+
+- name: "Install Python dependencies via uv"
+  ansible.builtin.command:
+    cmd: /root/.local/bin/uv sync
+    chdir: "{{ social_code_src }}"
+  environment:
+    PATH: "/root/.local/bin:{{ ansible_env.PATH }}"
+
+- name: "Create data directory"
+  ansible.builtin.file:
+    path: "{{ social_code_data_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: "Create .env file from template"
+  ansible.builtin.template:
+    src: social-code.env.j2
+    dest: "{{ social_code_src }}/.env"
+    mode: "0600"
+  notify: Restart social-code
+
+- name: "Initialize Small Talk database"
+  ansible.builtin.command:
+    cmd: /root/.local/bin/uv run --package small-talk st init
+    chdir: "{{ social_code_src }}"
+  environment:
+    PATH: "/root/.local/bin:{{ ansible_env.PATH }}"
+  args:
+    creates: "{{ social_code_data_dir }}/small_talk.db"
+
+- name: "Record social-code as installed"
+  ansible.builtin.lineinfile:
+    path: /etc/iiab/iiab_state.yml
+    regexp: "^social_code_installed:"
+    line: "social_code_installed: True"
