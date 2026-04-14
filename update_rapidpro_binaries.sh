@@ -135,6 +135,16 @@ sync_and_release() {
     fi
     
     echo "[$REPO] Subsystem completely automated securely."
+
+    # OPTIONAL: Ansible Auto-Yaml Hardcoder (Option B)
+    # If explicitly required to hardcode Ansible securely instead of relying on generic 'latest', uncomment:
+    # if [ "$REPO" == "mailroom" ] || [ "$REPO" == "courier" ]; then
+    #     sed -i "s|/$REPO/releases/.*/download/.*-|/$REPO/releases/download/$TAG/|g" "$WORK_DIR/iiab/roles/rapidpro/tasks/install_binary.yml"
+    # elif [ "$REPO" == "wuzapi" ]; then
+    #     sed -i "s|/$REPO/releases/.*/download/.*-|/$REPO/releases/download/$TAG/|g" "$WORK_DIR/iiab/roles/wuzapi/tasks/install.yml"
+    # elif [ "$REPO" == "rapidpro" ]; then
+    #     sed -i "s|version: .*|version: $TAG|g" "$WORK_DIR/iiab/roles/rapidpro/tasks/install.yml"
+    # fi
 }
 
 # Main Bootstrapper
