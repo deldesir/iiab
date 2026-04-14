@@ -150,7 +150,7 @@
 
 - name: Purge Django Valkey/Redis cache resolving Javascript memory desynchronizations
   shell: |
-    {{ rapidpro_dir }}/.venv/bin/uv run python manage.py shell -c "from django.core.cache import cache; cache.clear()"
+    {{ rapidpro_dir }}/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
