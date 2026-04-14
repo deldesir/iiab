@@ -78,9 +78,7 @@ kolibri_enabled: False
 ##############################
 
 ##############################
-# Matomo
-# 4G RAM phone - False
-# 8GB or more - True (if desired)
+# Matomo - enable at will.
 matomo_install: False
 matomo_enabled: False
 ##############################
