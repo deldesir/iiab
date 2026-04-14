@@ -52,12 +52,17 @@ _localstack_host = "localhost"
 
 # AWS credentials for DynamoDB (used for counters/timeseries data)
 # These are dummy values for local Minio/DynamoDB development
-AWS_ACCESS_KEY_ID = "root"
-AWS_SECRET_ACCESS_KEY = "tembatemba"
-AWS_REGION = "us-east-1"
-
-DYNAMO_ENDPOINT_URL = f"http://{_localstack_host}:6000"
-DYNAMO_TABLE_PREFIX = "Test" if TESTING else "Temba"
+{% if rapidpro_aws_enabled %}
+AWS_ACCESS_KEY_ID = "{{ rapidpro_aws_access_key_id }}"
+AWS_SECRET_ACCESS_KEY = "{{ rapidpro_aws_secret_access_key }}"
+AWS_REGION = "{{ rapidpro_aws_region }}"
+DYNAMO_TABLE_PREFIX = "Test" if TESTING else "{{ rapidpro_dynamo_table_prefix }}"
+{% else %}
+AWS_ACCESS_KEY_ID = ""
+AWS_SECRET_ACCESS_KEY = ""
+AWS_REGION = ""
+DYNAMO_TABLE_PREFIX = ""
+{% endif %}
 
 # ===============================================================================
 # File Storage Configuration

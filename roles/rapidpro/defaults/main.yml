@@ -29,7 +29,7 @@ rapidpro_secret_key: ""
 custom_ai_admin_token: ""
 
 # AWS mode: set to false to disable S3 + DynamoDB and use local storage only
-rapidpro_aws_enabled: true
+rapidpro_aws_enabled: false
 
 # Domain for courier (used in attachment URLs)
 rapidpro_domain: "{{ rapidpro_hostname }}"
