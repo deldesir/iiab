@@ -9,7 +9,9 @@ Group=www-data
 WorkingDirectory={{ rapidpro_dir }}
 # Standardize on the app directory, not /run
 UMask=0007
-ExecStart={{ rapidpro_dir }}/.venv/bin/gunicorn temba.wsgi:application --access-logfile - --error-logfile - --workers 3 --bind unix:{{ rapidpro_dir }}/run/gunicorn.sock --forwarded-allow-ips=*
+ExecStart={{ rapidpro_dir }}/.venv/bin/gunicorn temba.wsgi:application --access-logfile - --error-logfile - --workers 3 --bind unix:{{ rapidpro_dir }}/run/gunicorn.sock --forwarded-allow-ips=* --max-requests 1000 --max-requests-jitter 50
+Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
