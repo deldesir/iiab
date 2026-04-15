@@ -346,3 +346,15 @@
     fail_msg: "DISALLOWED: 'bagisto_headless_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'bagisto_headless_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
     quiet: yes
 
+
+- name: "DISALLOW 'hermes_agent_install: False' WHEN hermes_agent_installed is defined"
+  assert:
+    that: hermes_agent_install or hermes_agent_installed is undefined
+    fail_msg: "DISALLOWED: 'hermes_agent_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'hermes_agent_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
+    quiet: yes
+
+- name: "DISALLOW 'mempalace_install: False' WHEN mempalace_installed is defined"
+  assert:
+    that: mempalace_install or mempalace_installed is undefined
+    fail_msg: "DISALLOWED: 'mempalace_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'mempalace_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
+    quiet: yes

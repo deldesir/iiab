@@ -532,6 +532,14 @@ siyuan_install: False
 siyuan_enabled: False
 siyuan_port: 6806
 
+# Hermes Agent: Autonomous reasoning engine (in-process library for AI Gateway)
+hermes_agent_install: False
+hermes_agent_enabled: False
+
+# MemPalace: Structured memory with ChromaDB (in-process library for AI Gateway)
+mempalace_install: False
+mempalace_enabled: False
+
 
 # If using WordPress intensively, set nginx_high_php_limits further above.
 wordpress_install: False

@@ -11,6 +11,11 @@ WorkingDirectory={{ ai_gateway_dir }}
 StandardOutput=journal
 StandardError=journal
 
+# Memory cgroup limits — prevent OOM from crashing the entire server
+# Peak with 2 concurrent Hermes threads: ~480MB (§15 memory budget)
+MemoryMax=800M
+MemorySwapMax=0
+
 # Secrets loaded from restricted file (mode 0600, owned by service user)
 EnvironmentFile={{ ai_gateway_dir }}/.env
 
@@ -23,6 +28,14 @@ Environment="SIYUAN_NOTEBOOK_ID={{ ai_gateway_siyuan_notebook_id }}"
 {% endif %}
 Environment="DEFAULT_PERSONA={{ ai_gateway_default_persona | default('konex-support') }}"
 
+# V2 — Hermes + MemPalace + ChromaDB threading constraints
+Environment="HERMES_HOME={{ hermes_agent_home | default(ai_gateway_dir ~ '/data/hermes') }}"
+Environment="MEMPALACE_PALACE_PATH={{ mempalace_palace_path | default(ai_gateway_dir ~ '/data/palace') }}"
+Environment="HERMES_MAX_ITERATIONS={{ hermes_agent_max_iterations | default(15) }}"
+Environment="HERMES_THREAD_POOL_SIZE={{ hermes_agent_thread_pool_size | default(2) }}"
+Environment="OMP_NUM_THREADS=1"
+Environment="TOKENIZERS_PARALLELISM=false"
+
 ExecStart={{ ai_gateway_uv_bin }} run uvicorn {{ ai_gateway_app }} \
     --host 0.0.0.0 \
     --port {{ ai_gateway_port }}
@@ -32,3 +45,4 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
+

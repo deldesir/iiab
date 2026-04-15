@@ -335,3 +335,15 @@
     fail_msg: "DISALLOWED: 'bagisto_headless_install: False' WITH 'bagisto_headless_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
     quiet: yes
 
+
+- name: "DISALLOW 'hermes_agent_install: False' WITH 'hermes_agent_enabled: True'"
+  assert:
+    that: hermes_agent_install or not hermes_agent_enabled
+    fail_msg: "DISALLOWED: 'hermes_agent_install: False' WITH 'hermes_agent_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
+    quiet: yes
+
+- name: "DISALLOW 'mempalace_install: False' WITH 'mempalace_enabled: True'"
+  assert:
+    that: mempalace_install or not mempalace_enabled
+    fail_msg: "DISALLOWED: 'mempalace_install: False' WITH 'mempalace_enabled: True' -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 variable values e.g. in /etc/iiab/local_vars.yml, and other places variables are defined?"
+    quiet: yes

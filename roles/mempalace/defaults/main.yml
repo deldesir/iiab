@@ -1,0 +1,22 @@
+---
+mempalace_install: False
+mempalace_enabled: False
+
+# Install location
+mempalace_dir: /opt/iiab/mempalace
+mempalace_user: "{{ iiab_admin_user }}"
+
+# uv binary path
+mempalace_uv_bin: /root/.local/bin/uv
+
+# Source repository — tracks latest main branch
+mempalace_repo: "https://github.com/mempalace/mempalace.git"
+mempalace_version: "main"
+
+# AI Gateway virtualenv — MemPalace is installed INTO the gateway's venv
+# because it runs in-process (ChromaDB shares the gateway process)
+mempalace_gateway_dir: /opt/iiab/ai-gateway
+
+# Palace data directory (ChromaDB SQLite + HNSW index)
+mempalace_palace_path: "{{ mempalace_gateway_dir }}/data/palace"
+mempalace_backend: "chromadb"

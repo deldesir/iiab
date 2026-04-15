@@ -67,3 +67,18 @@ ai_gateway_postgres_uri: "postgresql+asyncpg://{{ rapidpro_db_user | default('te
 
 # Fallback persona when no channel→persona mapping exists
 ai_gateway_default_persona: "konex-support"
+
+# ── V2 Architecture: Hermes Agent + MemPalace ───────────────────────
+# Hermes autonomous agent (vendored at /opt/iiab/hermes-agent)
+ai_gateway_hermes_version: "v0.9.0"
+ai_gateway_hermes_max_iterations: 15
+ai_gateway_hermes_thread_pool_size: 2         # Default 2; increase to 3 on 4GB+ devices
+ai_gateway_hermes_home: "{{ ai_gateway_dir }}/data/hermes"
+
+# MemPalace structured memory (ChromaDB backend)
+ai_gateway_mempalace_palace_path: "{{ ai_gateway_dir }}/data/palace"
+ai_gateway_mempalace_backend: "chromadb"
+
+# SiYuan Knowledge Wiki integration (enable in Phase 4)
+ai_gateway_siyuan_wiki_enabled: false
+ai_gateway_siyuan_api_url: "http://localhost:6806"

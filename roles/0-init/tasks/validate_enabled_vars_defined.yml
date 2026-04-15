@@ -332,3 +332,15 @@
     fail_msg: "VARIABLE MUST BE DEFINED: 'bagisto_headless_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
 
+
+- name: Assert that var hermes_agent_enabled is defined
+  assert:
+    that: hermes_agent_enabled is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'hermes_agent_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var mempalace_enabled is defined
+  assert:
+    that: mempalace_enabled is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'mempalace_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

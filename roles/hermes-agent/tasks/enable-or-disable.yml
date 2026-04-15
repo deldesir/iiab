@@ -1,0 +1,8 @@
+---
+# Hermes Agent is an in-process library — no separate systemd service.
+# Enable/disable controls whether the gateway loads the Hermes engine.
+# The actual service lifecycle is managed by the ai-gateway role.
+
+- name: "Note: Hermes Agent has no separate service (in-process library)"
+  debug:
+    msg: "Hermes Agent runs inside ai-gateway process. Enable/disable managed via ai-gateway."

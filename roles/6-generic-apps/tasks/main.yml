@@ -83,6 +83,16 @@
     name: siyuan
   when: siyuan_install
 
+- name: HERMES-AGENT
+  include_role:
+    name: hermes-agent
+  when: hermes_agent_install
+
+- name: MEMPALACE
+  include_role:
+    name: mempalace
+  when: mempalace_install
+
 - name: AI-GATEWAY
   include_role:
     name: ai-gateway

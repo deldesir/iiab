@@ -102,6 +102,8 @@ elif [ $ROLE_NAME == "bagisto-headless" ]; then
     ROLE_VAR=bagisto_headless
 elif [ $ROLE_NAME == "ai-gateway" ]; then
     ROLE_VAR=ai_gateway
+elif [ $ROLE_NAME == "hermes-agent" ]; then
+    ROLE_VAR=hermes_agent
 else
     ROLE_VAR="$ROLE_NAME"
 fi

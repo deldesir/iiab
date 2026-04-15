@@ -1,0 +1,72 @@
+---
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+- name: Add hermes-agent directory to git safe directories
+  community.general.git_config:
+    name: safe.directory
+    scope: global
+    value: "{{ hermes_agent_dir }}"
+  become: yes
+
+- name: Clone / update Hermes Agent repository
+  git:
+    repo: "{{ hermes_agent_repo }}"
+    dest: "{{ hermes_agent_dir }}"
+    version: "{{ hermes_agent_version }}"
+    force: yes
+    update: yes
+  become: yes
+
+- name: Set ownership of Hermes Agent directory
+  file:
+    path: "{{ hermes_agent_dir }}"
+    state: directory
+    owner: "{{ hermes_agent_user }}"
+    group: "{{ hermes_agent_user }}"
+    recurse: yes
+  become: yes
+
+# Hermes is NOT installed here via `uv pip install`.
+# Instead, it is declared in ai-gateway's pyproject.toml as a
+# [tool.uv.sources] editable path (same pattern as talkmaster/jwlinker).
+# The actual installation happens when ai-gateway runs `uv sync`.
+# This prevents `uv sync` from silently uninstalling hermes-agent
+# on gateway updates.
+
+# Initialize HERMES_HOME state directory.
+# Upstream default: ~/.hermes (set via HERMES_HOME env var).
+# We override to keep it inside the gateway's data/ dir for IIAB's
+# data-vs-code separation convention.
+- name: Initialize Hermes state directory
+  file:
+    path: "{{ hermes_agent_home }}"
+    state: directory
+    owner: "{{ hermes_agent_user }}"
+    group: "{{ hermes_agent_user }}"
+    mode: '0755'
+  become: yes
+
+# RECORD HERMES-AGENT AS INSTALLED
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'hermes_agent_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: hermes-agent
+    option: hermes_agent_disk_usage
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
+
+- name: "Set 'hermes_agent_installed: True'"
+  set_fact:
+    hermes_agent_installed: True
+
+- name: "Add 'hermes_agent_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"
+    regexp: '^hermes_agent_installed'
+    line: 'hermes_agent_installed: True'

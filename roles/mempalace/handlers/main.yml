@@ -1,0 +1,9 @@
+---
+# MemPalace is an in-process library — no separate systemd service to restart.
+# Gateway restart is handled by the ai-gateway role's handler.
+- name: restart ai-gateway
+  systemd:
+    name: ai-gateway
+    state: restarted
+    daemon_reload: yes
+  become: yes

@@ -1,11 +1,15 @@
 ---
 galaxy_info:
   role_name: ai-gateway
-  description: "AI Gateway — unified agentic backend for IIAB (FastAPI + LangGraph)"
+  description: "AI Gateway — unified agentic backend for IIAB (FastAPI + Hermes Agent)"
   author: deldesir
   license: AGPL-3.0
   min_ansible_version: "2.10"
 
+# NOTE: hermes-agent and mempalace are NOT listed here.
+# They depend on ai-gateway (install into its venv), NOT the reverse.
+# Ordering is enforced by the stage playbook:
+#   6-generic-apps/tasks/main.yml: HERMES-AGENT → MEMPALACE → AI-GATEWAY
 dependencies:
   - role: nginx
   - role: postgresql
@@ -14,3 +18,4 @@ dependencies:
       postgresql_enabled: true
   - role: litellm
     when: litellm_install | bool
+

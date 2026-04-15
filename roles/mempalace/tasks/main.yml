@@ -1,0 +1,45 @@
+---
+- name: Assert that "mempalace_install is sameas true" (boolean not string etc)
+  assert:
+    that: mempalace_install is sameas true
+    fail_msg: "PLEASE SET 'mempalace_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "mempalace_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: mempalace_enabled | type_debug == 'bool'
+    fail_msg: >-
+      PLEASE GIVE VARIABLE 'mempalace_enabled' A PROPER (UNQUOTED) ANSIBLE
+      BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml
+    quiet: yes
+
+- block:
+
+    - name: Install MemPalace if 'mempalace_installed' not defined, e.g. in {{ iiab_state_file }}
+      include_tasks: install.yml
+      when: mempalace_installed is undefined
+
+    - include_tasks: enable-or-disable.yml
+
+    - name: Add 'mempalace' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"
+        section: mempalace
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: MemPalace
+        - option: description
+          value: '"MemPalace — structured memory with ChromaDB (in-process library for AI Gateway)"'
+        - option: mempalace_install
+          value: "{{ mempalace_install }}"
+        - option: mempalace_enabled
+          value: "{{ mempalace_enabled }}"
+
+  rescue:
+
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error

@@ -341,3 +341,15 @@
     fail_msg: "VARIABLE MUST BE BOOLEAN: 'bagisto_headless_install' now has type '{{ lookup('vars', 'bagisto_headless_install') | type_debug }}' and value '{{ lookup('vars', 'bagisto_headless_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
 
+
+- name: Assert that var hermes_agent_install is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: hermes_agent_install | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'hermes_agent_install' now has type '{{ lookup('vars', 'hermes_agent_install') | type_debug }}' and value '{{ lookup('vars', 'hermes_agent_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var mempalace_install is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: mempalace_install | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'mempalace_install' now has type '{{ lookup('vars', 'mempalace_install') | type_debug }}' and value '{{ lookup('vars', 'mempalace_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

@@ -1,0 +1,25 @@
+---
+hermes_agent_install: False
+hermes_agent_enabled: False
+
+# Install location (vendored clone)
+hermes_agent_dir: /opt/iiab/hermes-agent
+hermes_agent_user: "{{ iiab_admin_user }}"
+
+# uv binary path
+hermes_agent_uv_bin: /root/.local/bin/uv
+
+# Source repository — tracks latest main branch
+hermes_agent_repo: "https://github.com/nousresearch/hermes-agent.git"
+hermes_agent_version: "main"
+
+# AI Gateway virtualenv — Hermes is installed INTO the gateway's venv
+# because it runs in-process (not as a separate service)
+hermes_agent_gateway_dir: /opt/iiab/ai-gateway
+
+# Hermes state directory (conversation logs, agent state)
+hermes_agent_home: "{{ hermes_agent_gateway_dir }}/data/hermes"
+
+# Concurrency
+hermes_agent_max_iterations: 15
+hermes_agent_thread_pool_size: 2    # Default 2; increase to 3 on 4GB+ devices

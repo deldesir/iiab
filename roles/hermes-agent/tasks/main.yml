@@ -1,0 +1,45 @@
+---
+- name: Assert that "hermes_agent_install is sameas true" (boolean not string etc)
+  assert:
+    that: hermes_agent_install is sameas true
+    fail_msg: "PLEASE SET 'hermes_agent_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "hermes_agent_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: hermes_agent_enabled | type_debug == 'bool'
+    fail_msg: >-
+      PLEASE GIVE VARIABLE 'hermes_agent_enabled' A PROPER (UNQUOTED) ANSIBLE
+      BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml
+    quiet: yes
+
+- block:
+
+    - name: Install Hermes Agent if 'hermes_agent_installed' not defined, e.g. in {{ iiab_state_file }}
+      include_tasks: install.yml
+      when: hermes_agent_installed is undefined
+
+    - include_tasks: enable-or-disable.yml
+
+    - name: Add 'hermes_agent' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"
+        section: hermes-agent
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: Hermes Agent
+        - option: description
+          value: '"Hermes Agent — autonomous reasoning engine for AI Gateway (in-process library)"'
+        - option: hermes_agent_install
+          value: "{{ hermes_agent_install }}"
+        - option: hermes_agent_enabled
+          value: "{{ hermes_agent_enabled }}"
+
+  rescue:
+
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error

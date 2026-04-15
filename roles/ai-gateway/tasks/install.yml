@@ -70,6 +70,27 @@
     recurse: yes
   become: yes
 
+# V2: Recreate venv with the latest available Python.
+# Hermes Agent requires >=3.11; this ensures the venv satisfies all deps.
+# Must update .python-version first — uv reads this file and would refuse
+# to sync if it conflicts with pyproject.toml's requires-python.
+- name: Update .python-version to latest available Python
+  copy:
+    content: "3.14\n"
+    dest: "{{ ai_gateway_dir }}/.python-version"
+    owner: "{{ ai_gateway_user }}"
+    group: "{{ ai_gateway_user }}"
+    mode: '0644'
+  become: yes
+
+- name: Ensure AI Gateway venv uses latest available Python
+  command: "{{ ai_gateway_uv_bin }} venv .venv --python 3.14"
+  args:
+    chdir: "{{ ai_gateway_dir }}"
+  become: yes
+  environment:
+    PATH: "/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
 - name: Install AI Gateway dependencies (uv sync)
   command: "{{ ai_gateway_uv_bin }} sync"
   args:
@@ -129,6 +150,19 @@
   shell: df -B1 --output=used / | tail -1
   register: df2
 
+# V2: Verify that Hermes Agent and MemPalace are importable after uv sync.
+# This catches dependency conflicts early rather than at runtime.
+- name: Verify V2 imports (Hermes + MemPalace)
+  command: >
+    {{ ai_gateway_uv_bin }} run python -c
+    "from run_agent import AIAgent; from mempalace.mcp_server import tool_status; print('V2 imports OK')"
+  args:
+    chdir: "{{ ai_gateway_dir }}"
+  become: yes
+  register: verify_v2
+  failed_when: verify_v2.rc != 0
+  when: hermes_agent_installed is defined and mempalace_installed is defined
+
 - name: Add 'ai_gateway_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
   ini_file:
     path: "{{ iiab_ini_file }}"
@@ -145,3 +179,4 @@
     path: "{{ iiab_state_file }}"
     regexp: '^ai_gateway_installed'
     line: 'ai_gateway_installed: True'
+

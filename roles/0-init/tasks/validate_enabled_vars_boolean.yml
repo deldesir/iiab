@@ -332,3 +332,15 @@
     fail_msg: "VARIABLE MUST BE BOOLEAN: 'bagisto_headless_enabled' now has type '{{ bagisto_headless_enabled | type_debug }}' and value '{{ bagisto_headless_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
 
+
+- name: Assert that var hermes_agent_enabled is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: hermes_agent_enabled | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'hermes_agent_enabled' now has type '{{ hermes_agent_enabled | type_debug }}' and value '{{ hermes_agent_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var mempalace_enabled is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: mempalace_enabled | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'mempalace_enabled' now has type '{{ mempalace_enabled | type_debug }}' and value '{{ mempalace_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
