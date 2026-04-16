@@ -59,12 +59,12 @@ sync_and_release() {
     fi
 
     # Fetch & Sync (with Github CI Auth handled seamlessly)
-    echo "Syncing with upstream..."
-    git checkout main 2>/dev/null || git checkout master
-    git pull origin main 2>/dev/null || git pull origin master
-    git fetch upstream
-    git merge upstream/main --no-edit 2>/dev/null || git merge upstream/master --no-edit 2>/dev/null || true
-    git push origin HEAD || echo "Warning: git push declined securely (likely no changes to push)"
+    # echo "Syncing with upstream..."
+    # git checkout main 2>/dev/null || git checkout master
+    # git pull origin main 2>/dev/null || git pull origin master
+    # git fetch upstream
+    # git merge upstream/main --no-edit 2>/dev/null || git merge upstream/master --no-edit 2>/dev/null || true
+    # git push origin HEAD || echo "Warning: git push declined securely (likely no changes to push)"
 
     # Determine Version algorithmically
     echo "Determining target version natively..."

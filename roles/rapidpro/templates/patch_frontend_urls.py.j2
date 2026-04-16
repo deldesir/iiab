@@ -28,6 +28,10 @@ def patch_file(filepath):
             ("/org/", f"{SUBPATH}/org/"),
             ("'/org/", f"'{SUBPATH}/org/"),
             # Additional paths for missing 404s
+            ("`/contact/chat_search/", f"`{{SUBPATH}}/contact/chat_search/"),
+            ("`/contact/chat/", f"`{{SUBPATH}}/contact/chat/"),
+            ('"/contact/chat/', f'"{SUBPATH}/contact/chat/'),
+            ("'/contact/chat/", f"'{SUBPATH}/contact/chat/"),
             ("/contact/", f"{SUBPATH}/contact/"),
             ("'/contact/", f"'{SUBPATH}/contact/"),
             ('"/contact/', f'"{SUBPATH}/contact/'),
