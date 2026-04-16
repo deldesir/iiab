@@ -84,7 +84,7 @@
   become: yes
 
 - name: Ensure AI Gateway venv uses latest available Python
-  command: "{{ ai_gateway_uv_bin }} venv .venv --python 3.14"
+  command: "{{ ai_gateway_uv_bin }} venv .venv --python 3.14 --clear"
   args:
     chdir: "{{ ai_gateway_dir }}"
   become: yes
@@ -120,11 +120,15 @@
 
 - name: Ensure AI Gateway data directories exist
   file:
-    path: "{{ ai_gateway_dir }}/data/knowledge"
+    path: "{{ item }}"
     state: directory
     owner: "{{ ai_gateway_user }}"
     group: "{{ ai_gateway_user }}"
     mode: '0755'
+  loop:
+    - "{{ ai_gateway_dir }}/data/knowledge"
+    - "{{ ai_gateway_hermes_home }}"
+    - "{{ ai_gateway_mempalace_palace_path }}"
   become: yes
 
 - name: Deploy TalkPrep knowledge file
@@ -134,6 +138,19 @@
     owner: "{{ ai_gateway_user }}"
     group: "{{ ai_gateway_user }}"
     mode: '0644'
+  become: yes
+
+# V2: Seed SOUL.md identity file for Hermes Agent (§7.9 of architecture spec).
+# Without this, Hermes uses its built-in "coding assistant" identity instead
+# of the IIAB-specific WhatsApp assistant identity.
+- name: Deploy SOUL.md identity for Hermes Agent
+  copy:
+    src: SOUL.md
+    dest: "{{ ai_gateway_hermes_home }}/SOUL.md"
+    owner: "{{ ai_gateway_user }}"
+    group: "{{ ai_gateway_user }}"
+    mode: '0644'
+    force: no    # Don't overwrite if operator has customized it
   become: yes
 
 - name: Install AI Gateway systemd service
@@ -161,7 +178,6 @@
   become: yes
   register: verify_v2
   failed_when: verify_v2.rc != 0
-  when: hermes_agent_installed is defined and mempalace_installed is defined
 
 - name: Add 'ai_gateway_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
   ini_file:

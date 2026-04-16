@@ -18,7 +18,7 @@ ai_gateway_talkmaster_dir: /opt/iiab/talkmaster
 ai_gateway_talkmaster_version: main
 ai_gateway_jwlinker_repo: "https://github.com/deldesir/jwlinker.git"
 ai_gateway_jwlinker_dir: /opt/iiab/jwlinker
-ai_gateway_jwlinker_version: main
+ai_gateway_jwlinker_version: master
 
 # Service
 ai_gateway_port: 8086
