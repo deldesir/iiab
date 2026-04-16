@@ -101,6 +101,10 @@
   become_user: "{{ iiab_admin_user }}"
   when: rapidpro_aws_enabled
 
+- name: Purge legacy spool files from pre-nanorp era
+  shell: rm -f /opt/iiab/rapidpro/spool/*/dynamo/*.jsonl /opt/iiab/rapidpro/spool/*/elastic/*.jsonl
+  when: not rapidpro_aws_enabled
+  ignore_errors: true
 
 - name: Collect static files
   shell: |

@@ -32,14 +32,15 @@ rapidpro_aws_enabled: false
 # All AWS variables below are ignored.
 ```
 
-| Feature | `rapidpro_aws_enabled: true` | `rapidpro_aws_enabled: false` |
+| Feature | `rapidpro_aws_enabled: true` | `rapidpro_aws_enabled: false` (Nanorp Mode) |
 |---------|------|-------|
 | File storage | AWS S3 (`S3Boto3Storage`) | Local filesystem (`FileSystemStorage`) |
 | DynamoDB | Real AWS DynamoDB | Disabled — events stored in PostgreSQL |
+| Elasticsearch | Full-text contact/msg search | Disabled — uses PostgreSQL `pg_trgm` and `tsvector` |
 | Courier attachments | Uploaded to S3 bucket | Saved to `/opt/iiab/rapidpro/media/` |
-| DynamoDB migrations | Run automatically | Skipped |
+| Cloud Services setup | DynamoDB migrations run | Skipped. Legacy spool explicitly purged. |
 
-> **Note:** The same Go binaries (courier/mailroom) support both modes. The
+> **Note:** The same highly optimized UPX-compressed Go binaries (courier/mailroom) support both modes natively. The
 > toggle only changes which environment variables are passed via systemd.
 
 ### All Variables
@@ -79,5 +80,5 @@ rapidpro_aws_enabled: false
 - Creates PostgreSQL database and runs migrations
 - Configures Nginx reverse proxy
 - Sets up systemd services for RapidPro, Courier, and Mailroom
-- If `rapidpro_aws_enabled: true`: creates DynamoDB tables and configures S3
-- If `rapidpro_aws_enabled: false`: uses local filesystem and PostgreSQL only
+- If `rapidpro_aws_enabled: true`: creates DynamoDB tables, requires Elasticsearch, and configures S3.
+- If `rapidpro_aws_enabled: false`: automatically bypasses Elasticsearch and DynamoDB, purging legacy spools and falling back to native high-performance GIN PostgreSQL deployments using hyper-compressed UPX binaries.
