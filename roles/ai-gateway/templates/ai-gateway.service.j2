@@ -37,7 +37,7 @@ Environment="OMP_NUM_THREADS=1"
 Environment="TOKENIZERS_PARALLELISM=false"
 
 ExecStart={{ ai_gateway_uv_bin }} run uvicorn {{ ai_gateway_app }} \
-    --host 0.0.0.0 \
+    --host 127.0.0.1 \
     --port {{ ai_gateway_port }}
 
 Restart=always
