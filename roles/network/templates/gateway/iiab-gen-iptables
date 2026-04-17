@@ -133,6 +133,20 @@ $IPTABLES -A INPUT -p udp --dport 5432 -j DROP
 $IPTABLES -A INPUT -p tcp --dport 5984 -j DROP
 $IPTABLES -A INPUT -p udp --dport 5984 -j DROP
 
+# Disable access to internal-only backend services (Nginx-proxied, loopback only)
+# AI Gateway (uvicorn)
+$IPTABLES -A INPUT -p tcp --dport 8086 -j DROP
+# LiteLLM proxy
+$IPTABLES -A INPUT -p tcp --dport 4000 -j DROP
+# RiveBot (already on 127.0.0.1 but drop as safety net)
+$IPTABLES -A INPUT -p tcp --dport 8087 -j DROP
+# SiYuan note-taking kernel (proxied at /siyuan/)
+$IPTABLES -A INPUT -p tcp --dport 6806 -j DROP
+# Calibre-Web (proxied via Nginx)
+$IPTABLES -A INPUT -p tcp --dport 8083 -j DROP
+# Frappe/ERPNext Socket.io realtime service (proxied via Nginx)
+$IPTABLES -A INPUT -p tcp --dport 9000 -j DROP
+
 # Allow established connections, and those not coming from the outside
 $IPTABLES -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 $IPTABLES -A INPUT -m state --state NEW -i $lan -j ACCEPT
