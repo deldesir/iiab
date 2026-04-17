@@ -7,6 +7,40 @@ if SUBPATH == "/":
 elif SUBPATH.endswith("/"):
     SUBPATH = SUBPATH[:-1]
 
+# --------------------------------------------------------------------------
+# custom_ai LLM icon patch
+# --------------------------------------------------------------------------
+# The upstream @nyaruka/flow-editor (temba-components) contains a hardcoded
+# regex array that maps LLM model names to brand icons:
+#   wu = [[/claude|anthropic/i,"anthropic"],[/gpt|openai|o1|o3|o4/i,"openai"],...]
+# If a provider's model name doesn't match any entry, it's silently excluded
+# from the "Call AI" dropdown.  Our Custom AI (LiteLLM proxy) uses the slug
+# "custom_ai" which matches nothing, so we inject an extra entry here.
+CUSTOM_AI_LLM_PATCH_BEFORE = '[/deepseek/i,"deepseek"]]'
+CUSTOM_AI_LLM_PATCH_AFTER  = '[/deepseek/i,"deepseek"],[/custom_ai/i,"openai"]]'
+
+def patch_custom_ai_llm():
+    """Inject custom_ai into the flow editor's LLM icon-mapping array."""
+    cache_js_dir = os.path.join(TARGET_DIR, "CACHE", "js")
+    if not os.path.isdir(cache_js_dir):
+        print(f"[custom_ai patch] CACHE/js dir not found: {cache_js_dir}")
+        return
+    for name in os.listdir(cache_js_dir):
+        if not name.endswith(".js"):
+            continue
+        fpath = os.path.join(cache_js_dir, name)
+        try:
+            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            if CUSTOM_AI_LLM_PATCH_BEFORE not in content:
+                continue  # already patched or doesn't contain the array
+            new_content = content.replace(CUSTOM_AI_LLM_PATCH_BEFORE, CUSTOM_AI_LLM_PATCH_AFTER)
+            with open(fpath, "w", encoding="utf-8") as f:
+                f.write(new_content)
+            print(f"[custom_ai patch] Patched LLM icon map in {name}")
+        except Exception as e:
+            print(f"[custom_ai patch] Error patching {fpath}: {e}")
+
 def patch_file(filepath):
     try:
         with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
@@ -129,5 +163,8 @@ if __name__ == "__main__":
         TICKET_LIST = os.path.join(TEMPLATES_DIR, "tickets/ticket_list.html")
         if os.path.exists(TICKET_LIST):
             patch_file(TICKET_LIST)
-            
+
+        # Inject custom_ai into the flow editor's LLM icon-mapping array.
+        patch_custom_ai_llm()
+
         print("Patching complete.")
