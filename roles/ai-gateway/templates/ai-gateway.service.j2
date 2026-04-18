@@ -26,7 +26,7 @@ Environment="SIYUAN_PUBLIC_URL={{ ai_gateway_siyuan_public_url | default(ai_gate
 {% if ai_gateway_siyuan_notebook_id | default('') %}
 Environment="SIYUAN_NOTEBOOK_ID={{ ai_gateway_siyuan_notebook_id }}"
 {% endif %}
-Environment="DEFAULT_PERSONA={{ ai_gateway_default_persona | default('konex-support') }}"
+Environment="DEFAULT_PERSONA={{ ai_gateway_default_persona | default('assistant') }}"
 
 # V2 — Hermes + MemPalace + ChromaDB threading constraints
 Environment="HERMES_HOME={{ hermes_agent_home | default(ai_gateway_dir ~ '/data/hermes') }}"
