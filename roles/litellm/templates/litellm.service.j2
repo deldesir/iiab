@@ -10,10 +10,7 @@ WorkingDirectory={{ litellm_dir }}
 ExecStart=/usr/bin/poetry run litellm --host 127.0.0.1 --port {{ litellm_port }} --config {{ litellm_dir }}/proxy_config.yaml
 Restart=always
 RestartSec=10
-Environment=LITELLM_MASTER_KEY={{ litellm_master_key }}
-{% for key, value in litellm_env.items() %}
-Environment={{ key }}={{ value }}
-{% endfor %}
+EnvironmentFile={{ litellm_dir }}/.env
 
 
 [Install]

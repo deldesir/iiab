@@ -71,6 +71,16 @@
   become: yes
   notify: restart litellm
 
+- name: Generate LiteLLM environment file
+  template:
+    src: litellm.env.j2
+    dest: "{{ litellm_dir }}/.env"
+    owner: "{{ litellm_user }}"
+    group: "{{ litellm_user }}"
+    mode: '0600'
+  become: yes
+  notify: restart litellm
+
 - name: Install LiteLLM systemd service
   template:
     src: litellm.service.j2
