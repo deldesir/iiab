@@ -23,6 +23,7 @@ EnvironmentFile={{ ai_gateway_dir }}/.env
 Environment="RIVEBOT_URL={{ ai_gateway_rivebot_url | default('http://localhost:8087') }}"
 Environment="GATEWAY_PUBLIC_URL={{ ai_gateway_public_url | default('http://localhost:8086') }}"
 Environment="SIYUAN_PUBLIC_URL={{ ai_gateway_siyuan_public_url | default(ai_gateway_siyuan_url) }}"
+Environment="SIYUAN_ACCESS_AUTH_CODE={{ siyuan_access_auth_code | default('iiab', true) }}"
 {% if ai_gateway_siyuan_notebook_id | default('') %}
 Environment="SIYUAN_NOTEBOOK_ID={{ ai_gateway_siyuan_notebook_id }}"
 {% endif %}
@@ -32,7 +33,7 @@ Environment="DEFAULT_PERSONA={{ ai_gateway_default_persona | default('assistant'
 Environment="HERMES_HOME={{ hermes_agent_home | default(ai_gateway_dir ~ '/data/hermes') }}"
 Environment="MEMPALACE_PALACE_PATH={{ mempalace_palace_path | default(ai_gateway_dir ~ '/data/palace') }}"
 Environment="HERMES_MAX_ITERATIONS={{ hermes_agent_max_iterations | default(15) }}"
-Environment="HERMES_THREAD_POOL_SIZE={{ hermes_agent_thread_pool_size | default(2) }}"
+Environment="HERMES_THREAD_POOL_SIZE={{ hermes_agent_thread_pool_size | default(3) }}"
 Environment="OMP_NUM_THREADS=1"
 Environment="TOKENIZERS_PARALLELISM=false"
 
