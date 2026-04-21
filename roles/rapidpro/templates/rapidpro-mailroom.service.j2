@@ -27,6 +27,14 @@ Environment='MAILROOM_DYNAMO_TABLE_PREFIX='
 Environment='MAILROOM_AWS_ACCESS_KEY_ID='
 {% endif %}
 
+# ADR-010: Allow localhost webhooks for CRM ops flows (Finding 1)
+# Keeps RFC1918 blocking but allows 127.0.0.1 for call_webhook → localhost/api/v2
+Environment='MAILROOM_DISALLOWED_NETWORKS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16'
+
+# ADR-010 Q3: Extend timeout from 15s → 30s for eMMC cold-start resilience
+# Source: mailroom/runtime/config.go:40 — WebhooksTimeout in milliseconds (default: 15000)
+Environment='MAILROOM_WEBHOOKS_TIMEOUT=30000'
+
 ExecStart=/usr/local/bin/mailroom
 Restart=on-failure
 
