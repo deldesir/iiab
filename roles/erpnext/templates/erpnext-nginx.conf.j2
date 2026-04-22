@@ -199,8 +199,10 @@ location ^~ /api/v2/method/ {
 }
 
 # ── Bounce-back redirects (SPA navigation safety net) ──────────────────────────
-location ^~ /desk { return 302 /erpnext$request_uri; }
-location ^~ /app  { return 302 /erpnext$request_uri; }
+location = /desk  { return 302 /erpnext$request_uri; }
+location ^~ /desk/ { return 302 /erpnext$request_uri; }
+location = /app   { return 302 /erpnext$request_uri; }
+location ^~ /app/  { return 302 /erpnext$request_uri; }
 # /hr/ is served by Frappe when hrms is installed — proxy through /erpnext/ mount
 location ^~ /hr/ {
     rewrite ^/hr/(.*) /hr/$1 break;

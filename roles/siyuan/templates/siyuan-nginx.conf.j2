@@ -17,10 +17,11 @@ location /siyuan/ {
     # Rewrite SiYuan's internal paths in HTML/JS to include /siyuan/ prefix
     sub_filter_once off;
     sub_filter_types text/html application/javascript;
-    sub_filter '"/check-auth' '"/siyuan/check-auth';
+
+    sub_filter '"/check-auth/' '"/siyuan/check-auth/';
     sub_filter '"/api/' '"/siyuan/api/';
     sub_filter '"/ws/' '"/siyuan/ws/';
-    sub_filter '"/ws?' '"/siyuan/ws?';
+    sub_filter '"/ws?/' '"/siyuan/ws?/';
     sub_filter '"/stage/' '"/siyuan/stage/';
     sub_filter '"/assets/' '"/siyuan/assets/';
     sub_filter '"/appearance/' '"/siyuan/appearance/';
@@ -29,15 +30,35 @@ location /siyuan/ {
     sub_filter '"/widgets/' '"/siyuan/widgets/';
     sub_filter '"/emojis/' '"/siyuan/emojis/';
     sub_filter '"/export/' '"/siyuan/export/';
-    sub_filter "'/check-auth" "'/siyuan/check-auth";
+    sub_filter '"/service-worker.js/' '"/siyuan/service-worker.js/';
+    sub_filter "'/check-auth/" "'/siyuan/check-auth/";
     sub_filter "'/api/" "'/siyuan/api/";
     sub_filter "'/ws/" "'/siyuan/ws/";
-    sub_filter "'/ws?" "'/siyuan/ws?";
+    sub_filter "'/ws?/" "'/siyuan/ws?/";
     sub_filter "'/stage/" "'/siyuan/stage/";
-
-    # Fix redirects from SiYuan backend
-    proxy_redirect / /siyuan/;
+    sub_filter "'/assets/" "'/siyuan/assets/";
+    sub_filter "'/appearance/" "'/siyuan/appearance/";
+    sub_filter "'/snippets/" "'/siyuan/snippets/";
+    sub_filter "'/plugins/" "'/siyuan/plugins/";
+    sub_filter "'/widgets/" "'/siyuan/widgets/";
+    sub_filter "'/emojis/" "'/siyuan/emojis/";
+    sub_filter "'/export/" "'/siyuan/export/";
+    sub_filter "'/service-worker.js/" "'/siyuan/service-worker.js/";
+    sub_filter "`/check-auth/" "`/siyuan/check-auth/";
+    sub_filter "`/api/" "`/siyuan/api/";
+    sub_filter "`/ws/" "`/siyuan/ws/";
+    sub_filter "`/ws?/" "`/siyuan/ws?/";
+    sub_filter "`/stage/" "`/siyuan/stage/";
+    sub_filter "`/assets/" "`/siyuan/assets/";
+    sub_filter "`/appearance/" "`/siyuan/appearance/";
+    sub_filter "`/snippets/" "`/siyuan/snippets/";
+    sub_filter "`/plugins/" "`/siyuan/plugins/";
+    sub_filter "`/widgets/" "`/siyuan/widgets/";
+    sub_filter "`/emojis/" "`/siyuan/emojis/";
+    sub_filter "`/export/" "`/siyuan/export/";
+    sub_filter "`/service-worker.js/" "`/siyuan/service-worker.js/";
 }
+
 
 # SiYuan WebSocket — JS builds this URL dynamically without /siyuan/ prefix
 location /ws {
@@ -72,11 +93,48 @@ location /check-auth {
 
     sub_filter_once off;
     sub_filter_types text/html application/javascript;
+
+    sub_filter '"/check-auth/' '"/siyuan/check-auth/';
     sub_filter '"/api/' '"/siyuan/api/';
+    sub_filter '"/ws/' '"/siyuan/ws/';
+    sub_filter '"/ws?/' '"/siyuan/ws?/';
     sub_filter '"/stage/' '"/siyuan/stage/';
     sub_filter '"/assets/' '"/siyuan/assets/';
     sub_filter '"/appearance/' '"/siyuan/appearance/';
+    sub_filter '"/snippets/' '"/siyuan/snippets/';
+    sub_filter '"/plugins/' '"/siyuan/plugins/';
+    sub_filter '"/widgets/' '"/siyuan/widgets/';
+    sub_filter '"/emojis/' '"/siyuan/emojis/';
+    sub_filter '"/export/' '"/siyuan/export/';
+    sub_filter '"/service-worker.js/' '"/siyuan/service-worker.js/';
+    sub_filter "'/check-auth/" "'/siyuan/check-auth/";
+    sub_filter "'/api/" "'/siyuan/api/";
+    sub_filter "'/ws/" "'/siyuan/ws/";
+    sub_filter "'/ws?/" "'/siyuan/ws?/";
+    sub_filter "'/stage/" "'/siyuan/stage/";
+    sub_filter "'/assets/" "'/siyuan/assets/";
+    sub_filter "'/appearance/" "'/siyuan/appearance/";
+    sub_filter "'/snippets/" "'/siyuan/snippets/";
+    sub_filter "'/plugins/" "'/siyuan/plugins/";
+    sub_filter "'/widgets/" "'/siyuan/widgets/";
+    sub_filter "'/emojis/" "'/siyuan/emojis/";
+    sub_filter "'/export/" "'/siyuan/export/";
+    sub_filter "'/service-worker.js/" "'/siyuan/service-worker.js/";
+    sub_filter "`/check-auth/" "`/siyuan/check-auth/";
+    sub_filter "`/api/" "`/siyuan/api/";
+    sub_filter "`/ws/" "`/siyuan/ws/";
+    sub_filter "`/ws?/" "`/siyuan/ws?/";
+    sub_filter "`/stage/" "`/siyuan/stage/";
+    sub_filter "`/assets/" "`/siyuan/assets/";
+    sub_filter "`/appearance/" "`/siyuan/appearance/";
+    sub_filter "`/snippets/" "`/siyuan/snippets/";
+    sub_filter "`/plugins/" "`/siyuan/plugins/";
+    sub_filter "`/widgets/" "`/siyuan/widgets/";
+    sub_filter "`/emojis/" "`/siyuan/emojis/";
+    sub_filter "`/export/" "`/siyuan/export/";
+    sub_filter "`/service-worker.js/" "`/siyuan/service-worker.js/";
 }
+
 
 # SiYuan API catch-all — regex with negative lookahead
 # Catches ALL /api/* EXCEPT ERPNext (/api/method/, /api/resource/) and RapidPro (/api/v2/)

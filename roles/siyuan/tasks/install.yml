@@ -1,4 +1,18 @@
 ---
+- name: Determine latest SiYuan release from GitHub
+  uri:
+    url: https://api.github.com/repos/siyuan-note/siyuan/releases/latest
+    return_content: yes
+    headers:
+      User-Agent: "IIAB"
+  register: siyuan_latest_release
+  when: siyuan_version == 'latest'
+
+- name: Set siyuan_version to latest dynamically
+  set_fact:
+    siyuan_version: "{{ siyuan_latest_release.json.tag_name | regex_replace('^v', '') }}"
+  when: siyuan_version == 'latest'
+
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1

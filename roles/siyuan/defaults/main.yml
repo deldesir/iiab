@@ -2,8 +2,8 @@
 siyuan_install: False
 siyuan_enabled: False
 
-# Version — update to pull a newer release
-siyuan_version: "3.6.1"
+# Version — set to 'latest' to automatically download the newest release, or pin a specific version
+siyuan_version: "latest"
 
 # Install location
 siyuan_dir: /opt/iiab/siyuan-server
