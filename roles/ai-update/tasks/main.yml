@@ -90,22 +90,80 @@
       when: "'wuzapi' not in ai_update_skip"
       register: wuzapi_src_result
 
-    # ═══════════════════════════════════════════════════════════════
-    # STAGE 2: Download Go binaries
-    # ═══════════════════════════════════════════════════════════════
+    # 1e. Courier (Go source for local build)
+    - name: "Pull Courier source"
+      git:
+        repo: "{{ ai_update_courier_repo }}"
+        dest: "{{ ai_update_courier_dir }}"
+        version: "{{ ai_update_courier_version }}"
+        force: yes
+        update: yes
+      become: yes
+      when: "'courier' not in ai_update_skip"
+      register: courier_git_result
 
-    - name: "Download latest Go binaries"
+    # 1f. Mailroom (Go source for local build)
+    - name: "Pull Mailroom source"
+      git:
+        repo: "{{ ai_update_mailroom_repo }}"
+        dest: "{{ ai_update_mailroom_dir }}"
+        version: "{{ ai_update_mailroom_version }}"
+        force: yes
+        update: yes
+      become: yes
+      when: "'mailroom' not in ai_update_skip"
+      register: mailroom_git_result
+
+    # ═══════════════════════════════════════════════════════════════
+    # STAGE 2: Go binaries — build from fork source + download
+    # ═══════════════════════════════════════════════════════════════
+    # Courier and mailroom MUST be built from the fork source because
+    # the upstream nyaruka releases require AWS DynamoDB + S3.
+    # WuzAPI has no such dependency and can use release downloads.
+
+    - name: "Build courier from fork source"
+      shell: >
+        {{ ai_update_go_bin }} build -ldflags="-s -w"
+        -o {{ ai_update_go_courier_dest }}
+        ./cmd/courier
+      args:
+        chdir: /opt/iiab/courier
+      environment:
+        CGO_ENABLED: "0"
+        GOOS: linux
+        GOARCH: "{{ ai_update_go_arch }}"
+      become: yes
+      when:
+        - "'courier' not in ai_update_skip"
+        - courier_git_result.changed | default(false)
+      register: courier_build_result
+
+    - name: "Build mailroom from fork source"
+      shell: >
+        {{ ai_update_go_bin }} build -ldflags="-s -w"
+        -o {{ ai_update_go_mailroom_dest }}
+        ./cmd/mailroom
+      args:
+        chdir: /opt/iiab/mailroom
+      environment:
+        CGO_ENABLED: "0"
+        GOOS: linux
+        GOARCH: "{{ ai_update_go_arch }}"
+      become: yes
+      when:
+        - "'mailroom' not in ai_update_skip"
+        - mailroom_git_result.changed | default(false)
+      register: mailroom_build_result
+
+    - name: "Download latest WuzAPI binary"
       get_url:
-        url: "{{ item.url }}"
-        dest: "{{ item.dest }}"
+        url: "{{ ai_update_go_wuzapi_url }}"
+        dest: /opt/iiab/wuzapi/wuzapi
         mode: '0755'
         force: yes
       become: yes
-      loop: "{{ ai_update_go_binaries }}"
-      loop_control:
-        label: "{{ item.name }}"
-      when: item.name not in ai_update_skip
-      register: go_binary_results
+      when: "'wuzapi' not in ai_update_skip"
+      register: wuzapi_binary_result
 
     # ═══════════════════════════════════════════════════════════════
     # STAGE 3: Apply patches + resolve dependencies
@@ -235,15 +293,26 @@
         - rapidpro-celery
       when: rapidpro_git_result.changed | default(false)
 
-    - name: Restart Go binary services
+    - name: Restart courier
       systemd:
-        name: "{{ item.item.service }}"
+        name: rapidpro-courier
         state: restarted
       become: yes
-      loop: "{{ go_binary_results.results | default([]) }}"
-      loop_control:
-        label: "{{ item.item.name | default('unknown') }}"
-      when: item.changed | default(false)
+      when: courier_build_result.changed | default(false)
+
+    - name: Restart mailroom
+      systemd:
+        name: rapidpro-mailroom
+        state: restarted
+      become: yes
+      when: mailroom_build_result.changed | default(false)
+
+    - name: Restart wuzapi
+      systemd:
+        name: wuzapi
+        state: restarted
+      become: yes
+      when: wuzapi_binary_result.changed | default(false)
 
     # ═══════════════════════════════════════════════════════════════
     # STAGE 7: Register in iiab.ini + Report
