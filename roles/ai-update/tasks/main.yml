@@ -246,8 +246,28 @@
       when: item.changed | default(false)
 
     # ═══════════════════════════════════════════════════════════════
-    # STAGE 7: Report
+    # STAGE 7: Register in iiab.ini + Report
     # ═══════════════════════════════════════════════════════════════
+
+    - name: Add 'ai_update' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"
+        section: ai-update
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: AI Update
+        - option: description
+          value: '"Unified update role for the cognitive pipeline"'
+        - option: ai_update_install
+          value: "{{ ai_update_install }}"
+        - option: ai_update_enabled
+          value: "{{ ai_update_enabled }}"
+        - option: ai_update_last_run
+          value: "{{ ansible_date_time.iso8601 }}"
+        - option: ai_update_skipped
+          value: "{{ ai_update_skip | join(',') or 'none' }}"
 
     - name: Update complete
       debug:

@@ -540,6 +540,9 @@ hermes_agent_enabled: False
 mempalace_install: False
 mempalace_enabled: False
 
+# AI Update: Unified update role for the cognitive pipeline (./runrole ai-update)
+ai_update_install: True
+ai_update_enabled: True
 
 # If using WordPress intensively, set nginx_high_php_limits further above.
 wordpress_install: False
