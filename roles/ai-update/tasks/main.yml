@@ -139,18 +139,6 @@
         PATH: "/root/.local/bin:{{ ansible_env.PATH }}"
       when: gateway_git_results.changed
 
-    # 3c-fix: uv sync (as root) creates .cache/ — but the service runs as 'hermes'.
-    # Fix ownership so the service can write to its own cache on startup.
-    - name: "Fix .cache ownership for gateway service user"
-      file:
-        path: "{{ ai_update_gateway_dir }}/.cache"
-        state: directory
-        owner: hermes
-        group: hermes
-        recurse: yes
-      become: yes
-      when: gateway_git_results.changed
-
     # 3d. RiveBot uv sync (own venv)
     - name: "Sync RiveBot venv"
       command: "{{ ai_update_uv_bin }} sync"
@@ -193,7 +181,33 @@
       when: gateway_git_results.changed
 
     # ═══════════════════════════════════════════════════════════════
-    # STAGE 5: Grouped restarts
+    # STAGE 5: Harden permissions (ALWAYS runs)
+    # ═══════════════════════════════════════════════════════════════
+    # These run unconditionally because ANY stage (git pull, chown,
+    # uv sync, collectstatic) can tighten directory permissions that
+    # nginx (www-data) or the hermes service user need.
+
+    - name: "Fix RapidPro permissions for nginx"
+      shell: |
+        chmod -R a+rX {{ ai_update_rapidpro_dir }}/sitestatic {{ ai_update_rapidpro_dir }}/media 2>/dev/null || true
+        chmod 755 {{ ai_update_rapidpro_dir }}/run 2>/dev/null || true
+      become: yes
+      changed_when: false
+      when: "'rapidpro' not in ai_update_skip"
+
+    - name: "Fix gateway .cache ownership for hermes service user"
+      file:
+        path: "{{ ai_update_gateway_dir }}/.cache"
+        state: directory
+        owner: hermes
+        group: hermes
+        recurse: yes
+      become: yes
+      changed_when: false
+      failed_when: false
+
+    # ═══════════════════════════════════════════════════════════════
+    # STAGE 6: Grouped restarts
     # ═══════════════════════════════════════════════════════════════
 
     - name: Restart ai-gateway
@@ -232,7 +246,7 @@
       when: item.changed | default(false)
 
     # ═══════════════════════════════════════════════════════════════
-    # STAGE 6: Report
+    # STAGE 7: Report
     # ═══════════════════════════════════════════════════════════════
 
     - name: Update complete
