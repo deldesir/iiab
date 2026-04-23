@@ -253,6 +253,14 @@
       changed_when: false
       when: "'rapidpro' not in ai_update_skip"
 
+    - name: "Clean stale DynamoDB/ES spool files (local-first mode)"
+      shell: rm -f {{ ai_update_rapidpro_dir }}/spool/*/dynamo/*.jsonl {{ ai_update_rapidpro_dir }}/spool/*/elastic/*.jsonl
+      become: yes
+      changed_when: false
+      when:
+        - "'rapidpro' not in ai_update_skip"
+        - not (rapidpro_aws_enabled | default(false))
+
     - name: "Fix gateway .cache ownership for hermes service user"
       file:
         path: "{{ ai_update_gateway_dir }}/.cache"
