@@ -1,0 +1,91 @@
+---
+# IIAB local patches applied after every git pull.
+# Same pattern as RapidPro's configure.yml — replace/blockinfile with ignore_errors.
+
+# ═══════════════════════════════════════════════════════════════════
+# Hermes Agent patches
+# ═══════════════════════════════════════════════════════════════════
+
+# Patch 1: Tenant-scoped memory isolation via contextvars
+# Reason: Multi-tenant WhatsApp deployments need per-user memory dirs
+- name: "hermes: tenant memory isolation"
+  replace:
+    path: /opt/iiab/hermes-agent/tools/memory_tool.py
+    regexp: |
+      def get_memory_dir\(\) -> Path:
+          """Return the profile-scoped memories directory."""
+          return get_hermes_home\(\) / "memories"
+    replace: |
+      import contextvars
+
+      # IIAB: tenant isolation for multi-user WhatsApp deployments
+      current_tenant_urn: contextvars.ContextVar[str] = contextvars.ContextVar("current_tenant_urn", default="")
+
+      def get_memory_dir() -> Path:
+          """Return the profile-scoped memories directory.
+          If current_tenant_urn is set, isolates memories per-user."""
+          base = get_hermes_home() / "memories"
+          urn = current_tenant_urn.get()
+          if urn:
+              user_digits = urn.split(":")[-1].lstrip("+")
+              return base / f"user_{user_digits}"
+          return base
+  become: yes
+  register: patch_tenant
+  ignore_errors: yes
+
+- name: "⚠️  tenant isolation patch did not apply"
+  debug:
+    msg: "Hermes tenant isolation patch FAILED — upstream may have refactored memory_tool.py"
+  when: patch_tenant is failed
+
+# Patch 2: 4KB USER.md storage cap
+# Reason: Prevent token exhaustion from unbounded user memory growth
+- name: "hermes: 4KB USER.md storage cap"
+  replace:
+    path: /opt/iiab/hermes-agent/tools/memory_tool.py
+    regexp: 'return self\.user_char_limit'
+    replace: 'return 4096  # IIAB: storage cap for multi-tenant'
+  become: yes
+  register: patch_cap
+  ignore_errors: yes
+
+- name: "⚠️  storage cap patch did not apply"
+  debug:
+    msg: "Hermes 4KB storage cap patch FAILED — check tools/memory_tool.py"
+  when: patch_cap is failed
+
+# ═══════════════════════════════════════════════════════════════════
+# MemPalace patches
+# ═══════════════════════════════════════════════════════════════════
+
+# Patch 3: 500-drawer per-wing storage cap
+# Reason: Prevent unbounded cognitive storage growth
+# The function is synchronous — uses col.get(), not async.
+# IMPORTANT: replacement content uses 4-space indent to match Python function body.
+- name: "mempalace: 500-drawer per-wing cap"
+  replace:
+    path: /opt/iiab/mempalace/mempalace/mcp_server.py
+    regexp: '    col = _get_collection\(create=True\)\n    if not col:\n        return _no_palace\(\)\n'
+    replace: "    col = _get_collection(create=True)\n    if not col:\n        return _no_palace()\n\n    # IIAB: 500-drawer per-wing storage cap\n    try:\n        _wing_count = col.count(where={\"wing\": wing})\n        if _wing_count >= 500:\n            return {\"success\": False, \"error\": f\"Wing '{wing}' has reached the 500-drawer limit\"}\n    except Exception:\n        pass  # If count fails, allow the add to proceed\n\n"
+  become: yes
+  register: patch_drawer
+  ignore_errors: yes
+
+- name: "⚠️  500-drawer cap patch did not apply"
+  debug:
+    msg: "MemPalace 500-drawer cap patch FAILED — check mcp_server.py"
+  when: patch_drawer is failed
+
+# ═══════════════════════════════════════════════════════════════════
+# RapidPro patches
+# ═══════════════════════════════════════════════════════════════════
+
+# Patch 4: Allow current system Python version
+- name: "rapidpro: allow current Python version"
+  replace:
+    path: /opt/iiab/rapidpro/pyproject.toml
+    regexp: 'requires-python = ">=3\.12,<3\.\d+"'
+    replace: 'requires-python = ">=3.12,<3.{{ (python_version.split(''.'')[1] | int) + 1 }}"'
+  become: yes
+  ignore_errors: yes

@@ -1,0 +1,245 @@
+---
+# ai-update: Update the entire cognitive pipeline in one shot.
+# No install-once guard. No boolean assertions. Just update.
+#
+# Usage:
+#   ./runrole ai-update
+#   ./runrole ai-update -e '{"ai_update_skip": ["wuzapi"]}'
+
+- block:
+
+    # ═══════════════════════════════════════════════════════════════
+    # STAGE 0: Ensure git safe.directory for all repos
+    # ═══════════════════════════════════════════════════════════════
+    # Repos are owned by iiab-admin but Ansible runs as root.
+    # The git module fails on dubious ownership before we can pull.
+
+    - name: "Get existing git safe.directory entries"
+      command: git config --global --get-all safe.directory
+      register: _safe_dirs
+      changed_when: false
+      failed_when: false
+      become: yes
+
+    - name: "Add missing dirs to git safe.directory"
+      command: git config --global --add safe.directory "{{ item }}"
+      become: yes
+      loop:
+        - "{{ ai_update_gateway_dir }}"
+        - /opt/iiab/hermes-agent
+        - /opt/iiab/mempalace
+        - /opt/iiab/talkmaster
+        - /opt/iiab/jwlinker
+        - "{{ ai_update_rivebot_dir }}"
+        - "{{ ai_update_rapidpro_dir }}"
+        - "{{ ai_update_wuzapi_src_dir }}"
+      when: item not in (_safe_dirs.stdout_lines | default([]))
+
+    # ═══════════════════════════════════════════════════════════════
+    # STAGE 1: Pull all git repos
+    # ═══════════════════════════════════════════════════════════════
+
+    # 1a. Gateway cluster (shared venv)
+    - name: "Pull gateway components"
+      git:
+        repo: "{{ item.repo }}"
+        dest: "{{ item.dest }}"
+        version: "{{ item.version }}"
+        force: yes
+        update: yes
+      become: yes
+      loop: "{{ ai_update_gateway_components }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: item.name not in ai_update_skip
+      register: gateway_git_results
+
+    # 1b. RiveBot (own venv)
+    - name: "Pull RiveBot"
+      git:
+        repo: "{{ ai_update_rivebot_repo }}"
+        dest: "{{ ai_update_rivebot_dir }}"
+        version: "{{ ai_update_rivebot_version }}"
+        force: yes
+        update: yes
+      become: yes
+      when: "'rivebot' not in ai_update_skip"
+      register: rivebot_git_result
+
+    # 1c. RapidPro
+    - name: "Pull RapidPro"
+      git:
+        repo: "{{ ai_update_rapidpro_repo }}"
+        dest: "{{ ai_update_rapidpro_dir }}"
+        version: "{{ ai_update_rapidpro_version }}"
+        force: yes
+        update: yes
+      become: yes
+      when: "'rapidpro' not in ai_update_skip"
+      register: rapidpro_git_result
+
+    # 1d. WuzAPI source (static assets)
+    - name: "Pull WuzAPI source (static assets)"
+      git:
+        repo: "{{ ai_update_wuzapi_src_repo }}"
+        dest: "{{ ai_update_wuzapi_src_dir }}"
+        version: main
+        force: yes
+        update: yes
+      become: yes
+      when: "'wuzapi' not in ai_update_skip"
+      register: wuzapi_src_result
+
+    # ═══════════════════════════════════════════════════════════════
+    # STAGE 2: Download Go binaries
+    # ═══════════════════════════════════════════════════════════════
+
+    - name: "Download latest Go binaries"
+      get_url:
+        url: "{{ item.url }}"
+        dest: "{{ item.dest }}"
+        mode: '0755'
+        force: yes
+      become: yes
+      loop: "{{ ai_update_go_binaries }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: item.name not in ai_update_skip
+      register: go_binary_results
+
+    # ═══════════════════════════════════════════════════════════════
+    # STAGE 3: Apply patches + resolve dependencies
+    # ═══════════════════════════════════════════════════════════════
+
+    # 3a. IIAB local patches (hermes, mempalace, rapidpro)
+    - name: Apply IIAB local patches
+      include_tasks: apply-patches.yml
+
+    # 3b. Fix ownership on gateway components
+    - name: Fix ownership on gateway component dirs
+      file:
+        path: "{{ item.dest }}"
+        state: directory
+        owner: "{{ ai_update_gateway_user }}"
+        group: "{{ ai_update_gateway_user }}"
+        recurse: yes
+      become: yes
+      loop: "{{ ai_update_gateway_components }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: gateway_git_results.changed
+
+    # 3c. ONE gateway uv sync (resolves all editable deps)
+    - name: "Sync ai-gateway venv (all editable deps)"
+      command: "{{ ai_update_uv_bin }} sync"
+      args:
+        chdir: "{{ ai_update_gateway_dir }}"
+      become: yes
+      environment:
+        PATH: "/root/.local/bin:{{ ansible_env.PATH }}"
+      when: gateway_git_results.changed
+
+    # 3c-fix: uv sync (as root) creates .cache/ — but the service runs as 'hermes'.
+    # Fix ownership so the service can write to its own cache on startup.
+    - name: "Fix .cache ownership for gateway service user"
+      file:
+        path: "{{ ai_update_gateway_dir }}/.cache"
+        state: directory
+        owner: hermes
+        group: hermes
+        recurse: yes
+      become: yes
+      when: gateway_git_results.changed
+
+    # 3d. RiveBot uv sync (own venv)
+    - name: "Sync RiveBot venv"
+      command: "{{ ai_update_uv_bin }} sync"
+      args:
+        chdir: "{{ ai_update_rivebot_dir }}"
+      become: yes
+      environment:
+        PATH: "/root/.local/bin:{{ ansible_env.PATH }}"
+      when: rivebot_git_result.changed | default(false)
+
+    # 3e. RapidPro post-update (configure + migrate + collectstatic + patches)
+    - name: RapidPro post-update
+      include_tasks: rapidpro-post-update.yml
+      when: rapidpro_git_result.changed | default(false)
+
+    # 3f. WuzAPI static assets
+    - name: Copy updated WuzAPI static assets
+      copy:
+        src: "{{ ai_update_wuzapi_src_dir }}/static"
+        dest: "{{ ai_update_wuzapi_dir }}/"
+        remote_src: yes
+        owner: "{{ ai_update_gateway_user }}"
+        group: "{{ ai_update_gateway_user }}"
+      become: yes
+      when: wuzapi_src_result.changed | default(false)
+
+    # ═══════════════════════════════════════════════════════════════
+    # STAGE 4: Verify imports
+    # ═══════════════════════════════════════════════════════════════
+
+    - name: Verify gateway imports
+      command: >
+        {{ ai_update_uv_bin }} run python -c
+        "from run_agent import AIAgent; from mempalace.mcp_server import tool_status; print('Gateway imports OK')"
+      args:
+        chdir: "{{ ai_update_gateway_dir }}"
+      become: yes
+      register: gateway_verify
+      failed_when: gateway_verify.rc != 0
+      when: gateway_git_results.changed
+
+    # ═══════════════════════════════════════════════════════════════
+    # STAGE 5: Grouped restarts
+    # ═══════════════════════════════════════════════════════════════
+
+    - name: Restart ai-gateway
+      systemd:
+        name: ai-gateway
+        state: restarted
+        daemon_reload: yes
+      become: yes
+      when: gateway_git_results.changed
+
+    - name: Restart RiveBot
+      systemd:
+        name: rivebot
+        state: restarted
+      become: yes
+      when: rivebot_git_result.changed | default(false)
+
+    - name: Restart RapidPro services
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+      become: yes
+      loop:
+        - rapidpro-gunicorn
+        - rapidpro-celery
+      when: rapidpro_git_result.changed | default(false)
+
+    - name: Restart Go binary services
+      systemd:
+        name: "{{ item.item.service }}"
+        state: restarted
+      become: yes
+      loop: "{{ go_binary_results.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.name | default('unknown') }}"
+      when: item.changed | default(false)
+
+    # ═══════════════════════════════════════════════════════════════
+    # STAGE 6: Report
+    # ═══════════════════════════════════════════════════════════════
+
+    - name: Update complete
+      debug:
+        msg: "Cognitive pipeline updated. All changed services restarted."
+
+  rescue:
+    - name: 'UPDATE FAILED — SEE ERROR ABOVE'
+      fail:
+        msg: "Pipeline update failed. Check the error above. Some services may need manual restart."

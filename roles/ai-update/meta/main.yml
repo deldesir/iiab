@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  role_name: ai-update
+  description: "Update the entire cognitive pipeline — AI stack, RapidPro, Go services, RiveBot"
+  author: deldesir
+  license: AGPL-3.0
+  min_ansible_version: "2.10"
+
+# No dependencies — components must already be installed via their own roles
+dependencies: []

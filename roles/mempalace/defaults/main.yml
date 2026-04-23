@@ -11,7 +11,7 @@ mempalace_uv_bin: /root/.local/bin/uv
 
 # Source repository — tracks latest main branch
 mempalace_repo: "https://github.com/mempalace/mempalace.git"
-mempalace_version: "main"
+mempalace_version: "develop"
 
 # AI Gateway virtualenv — MemPalace is installed INTO the gateway's venv
 # because it runs in-process (ChromaDB shares the gateway process)

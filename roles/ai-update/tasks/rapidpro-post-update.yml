@@ -1,0 +1,64 @@
+---
+# RapidPro post-update: backup DB, run migrations, collectstatic, re-patch URLs.
+#
+# We intentionally do NOT re-deploy templates (settings.py, url_tags.py) here.
+# Those templates depend on dozens of rapidpro role variables and only change
+# when the user modifies local_vars.yml — not on upstream code updates.
+# If settings need updating, the user runs: ./runrole rapidpro
+
+- name: Backup RapidPro database before migration
+  shell: pg_dump -Fc temba -f /var/backups/temba-pre-update-$(date +%Y%m%d%H%M).dump
+  become: yes
+  become_user: postgres
+  ignore_errors: yes
+
+- name: Fix RapidPro ownership after git pull
+  command: "chown -R {{ ai_update_gateway_user }}:{{ ai_update_gateway_user }} {{ ai_update_rapidpro_dir }}"
+  become: yes
+  changed_when: false
+
+- name: Sync RapidPro Python dependencies
+  shell: |
+    export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
+    uv sync --frozen
+  args:
+    chdir: "{{ ai_update_rapidpro_dir }}"
+  become: yes
+  become_user: "{{ ai_update_gateway_user }}"
+
+- name: Run database migrations
+  shell: |
+    export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
+    uv run python manage.py migrate
+  args:
+    chdir: "{{ ai_update_rapidpro_dir }}"
+  become: yes
+  become_user: "{{ ai_update_gateway_user }}"
+
+- name: Collect static files
+  shell: |
+    export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
+    uv run python manage.py collectstatic --noinput
+  args:
+    chdir: "{{ ai_update_rapidpro_dir }}"
+  become: yes
+  become_user: "{{ ai_update_gateway_user }}"
+
+- name: Execute frontend patch script
+  command: python3 {{ ai_update_rapidpro_dir }}/patch_urls.py
+  become_user: "{{ ai_update_gateway_user }}"
+  become: yes
+  ignore_errors: yes
+
+- name: Purge Django cache
+  shell: |
+    {{ ai_update_rapidpro_dir }}/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
+  args:
+    chdir: "{{ ai_update_rapidpro_dir }}"
+  become: yes
+  ignore_errors: yes
+
+- name: Fix Nginx permissions on static assets
+  command: "chmod -R a+rX {{ ai_update_rapidpro_dir }}/sitestatic {{ ai_update_rapidpro_dir }}/media"
+  become: yes
+  ignore_errors: yes

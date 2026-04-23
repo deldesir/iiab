@@ -1,0 +1,78 @@
+---
+ai_update_install: True
+ai_update_enabled: True
+
+# uv binary
+ai_update_uv_bin: /root/.local/bin/uv
+
+# ── Gateway cluster (shared venv, ONE uv sync, ONE restart) ────────
+ai_update_gateway_dir: /opt/iiab/ai-gateway
+ai_update_gateway_user: "{{ iiab_admin_user }}"
+
+ai_update_gateway_components:
+  - name: ai-gateway
+    repo: "https://github.com/deldesir/gateway.git"
+    dest: /opt/iiab/ai-gateway
+    version: main
+
+  - name: hermes-agent
+    repo: "https://github.com/nousresearch/hermes-agent.git"
+    dest: /opt/iiab/hermes-agent
+    version: main
+
+  - name: mempalace
+    repo: "https://github.com/mempalace/mempalace.git"
+    dest: /opt/iiab/mempalace
+    version: develop
+
+  - name: talkmaster
+    repo: "https://github.com/deldesir/talkmaster.git"
+    dest: /opt/iiab/talkmaster
+    version: main
+
+  - name: jwlinker
+    repo: "https://github.com/deldesir/jwlinker.git"
+    dest: /opt/iiab/jwlinker
+    version: master
+
+# ── RiveBot (own venv, own restart) ─────────────────────────────────
+ai_update_rivebot_dir: /opt/iiab/rivebot
+ai_update_rivebot_repo: "https://github.com/deldesir/rivebot.git"
+ai_update_rivebot_version: main
+
+# ── RapidPro (Django — needs migrations + static + patches) ────────
+ai_update_rapidpro_dir: /opt/iiab/rapidpro
+ai_update_rapidpro_repo: "https://github.com/deldesir/rapidpro.git"
+ai_update_rapidpro_version: main
+
+# ── Go binaries (download latest release) ──────────────────────────
+ai_update_arch_dict:
+  x86_64: amd64
+  aarch64: arm64
+
+ai_update_go_arch: "{{ ai_update_arch_dict.get(ansible_facts.machine, 'unsupported') }}"
+
+ai_update_go_binaries:
+  - name: courier
+    url: "https://github.com/deldesir/courier/releases/latest/download/courier-linux-{{ ai_update_go_arch }}"
+    dest: /usr/local/bin/courier
+    service: rapidpro-courier
+
+  - name: mailroom
+    url: "https://github.com/deldesir/mailroom/releases/latest/download/mailroom-linux-{{ ai_update_go_arch }}"
+    dest: /usr/local/bin/mailroom
+    service: rapidpro-mailroom
+
+  - name: wuzapi
+    url: "https://github.com/deldesir/wuzapi/releases/latest/download/wuzapi-linux-{{ ai_update_go_arch }}"
+    dest: /opt/iiab/wuzapi/wuzapi
+    service: wuzapi
+
+# ── WuzAPI static assets ───────────────────────────────────────────
+ai_update_wuzapi_src_repo: "https://github.com/deldesir/wuzapi.git"
+ai_update_wuzapi_src_dir: /opt/iiab/wuzapi-src
+ai_update_wuzapi_dir: /opt/iiab/wuzapi
+
+# ── Skip list (set via -e to skip specific components) ─────────────
+# Usage: ./runrole ai-update -e '{"ai_update_skip": ["wuzapi", "rapidpro"]}'
+ai_update_skip: []
