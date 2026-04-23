@@ -58,7 +58,9 @@
   become: yes
   ignore_errors: yes
 
-- name: Fix Nginx permissions on static assets
-  command: "chmod -R a+rX {{ ai_update_rapidpro_dir }}/sitestatic {{ ai_update_rapidpro_dir }}/media"
+- name: Fix Nginx permissions on static assets and socket directory
+  shell: |
+    chmod -R a+rX {{ ai_update_rapidpro_dir }}/sitestatic {{ ai_update_rapidpro_dir }}/media
+    chmod 755 {{ ai_update_rapidpro_dir }}/run
   become: yes
   ignore_errors: yes
