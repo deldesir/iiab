@@ -2,8 +2,11 @@
 # Managed by Ansible — edit via /etc/iiab/local_vars.yml
 
 location /ai/v1/ {
-    # Security: Restrict access to Local LAN and VPN only
+    # Security: Restrict access to Local LAN, VPN, and self (hairpin webhooks)
     allow 127.0.0.1;
+{% if ansible_default_ipv4.address is defined %}
+    allow {{ ansible_default_ipv4.address }};  # Self — mailroom webhooks hairpin via public DNS
+{% endif %}
     allow 192.168.0.0/16;
     allow 10.0.0.0/8;
     allow 172.16.0.0/12;
