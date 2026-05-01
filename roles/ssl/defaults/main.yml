@@ -8,8 +8,8 @@
 # The ssl role installs certbot, obtains a certificate using webroot
 # authentication, and sets up automatic renewal via systemd timer.
 
-ssl_install: True
-ssl_enabled: True
+ssl_install: False
+ssl_enabled: False
 
 # Certbot configuration
 iiab_ssl_certbot_email: ""            # REQUIRED — Let's Encrypt registration email

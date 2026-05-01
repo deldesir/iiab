@@ -1,73 +1,103 @@
 # SSL/TLS Certificate Automation — main entry point
 # Installs certbot, obtains Let's Encrypt certificate, sets up auto-renewal
 
-- name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df1
-
-
-# VALIDATION
-
-- name: Assert that iiab_ssl_enabled is True
+# ── Assert booleans ──────────────────────────────────────────
+- name: Assert that "ssl_install is sameas true" (boolean not string etc)
   assert:
-    that: iiab_ssl_enabled | bool
-    fail_msg: "SSL role requires iiab_ssl_enabled: True in local_vars.yml"
+    that: ssl_install is sameas true
+    fail_msg: "PLEASE SET 'ssl_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
 
-- name: Assert that iiab_ssl_domain is set and not the default 'box.lan'
+- name: Assert that "ssl_enabled | type_debug == 'bool'" (boolean not string etc)
   assert:
-    that:
-      - iiab_ssl_domain is defined
-      - iiab_ssl_domain | length > 0
-      - iiab_ssl_domain != "box.lan"
-    fail_msg: "SSL role requires iiab_ssl_domain to be set to your real domain in local_vars.yml (not 'box.lan')"
+    that: ssl_enabled | type_debug == 'bool'
+    fail_msg: >-
+      PLEASE GIVE VARIABLE 'ssl_enabled' A PROPER (UNQUOTED) ANSIBLE
+      BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml
+    quiet: yes
 
-- name: Assert that iiab_ssl_certbot_email is set
-  assert:
-    that:
-      - iiab_ssl_certbot_email is defined
-      - iiab_ssl_certbot_email | length > 0
-    fail_msg: "SSL role requires iiab_ssl_certbot_email to be set in local_vars.yml"
+# ── Main block with rescue ───────────────────────────────────
+- block:
+
+    # VALIDATION
+    - name: Assert that iiab_ssl_enabled is True
+      assert:
+        that: iiab_ssl_enabled | bool
+        fail_msg: "SSL role requires iiab_ssl_enabled: True in local_vars.yml"
+
+    - name: Assert that iiab_ssl_domain is set and not the default 'box.lan'
+      assert:
+        that:
+          - iiab_ssl_domain is defined
+          - iiab_ssl_domain | length > 0
+          - iiab_ssl_domain != "box.lan"
+        fail_msg: "SSL role requires iiab_ssl_domain to be set to your real domain in local_vars.yml (not 'box.lan')"
+
+    - name: Assert that iiab_ssl_certbot_email is set
+      assert:
+        that:
+          - iiab_ssl_certbot_email is defined
+          - iiab_ssl_certbot_email | length > 0
+        fail_msg: "SSL role requires iiab_ssl_certbot_email to be set in local_vars.yml"
 
 
-# INSTALL
-
-- name: Install SSL certificate automation (certbot + Let's Encrypt)
-  include_tasks: install.yml
-  when: ssl_installed is undefined
-
-
-# ENABLE / DISABLE
-
-- name: Enable or disable certificate auto-renewal
-  include_tasks: enable-or-disable.yml
+    # INSTALL
+    - name: Install SSL certificate automation (certbot + Let's Encrypt)
+      include_tasks: install.yml
+      when: ssl_installed is undefined
 
 
-# RECORD SSL AS INSTALLED
+    # ENABLE / DISABLE
+    - name: Enable or disable certificate auto-renewal
+      include_tasks: enable-or-disable.yml
 
-- name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
-  register: df2
 
-- name: Add 'ssl_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
-    section: ssl
-    option: ssl_disk_usage
-    value: "{{ df2.stdout | int - df1.stdout | int }}"
+    # RECORD SSL AS INSTALLED
+    - name: Record (initial) disk space used
+      shell: df -B1 --output=used / | tail -1
+      register: df1
 
-- name: Add 'ssl_domain = {{ iiab_ssl_domain }}' to {{ iiab_ini_file }}
-  ini_file:
-    path: "{{ iiab_ini_file }}"
-    section: ssl
-    option: ssl_domain
-    value: "{{ iiab_ssl_domain }}"
+    - name: Record (final) disk space used
+      shell: df -B1 --output=used / | tail -1
+      register: df2
 
-- name: "Set 'ssl_installed: True'"
-  set_fact:
-    ssl_installed: True
+    - name: Add 'ssl_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+        section: ssl
+        option: ssl_disk_usage
+        value: "{{ df2.stdout | int - df1.stdout | int }}"
 
-- name: "Add 'ssl_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
-    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-    regexp: '^ssl_installed'
-    line: 'ssl_installed: True'
+    - name: Add 'ssl' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"
+        section: ssl
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: SSL
+        - option: description
+          value: '"Automated SSL/TLS certificate provisioning via Let''s Encrypt certbot"'
+        - option: ssl_install
+          value: "{{ ssl_install }}"
+        - option: ssl_enabled
+          value: "{{ ssl_enabled }}"
+        - option: ssl_domain
+          value: "{{ iiab_ssl_domain }}"
+
+    - name: "Set 'ssl_installed: True'"
+      set_fact:
+        ssl_installed: True
+
+    - name: "Add 'ssl_installed: True' to {{ iiab_state_file }}"
+      lineinfile:
+        path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+        regexp: '^ssl_installed'
+        line: 'ssl_installed: True'
+
+  rescue:
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error
