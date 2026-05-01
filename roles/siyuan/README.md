@@ -28,14 +28,3 @@ siyuan_access_auth_code: "my-secret-code"   # recommended on shared networks
 | `siyuan_access_auth_code` | *(empty)* | Auth code (empty = no auth) |
 | `siyuan_workspace` | `{{ siyuan_dir }}/workspace` | Data directory |
 | `siyuan_user` | `{{ iiab_admin_user }}` | System user |
-
-## Dependencies
-
-None (standalone).
-
-## Role in the Ecosystem
-
-SiYuan serves as the knowledge authoring platform:
-- **RiveBot** syncs RiveScript brains from SiYuan notebooks (Mode B/C)
-- **TalkMaster** publishes manuscripts and dashboards to SiYuan
-- **JWLinker** exports study cards to SiYuan notebooks
