@@ -344,3 +344,15 @@
     that: mempalace_enabled | type_debug == 'bool'
     fail_msg: "VARIABLE MUST BE BOOLEAN: 'mempalace_enabled' now has type '{{ mempalace_enabled | type_debug }}' and value '{{ mempalace_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+
+- name: Assert that var organized_enabled is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: organized_enabled | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'organized_enabled' now has type '{{ organized_enabled | type_debug }}' and value '{{ organized_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var ssl_enabled is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: ssl_enabled | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'ssl_enabled' now has type '{{ ssl_enabled | type_debug }}' and value '{{ ssl_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

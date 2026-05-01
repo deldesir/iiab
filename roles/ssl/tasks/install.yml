@@ -1,0 +1,141 @@
+# SSL install tasks — certbot + Let's Encrypt certificate provisioning
+
+- name: Install certbot package
+  package:
+    name: certbot
+    state: present
+
+- name: Create ACME webroot challenge directory
+  file:
+    path: "{{ doc_root }}/.well-known/acme-challenge"
+    state: directory
+    owner: "{{ apache_user }}"
+    group: "{{ apache_user }}"
+    mode: '0755'
+
+- name: Install ACME challenge nginx location snippet from template
+  template:
+    src: acme-challenge.conf.j2
+    dest: "{{ nginx_conf_dir }}/acme-challenge.conf"
+  register: acme_conf
+
+- name: Reload nginx to pick up ACME challenge location
+  systemd:
+    name: nginx
+    state: reloaded
+  when: acme_conf.changed and not is_proot
+
+- name: Create /etc/nginx/ssl directory
+  file:
+    path: /etc/nginx/ssl
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+# Backup any existing manually-placed cert files (migration from manual setup)
+- name: Check for existing cert file
+  stat:
+    path: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.cert.pem"
+  register: existing_cert
+
+- name: Backup existing cert file if it is a regular file (not a symlink)
+  copy:
+    src: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.cert.pem"
+    dest: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.cert.pem.bak-manual"
+    remote_src: yes
+  when: existing_cert.stat.exists and not existing_cert.stat.islnk
+
+- name: Check for existing key file
+  stat:
+    path: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.key.pem"
+  register: existing_key
+
+- name: Backup existing key file if it is a regular file (not a symlink)
+  copy:
+    src: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.key.pem"
+    dest: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.key.pem.bak-manual"
+    remote_src: yes
+    mode: '0600'
+  when: existing_key.stat.exists and not existing_key.stat.islnk
+
+# Remove old regular files so symlinks can be created
+- name: Remove existing cert file if it is a regular file
+  file:
+    path: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.cert.pem"
+    state: absent
+  when: existing_cert.stat.exists and not existing_cert.stat.islnk
+
+- name: Remove existing key file if it is a regular file
+  file:
+    path: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.key.pem"
+    state: absent
+  when: existing_key.stat.exists and not existing_key.stat.islnk
+
+# Obtain certificate from Let's Encrypt
+- name: "Obtain Let's Encrypt certificate for {{ iiab_ssl_domain }}"
+  command: >
+    certbot certonly --webroot
+    -w {{ doc_root }}
+    -d {{ iiab_ssl_domain }}
+    --email {{ iiab_ssl_certbot_email }}
+    --agree-tos
+    --non-interactive
+    --keep-until-expiring
+    {{ '--staging' if iiab_ssl_certbot_staging | default(False) else '' }}
+  register: certbot_result
+
+- name: Show certbot output
+  debug:
+    var: certbot_result.stdout_lines
+
+# Symlink Let's Encrypt certs to IIAB's expected paths
+- name: "Symlink fullchain.pem → /etc/nginx/ssl/{{ iiab_ssl_domain }}.cert.pem"
+  file:
+    src: "/etc/letsencrypt/live/{{ iiab_ssl_domain }}/fullchain.pem"
+    dest: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.cert.pem"
+    state: link
+    force: yes
+
+- name: "Symlink privkey.pem → /etc/nginx/ssl/{{ iiab_ssl_domain }}.key.pem"
+  file:
+    src: "/etc/letsencrypt/live/{{ iiab_ssl_domain }}/privkey.pem"
+    dest: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.key.pem"
+    state: link
+    force: yes
+
+# Ensure Let's Encrypt private key has correct permissions
+- name: Set restrictive permissions on Let's Encrypt private key
+  file:
+    path: "/etc/letsencrypt/live/{{ iiab_ssl_domain }}/privkey.pem"
+    mode: '0600'
+  # privkey.pem is a symlink into archive/, but 'follow: yes' is default
+
+- name: Set restrictive permissions on Let's Encrypt archive directory
+  file:
+    path: "/etc/letsencrypt/archive/{{ iiab_ssl_domain }}"
+    mode: '0700'
+
+# Post-renewal hook to reload nginx
+- name: Create certbot renewal hooks directory
+  file:
+    path: /etc/letsencrypt/renewal-hooks/post
+    state: directory
+    mode: '0755'
+
+- name: Install post-renewal hook to reload nginx
+  template:
+    src: nginx-reload.sh.j2
+    dest: /etc/letsencrypt/renewal-hooks/post/nginx-reload.sh
+    mode: '0755'
+
+# Verify the certificate works
+- name: Test certbot renewal (dry-run)
+  command: certbot renew --dry-run
+  register: renewal_test
+  ignore_errors: yes
+
+- name: Show renewal test result
+  debug:
+    var: renewal_test.stdout_lines
+  when: renewal_test is defined

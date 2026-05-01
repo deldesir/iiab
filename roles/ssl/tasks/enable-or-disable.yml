@@ -1,0 +1,22 @@
+# SSL enable/disable tasks — controls certbot auto-renewal timer
+
+- name: Enable & Start certbot.timer for automatic certificate renewal
+  systemd:
+    name: certbot.timer
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  when:
+    - ssl_enabled | bool
+    - iiab_ssl_certbot_auto_renew | default(True) | bool
+    - not is_proot
+
+- name: Disable & Stop certbot.timer
+  systemd:
+    name: certbot.timer
+    enabled: no
+    state: stopped
+  when:
+    - not ssl_enabled | bool or not iiab_ssl_certbot_auto_renew | default(True) | bool
+    - not is_proot
+  ignore_errors: yes

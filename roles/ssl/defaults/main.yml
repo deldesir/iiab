@@ -1,0 +1,17 @@
+# SSL/TLS Certificate Automation (Let's Encrypt via certbot)
+#
+# To enable, set in /etc/iiab/local_vars.yml:
+#   iiab_ssl_enabled: True
+#   iiab_ssl_domain: "yourdomain.com"
+#   iiab_ssl_certbot_email: "you@email.com"
+#
+# The ssl role installs certbot, obtains a certificate using webroot
+# authentication, and sets up automatic renewal via systemd timer.
+
+ssl_install: True
+ssl_enabled: True
+
+# Certbot configuration
+iiab_ssl_certbot_email: ""            # REQUIRED — Let's Encrypt registration email
+iiab_ssl_certbot_staging: False       # True = use Let's Encrypt staging CA (for testing)
+iiab_ssl_certbot_auto_renew: True     # Enable systemd timer for automatic renewal

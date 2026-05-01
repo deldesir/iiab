@@ -344,3 +344,15 @@
     that: mempalace_enabled is defined
     fail_msg: "VARIABLE MUST BE DEFINED: 'mempalace_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+
+- name: Assert that var organized_enabled is defined
+  assert:
+    that: organized_enabled is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'organized_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var ssl_enabled is defined
+  assert:
+    that: ssl_enabled is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'ssl_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

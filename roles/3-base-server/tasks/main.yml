@@ -32,6 +32,11 @@
     name: www_base
   #when: www_base_install    # Flag might be created in future?
 
+- name: SSL (Let's Encrypt Certificate Automation)
+  include_role:
+    name: ssl
+  when: iiab_ssl_enabled is defined and iiab_ssl_enabled and iiab_ssl_domain != "box.lan"
+
 - name: Recording STAGE 3 HAS COMPLETED =====================
   lineinfile:
     path: "{{ iiab_env_file }}"

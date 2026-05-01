@@ -1,0 +1,6 @@
+# Let's Encrypt ACME challenge — managed by IIAB ssl role
+# This snippet allows certbot to verify domain ownership via webroot
+location ^~ /.well-known/acme-challenge/ {
+    root {{ doc_root }};
+    allow all;
+}

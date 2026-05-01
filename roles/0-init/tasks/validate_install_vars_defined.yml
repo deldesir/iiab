@@ -350,3 +350,14 @@
     fail_msg: "VARIABLE MUST BE DEFINED: 'mempalace_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
 
+- name: Assert that var organized_install is defined
+  assert:
+    that: organized_install is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'organized_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that var ssl_install is defined
+  assert:
+    that: ssl_install is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'ssl_install' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

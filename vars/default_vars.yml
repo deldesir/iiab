@@ -185,7 +185,7 @@ gui_port: 80    # 2021-08-17: For iptables.  And #2811 dreams of HTTPS/443 ?
 #ports_externally_visible: 0    # none
 #ports_externally_visible: 1    # ssh only
 #ports_externally_visible: 2    # ssh + http-or-https (for Admin Console's box.lan/admin too)
-ports_externally_visible: 3     # ssh + http-or-https + common IIAB services
+ports_externally_visible: 2     # ssh + http-or-https only (services proxied via nginx)
 #ports_externally_visible: 4    # ssh + http-or-https + common IIAB services + Samba
 #ports_externally_visible: 5    # all but databases
 #
@@ -549,11 +549,19 @@ wordpress_install: False
 wordpress_enabled: False
 
 # SSL/HTTPS Configuration
+ssl_install: True
+ssl_enabled: True
 iiab_ssl_enabled: False
 iiab_ssl_domain: "box.lan"
 iiab_ssl_cert_path: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.cert.pem"
 iiab_ssl_key_path: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.key.pem"
 iiab_ssl_redirect_http: True
+
+# SSL Certificate Automation (Let's Encrypt / certbot)
+# To enable, set iiab_ssl_enabled: True, iiab_ssl_domain, and this email:
+iiab_ssl_certbot_email: ""
+iiab_ssl_certbot_staging: False       # True = use Let's Encrypt staging CA (for testing)
+iiab_ssl_certbot_auto_renew: True     # Enable systemd timer for automatic renewal
 
 # ERPNext (Frappe framework) business management software
 erpnext_install: False
@@ -954,3 +962,6 @@ is_debuntu: True    # 2025-09-16: OBSOLETE VARIABLE, BUT ADMIN CONSOLE STILL
 
 bagisto_headless_install: False
 bagisto_headless_enabled: False
+
+organized_install: False
+organized_enabled: False
