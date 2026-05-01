@@ -1,0 +1,45 @@
+---
+- name: Assert that "organized_install is sameas true" (boolean not string etc)
+  assert:
+    that: organized_install is sameas true
+    fail_msg: "PLEASE SET 'organized_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- name: Assert that "organized_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: organized_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'organized_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
+- block:
+
+    - name: Install organized if 'organized_installed' not defined, e.g. in {{ iiab_state_file }}
+      include_tasks: install.yml
+      when: organized_installed is undefined
+
+    - include_tasks: enable-or-disable.yml
+
+    - name: Add 'organized' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"
+        section: organized
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: Organized
+        - option: description
+          value: '"Organized App Backend"'
+        - option: organized_install
+          value: "{{ organized_install }}"
+        - option: organized_enabled
+          value: "{{ organized_enabled }}"
+        - option: organized_port
+          value: "{{ organized_port }}"
+
+  rescue:
+
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      fail:
+        msg: ""
+      when: not skip_role_on_error

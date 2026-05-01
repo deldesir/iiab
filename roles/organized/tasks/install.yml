@@ -1,0 +1,160 @@
+---
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
+- name: Install postgresql-client
+  apt:
+    name: postgresql-client
+    state: present
+  become: yes
+
+# --- System user & directories ---
+
+- name: Create organized system user
+  user:
+    name: "{{ organized_user }}"
+    system: yes
+    home: "{{ organized_dir }}"
+    create_home: no
+    shell: /usr/sbin/nologin
+  become: yes
+
+- name: Create log directory
+  file:
+    path: /var/log/organized
+    state: directory
+    owner: "{{ organized_user }}"
+    group: "{{ organized_user }}"
+    mode: '0755'
+  become: yes
+
+- name: Set ownership of organized backend
+  file:
+    path: "{{ organized_dir }}"
+    owner: "{{ organized_user }}"
+    group: "{{ organized_user }}"
+    recurse: yes
+  become: yes
+
+# --- Database ---
+
+- name: Create organized database user
+  community.postgresql.postgresql_user:
+    name: "{{ organized_db_user }}"
+    password: "{{ organized_db_pass }}"
+    role_attr_flags: CREATEDB
+  become: yes
+  become_user: postgres
+
+- name: Create organized database
+  community.postgresql.postgresql_db:
+    name: "{{ organized_db_name }}"
+    owner: "{{ organized_db_user }}"
+  become: yes
+  become_user: postgres
+
+# --- Environment file ---
+
+- name: Generate Django secret key
+  shell: "{{ organized_dir }}/.venv/bin/python3 -c \"import secrets,string; print(''.join(secrets.choice(string.ascii_letters+string.digits+'!@_+-=') for _ in range(50)))\""
+  register: django_secret_key
+  changed_when: false
+  when: organized_secret_key is not defined
+
+- name: Write organized environment file
+  template:
+    src: organized.env.j2
+    dest: /etc/iiab/organized.env
+    owner: "{{ organized_user }}"
+    group: "{{ organized_user }}"
+    mode: '0600'
+  become: yes
+  notify: restart organized
+
+# --- Backend setup ---
+
+- name: Install gunicorn in backend venv
+  command: "/root/.local/bin/uv pip install gunicorn"
+  args:
+    chdir: "{{ organized_dir }}"
+  become: yes
+  environment:
+    VIRTUAL_ENV: "{{ organized_dir }}/.venv"
+    PATH: "{{ organized_dir }}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+- name: Create organized backend migrations
+  command: "{{ organized_dir }}/.venv/bin/python manage.py makemigrations api"
+  args:
+    chdir: "{{ organized_dir }}"
+  become: yes
+  become_user: "{{ organized_user }}"
+  environment:
+    DJANGO_SECRET_KEY: "{{ django_secret_key.stdout | default(organized_secret_key | default('temp-key-for-migrations')) }}"
+
+- name: Run organized backend migrations
+  command: "{{ organized_dir }}/.venv/bin/python manage.py migrate"
+  args:
+    chdir: "{{ organized_dir }}"
+  become: yes
+  become_user: "{{ organized_user }}"
+  environment:
+    DJANGO_SECRET_KEY: "{{ django_secret_key.stdout | default(organized_secret_key | default('temp-key-for-migrations')) }}"
+    DB_NAME: "{{ organized_db_name }}"
+    DB_USER: "{{ organized_db_user }}"
+    DB_PASSWORD: "{{ organized_db_pass }}"
+
+- name: Collect static files
+  command: "{{ organized_dir }}/.venv/bin/python manage.py collectstatic --noinput"
+  args:
+    chdir: "{{ organized_dir }}"
+  become: yes
+  become_user: "{{ organized_user }}"
+  environment:
+    DJANGO_SECRET_KEY: "{{ django_secret_key.stdout | default(organized_secret_key | default('temp-key-for-migrations')) }}"
+
+# --- Systemd services ---
+
+- name: Install organized systemd service
+  template:
+    src: organized.service.j2
+    dest: /etc/systemd/system/organized.service
+    mode: '0644'
+  become: yes
+  notify: restart organized
+
+- name: Install organized celery systemd service
+  template:
+    src: organized-celery.service.j2
+    dest: /etc/systemd/system/organized-celery.service
+    mode: '0644'
+  become: yes
+  notify: restart organized-celery
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+  become: yes
+
+# --- Bookkeeping ---
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'organized_disk_usage = ...' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: organized
+    option: organized_disk_usage
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
+
+- name: "Set 'organized_installed: True'"
+  set_fact:
+    organized_installed: True
+
+- name: "Add 'organized_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"
+    regexp: '^organized_installed'
+    line: 'organized_installed: True'

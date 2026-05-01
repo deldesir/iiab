@@ -342,7 +342,7 @@
         - option: ai_update_enabled
           value: "{{ ai_update_enabled }}"
         - option: ai_update_last_run
-          value: "{{ ansible_date_time.iso8601 }}"
+          value: "{{ lookup('pipe', 'date --iso-8601=seconds') }}"
         - option: ai_update_skipped
           value: "{{ ai_update_skip | join(',') or 'none' }}"
 

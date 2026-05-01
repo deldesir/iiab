@@ -1,0 +1,12 @@
+---
+organized_install: False
+organized_enabled: False
+
+organized_dir: /opt/iiab/organized-backend
+organized_app_dir: /opt/iiab/organized-app
+organized_port: 8088
+organized_user: organized
+
+organized_db_name: organized
+organized_db_user: organized
+organized_db_pass: "{{ lookup('password', '/etc/iiab/.organized_db_pass chars=ascii_letters,digits length=24') }}"

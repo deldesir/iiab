@@ -1,0 +1,9 @@
+---
+dependencies: []
+
+galaxy_info:
+  role_name: organized
+  description: "Organized App Headless Backend for IIAB"
+  author: "Internet-in-a-Box project"
+  license: "GPLv3"
+  min_ansible_version: "2.12"

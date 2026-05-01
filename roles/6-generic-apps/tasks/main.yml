@@ -123,6 +123,11 @@
     name: bagisto-headless
   when: bagisto_headless_install
 
+- name: ORGANIZED
+  include_role:
+    name: organized
+  when: organized_install
+
 - name: Recording STAGE 6 HAS COMPLETED ====================
   lineinfile:
     path: "{{ iiab_env_file }}"

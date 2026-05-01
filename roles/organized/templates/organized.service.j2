@@ -1,0 +1,33 @@
+[Unit]
+Description=Organized App Backend (Gunicorn)
+After=network.target postgresql.service redis-server.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User={{ organized_user | default('organized') }}
+Group={{ organized_user | default('organized') }}
+WorkingDirectory={{ organized_dir }}
+EnvironmentFile=/etc/iiab/organized.env
+ExecStart={{ organized_dir }}/.venv/bin/gunicorn \
+    organized_backend.wsgi:application \
+    --bind 127.0.0.1:{{ organized_port }} \
+    --workers 1 \
+    --threads 2 \
+    --timeout 120 \
+    --access-logfile /var/log/organized/access.log \
+    --error-logfile /var/log/organized/error.log
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Systemd hardening
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths={{ organized_dir }} /var/log/organized
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

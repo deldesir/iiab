@@ -1,0 +1,31 @@
+[Unit]
+Description=Organized App Celery Worker
+After=network.target postgresql.service redis-server.service
+Requires=redis-server.service
+
+[Service]
+Type=simple
+User={{ organized_user | default('organized') }}
+Group={{ organized_user | default('organized') }}
+WorkingDirectory={{ organized_dir }}
+EnvironmentFile=/etc/iiab/organized.env
+ExecStart={{ organized_dir }}/.venv/bin/celery \
+    -A organized_backend worker \
+    --loglevel=info \
+    --concurrency=1 \
+    --logfile=/var/log/organized/celery.log \
+    --pidfile=/run/organized/celery.pid
+Restart=on-failure
+RestartSec=10
+
+# Systemd hardening
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths={{ organized_dir }} /var/log/organized /run/organized
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+RuntimeDirectory=organized
+
+[Install]
+WantedBy=multi-user.target
