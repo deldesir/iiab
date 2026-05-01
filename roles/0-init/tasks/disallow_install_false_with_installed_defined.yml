@@ -358,3 +358,15 @@
     that: mempalace_install or mempalace_installed is undefined
     fail_msg: "DISALLOWED: 'mempalace_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'mempalace_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
     quiet: yes
+
+- name: "DISALLOW 'organized_install: False' WHEN organized_installed is defined"
+  assert:
+    that: organized_install or organized_installed is undefined
+    fail_msg: "DISALLOWED: 'organized_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'organized_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
+    quiet: yes
+
+- name: "DISALLOW 'ssl_install: False' WHEN ssl_installed is defined"
+  assert:
+    that: ssl_install or ssl_installed is undefined
+    fail_msg: "DISALLOWED: 'ssl_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'ssl_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
+    quiet: yes

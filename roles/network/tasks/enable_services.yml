@@ -84,6 +84,14 @@
 
 
 # check-LAN should be iptables.yml remove later
+- name: Install iptables-persistent so firewall rules survive reboot
+  package:
+    name: iptables-persistent
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  when: not is_proot
+
 - name: Install clean copy of /usr/bin/iiab-gen-iptables from template (root:root by default)
   template:
     src: gateway/iiab-gen-iptables
