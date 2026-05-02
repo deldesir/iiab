@@ -498,7 +498,6 @@ litellm_master_key: ""
 # Bagisto: E-Commerce platform
 bagisto_install: False
 bagisto_enabled: False
-bagisto_app_url: ""
 
 # Konex: AI conversational backend
 konex_backend_install: False
