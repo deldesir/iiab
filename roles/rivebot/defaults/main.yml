@@ -29,3 +29,7 @@ rivebot_siyuan_api_url: "http://localhost:6806"
 rivebot_siyuan_api_token: "{{ siyuan_api_token | default('') }}"
 rivebot_siyuan_notebook_id: ""        # e.g. 20260321012908-iej1pzy
 rivebot_siyuan_poll_interval_s: "30"  # How often to poll (seconds)
+
+# RapidPro integration
+rivebot_rapidpro_api_url: "https://garantie.boutique/api/v2"
+rivebot_rapidpro_api_token: "{{ rapidpro_auth_token | default('') }}"
