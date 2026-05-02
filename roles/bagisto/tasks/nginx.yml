@@ -11,6 +11,11 @@
     state: absent
   when: not bagisto_enabled
 
+- name: Remove standalone nextjs-assets.conf (now part of bagisto.conf)
+  file:
+    path: "{{ nginx_conf_dir }}/nextjs-assets.conf"
+    state: absent
+
 - name: Restart 'nginx' systemd service
   systemd:
     name: nginx
