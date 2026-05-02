@@ -41,6 +41,7 @@
     force: yes
     update: yes
   become: yes
+  no_log: true
 
 - name: Clone JWLinker library
   git:
@@ -50,6 +51,7 @@
     force: yes
     update: yes
   become: yes
+  no_log: true
 
 - name: Clone AI Gateway repository
   git:
