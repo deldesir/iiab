@@ -129,7 +129,7 @@
   ignore_errors: yes
 
 - name: Generate Bagisto Storefront Key for headless auth
-  command: php artisan bagisto-api:generate-key
+  command: php artisan bagisto-api:generate-key --name="IIAB_Headless" --no-interaction
   args:
     chdir: "{{ bagisto_abs_path }}"
   register: storefront_key_result
