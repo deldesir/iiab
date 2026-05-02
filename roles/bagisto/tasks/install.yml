@@ -57,6 +57,15 @@
     path: "{{ bagisto_install_path }}"
     state: directory
 
+- name: Clone Bagisto source to {{ bagisto_src_dir }}
+  git:
+    repo: "{{ bagisto_repo }}"
+    dest: "{{ bagisto_src_dir }}"
+    version: "{{ bagisto_version }}"
+    depth: 1
+    force: yes
+  when: bagisto_src_dir is defined
+
 - name: Sync Bagisto source to {{ bagisto_abs_path }}
   synchronize:
     src: "{{ bagisto_src_dir }}/"
