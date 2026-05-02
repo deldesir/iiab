@@ -12,7 +12,7 @@
   become: yes
 
 - name: Ensure uv is installed
-  shell: which uv || curl -LsSf https://astral.sh/uv/install.sh | sh
+  shell: curl -LsSf https://astral.sh/uv/install.sh | sh
   args:
     creates: "{{ ai_gateway_uv_bin }}"
   become: yes
