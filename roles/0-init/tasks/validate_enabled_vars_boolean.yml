@@ -362,3 +362,9 @@
     that: ssl_enabled | type_debug == 'bool'
     fail_msg: "VARIABLE MUST BE BOOLEAN: 'ssl_enabled' now has type '{{ ssl_enabled | type_debug }}' and value '{{ ssl_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+
+- name: Assert that var erpnext_enabled is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: erpnext_enabled | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'erpnext_enabled' now has type '{{ erpnext_enabled | type_debug }}' and value '{{ erpnext_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

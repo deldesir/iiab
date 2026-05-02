@@ -362,3 +362,9 @@
     that: ssl_enabled is defined
     fail_msg: "VARIABLE MUST BE DEFINED: 'ssl_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
+
+- name: Assert that var erpnext_enabled is defined
+  assert:
+    that: erpnext_enabled is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'erpnext_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes

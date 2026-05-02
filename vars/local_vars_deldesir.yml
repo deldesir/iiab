@@ -33,7 +33,11 @@ admin_console_install: True
 admin_console_enabled: True
 #
 # Homepage: set to /home or /wordpress or /wiki (for MediaWiki)
-iiab_home_url: /live    # Bagisto storefront
+iiab_home_url: /live    # ERPNext — Full-featured ERP system (accounting, HR, inventory, manufacturing)
+erpnext_install: True
+erpnext_enabled: True
+
+# Bagisto storefront
 # You might also want to set captiveportal_splash_page (below!)
 #
 # Set to "False" if you do not want to use the latest js-menus, either because
@@ -448,6 +452,10 @@ asterisk_chan_dongle: False
 # ============================================================================
 # DELDESIR CUSTOM APPS
 # ============================================================================
+
+# ERPNext — Full-featured ERP system (accounting, HR, inventory, manufacturing)
+erpnext_install: True
+erpnext_enabled: True
 
 # Bagisto — E-commerce platform
 bagisto_install: True
