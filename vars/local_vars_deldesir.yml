@@ -480,7 +480,7 @@ ai_gateway_api_key: "CHANGEME"            # Generate: python3 -c "import secrets
 # ai_gateway_llm_model: "gemini-3.1-flash-lite-preview"
 # ai_gateway_admin_phone: "YOUR_PHONE"
 
-openclaw_install: False
+openclaw_install: True
 openclaw_enabled: False
 openclaw_admin_token: "CHANGEME"          # Generate unique per-service token
 
@@ -493,7 +493,7 @@ rivebot_install: True
 rivebot_enabled: True
 
 # LiteLLM — Multi-provider LLM proxy (optional, disabled by default)
-litellm_install: False
+litellm_install: True
 litellm_enabled: False
 litellm_master_key: "CHANGEME"            # Generate unique token
 litellm_env:
