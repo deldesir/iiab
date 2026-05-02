@@ -4,3 +4,15 @@
     name: nginx
     state: reloaded
   become: yes
+
+- name: restart organized
+  systemd:
+    name: organized
+    state: restarted
+  become: yes
+
+- name: restart organized-celery
+  systemd:
+    name: organized-celery
+    state: restarted
+  become: yes
