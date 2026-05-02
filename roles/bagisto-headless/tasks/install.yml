@@ -86,9 +86,10 @@
 # so API Platform does not attempt to map it as an API Resource and crash trying
 # to introspect its translation model. (This mimics what the bagisto-api installer does).
 - name: Make TranslatableModel abstract for API Platform compatibility
-  command: sed -i 's/class TranslatableModel extends Model/abstract class TranslatableModel extends Model/' packages/Webkul/Core/src/Eloquent/TranslatableModel.php
-  args:
-    chdir: "{{ bagisto_abs_path }}"
+  replace:
+    path: "{{ bagisto_abs_path }}/packages/Webkul/Core/src/Eloquent/TranslatableModel.php"
+    regexp: '^class TranslatableModel extends Model'
+    replace: 'abstract class TranslatableModel extends Model'
 
 - name: Rebuild autoload and discover packages
   shell: |
