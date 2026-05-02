@@ -1,7 +1,7 @@
 [Unit]
 Description=Organized App Celery Worker
-After=network.target postgresql.service redis-server.service
-Requires=redis-server.service
+After=network.target postgresql.service valkey-server.service
+Requires=valkey-server.service
 
 [Service]
 Type=simple
