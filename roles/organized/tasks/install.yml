@@ -27,6 +27,21 @@
     depth: 1
     force: yes
 
+- name: Install organized-app npm dependencies
+  command: npm ci --prefer-offline
+  args:
+    chdir: "{{ organized_app_dir }}"
+  environment:
+    NODE_OPTIONS: "--max-old-space-size=2048"
+
+- name: Build organized-app frontend (Vite)
+  command: npm run build
+  args:
+    chdir: "{{ organized_app_dir }}"
+    creates: "{{ organized_app_dir }}/dist/index.html"
+  environment:
+    NODE_OPTIONS: "--max-old-space-size=2048"
+
 - name: Create backend virtualenv with uv
   command: /root/.local/bin/uv venv --python /usr/bin/python3 .venv
   args:
