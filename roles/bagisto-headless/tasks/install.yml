@@ -27,13 +27,72 @@
     regexp: '^APP_ENV='
     line: 'APP_ENV=local'
 
-- name: Clear cached configs for API install
-  command: php artisan config:clear
+- name: Remove stale api-platform config (prevents UrlGeneratorInterface crash)
+  file:
+    path: "{{ bagisto_abs_path }}/config/api-platform.php"
+    state: absent
+
+- name: Clear Laravel caches before API install
+  shell: |
+    rm -f bootstrap/cache/packages.php bootstrap/cache/services.php
+    php artisan config:clear
   args:
     chdir: "{{ bagisto_abs_path }}"
 
-- name: Install Bagisto API Platform package via composer
-  command: composer require "{{ bagisto_api_package }}" --with-all-dependencies
+# -- Provider ordering fix --
+# ApiPlatformProvider must NOT auto-discover because it boots BEFORE
+# Bagisto's CheckoutServiceProvider registers contract->model bindings,
+# causing BindingResolutionException. We add it to dont-discover and
+# then register providers explicitly AFTER Bagisto's in providers.php.
+
+- name: Add api-platform and bagisto-api to composer dont-discover
+  shell: |
+    jq '.extra.laravel."dont-discover" += ["api-platform/laravel", "bagisto/bagisto-api"]
+        | .extra.laravel."dont-discover" |= unique' composer.json > composer.tmp \
+    && mv composer.tmp composer.json
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+
+- name: Install Bagisto API Platform package via composer (no-scripts)
+  command: composer require "{{ bagisto_api_package }}" --with-all-dependencies --no-scripts
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+  environment:
+    COMPOSER_ALLOW_SUPERUSER: "1"
+
+- name: Register API Platform providers AFTER Bagisto providers
+  copy:
+    dest: "{{ bagisto_abs_path }}/fix_providers.php"
+    content: |
+      <?php
+      $content = file_get_contents('bootstrap/providers.php');
+      if (strpos($content, 'ApiPlatformProvider') === false) {
+          $insert = "\n" .
+            "    // API Platform providers (must load AFTER Bagisto module providers)\n" .
+            "    \\ApiPlatform\\Laravel\\ApiPlatformProvider::class,\n" .
+            "    \\ApiPlatform\\Laravel\\ApiPlatformDeferredProvider::class,\n" .
+            "    \\ApiPlatform\\Laravel\\Eloquent\\ApiPlatformEventProvider::class,\n" .
+            "    \\Webkul\\BagistoApi\\Providers\\BagistoApiServiceProvider::class,\n";
+          $content = str_replace('];', $insert . '];', $content);
+          file_put_contents('bootstrap/providers.php', $content);
+      }
+
+- name: Apply provider ordering fix
+  command: php fix_providers.php
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+
+# Fix API Platform / astrotomic crash: make the base TranslatableModel abstract
+# so API Platform does not attempt to map it as an API Resource and crash trying
+# to introspect its translation model. (This mimics what the bagisto-api installer does).
+- name: Make TranslatableModel abstract for API Platform compatibility
+  command: sed -i 's/class TranslatableModel extends Model/abstract class TranslatableModel extends Model/' packages/Webkul/Core/src/Eloquent/TranslatableModel.php
+  args:
+    chdir: "{{ bagisto_abs_path }}"
+
+- name: Rebuild autoload and discover packages
+  shell: |
+    composer dump-autoload --no-scripts && php artisan package:discover
   args:
     chdir: "{{ bagisto_abs_path }}"
   environment:
@@ -135,6 +194,10 @@
   environment:
     NODE_ENV: production
     NEXT_TELEMETRY_DISABLED: "1"
+    # Override HTTPS endpoint to HTTP for build-time SSR pre-rendering.
+    # The production HTTPS URL is baked into .env.local for runtime,
+    # but at build time we need to reach Bagisto via local HTTP.
+    NEXT_PUBLIC_BAGISTO_ENDPOINT: "http://127.0.0.1{{ bagisto_app_url | regex_replace('^https?://[^/]+', '') }}"
 
 # -------------------------------------------------------
 # 4. Systemd service

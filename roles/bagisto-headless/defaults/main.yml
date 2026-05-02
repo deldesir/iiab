@@ -5,7 +5,7 @@ bagisto_headless_repo: "https://github.com/bagisto/nextjs-commerce.git"
 bagisto_headless_version: "main"
 bagisto_headless_dir: "/library/nextjs-commerce"
 bagisto_headless_port: 3001
-bagisto_api_package: "bagisto/bagisto-api:dev-main"
+bagisto_api_package: "bagisto/bagisto-api:v1.0.3"
 bagisto_headless_user: "{{ iiab_admin_user }}"
 # bagisto_abs_path and bagisto_app_url must be defined here because Ansible
 # does not carry over defaults from previous independent roles in the play.
