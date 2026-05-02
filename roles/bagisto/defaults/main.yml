@@ -3,7 +3,7 @@ bagisto_install: False
 bagisto_enabled: False
 
 bagisto_repo: "https://github.com/bagisto/bagisto.git"
-bagisto_version: "v2.2.3"
+bagisto_version: "master"
 bagisto_src_dir: /opt/iiab/bagisto-source
 bagisto_install_path: /library
 bagisto_abs_path: "{{ bagisto_install_path }}/bagisto"
