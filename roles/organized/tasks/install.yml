@@ -28,7 +28,7 @@
     force: yes
 
 - name: Create backend virtualenv with uv
-  command: /root/.local/bin/uv venv .venv
+  command: /root/.local/bin/uv venv --python /usr/bin/python3 .venv
   args:
     chdir: "{{ organized_dir }}"
     creates: "{{ organized_dir }}/.venv"
