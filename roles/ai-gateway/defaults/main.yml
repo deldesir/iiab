@@ -48,6 +48,8 @@ ai_gateway_siyuan_token: "{{ siyuan_api_token | default('') }}"
 
 # Optional admin contact (e.g. for debug webhooks)
 ai_gateway_admin_phone: ""
+ai_gateway_api_key: ""
+ai_gateway_authorized_users: ""
 
 # RiveBot intent-matching service
 ai_gateway_rivebot_url: "http://localhost:8087"
