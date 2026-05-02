@@ -63,8 +63,7 @@
 
 - name: Switch Bagisto channel to default shop theme (headless mode)
   command: >
-    mysql --user="{{ bagisto_db_user }}"
-    --password="{{ bagisto_db_pass }}"
+    mysql --socket=/run/mysqld/mysqld.sock
     "{{ bagisto_db_name }}"
     -e "UPDATE channels SET theme = 'default' WHERE theme = 'visual-debut';"
   ignore_errors: yes
@@ -130,7 +129,7 @@
   include_tasks: patch_storefront.yml
 
 - name: Build Next.js Application
-  command: npm run build
+  command: npx next build
   args:
     chdir: "{{ bagisto_headless_dir }}"
   environment:
