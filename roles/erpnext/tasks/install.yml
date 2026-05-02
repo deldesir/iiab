@@ -107,6 +107,33 @@
     creates: /home/{{ erpnext_user_name }}/.local/bin/uv
   when: erpnext_enabled | bool
 
+# frappe-bench unconditionally calls `sudo supervisorctl status` during
+# bench init / get-app.  Without supervisor + passwordless sudo, the
+# entire ERPNext installation crashes.
+- name: Install supervisor (required by frappe-bench tool)
+  apt:
+    name: supervisor
+    state: present
+  when: erpnext_enabled | bool
+
+- name: Ensure supervisor is running
+  systemd:
+    name: supervisor
+    state: started
+    enabled: yes
+  when: erpnext_enabled | bool
+
+- name: Grant frappe user passwordless sudo for bench tooling
+  copy:
+    dest: /etc/sudoers.d/frappe
+    content: |
+      {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl
+      {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/sbin/nginx
+      {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  when: erpnext_enabled | bool
+
 - name: Instruct uv to fetch specific Python version if needed
   become: yes
   become_user: "{{ erpnext_user_name }}"
