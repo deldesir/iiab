@@ -3,6 +3,36 @@
   shell: df -B1 --output=used / | tail -1
   register: df1
 
+- name: Clone organized-backend repository
+  git:
+    repo: "{{ organized_repo }}"
+    dest: "{{ organized_dir }}"
+    version: "{{ organized_version }}"
+    depth: 1
+    force: yes
+
+- name: Clone organized-app repository
+  git:
+    repo: "{{ organized_app_repo }}"
+    dest: "{{ organized_app_dir }}"
+    version: "{{ organized_app_version }}"
+    depth: 1
+    force: yes
+
+- name: Create backend virtualenv with uv
+  command: /root/.local/bin/uv venv .venv
+  args:
+    chdir: "{{ organized_dir }}"
+    creates: "{{ organized_dir }}/.venv"
+
+- name: Install backend dependencies with uv
+  command: /root/.local/bin/uv pip install -r requirements.txt
+  args:
+    chdir: "{{ organized_dir }}"
+  environment:
+    VIRTUAL_ENV: "{{ organized_dir }}/.venv"
+  ignore_errors: yes
+
 - name: Install postgresql-client
   apt:
     name: postgresql-client

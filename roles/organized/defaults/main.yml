@@ -3,7 +3,11 @@ organized_install: False
 organized_enabled: False
 
 organized_dir: /opt/iiab/organized-backend
+organized_repo: "https://github.com/deldesir/organized-backend.git"
+organized_version: "main"
 organized_app_dir: /opt/iiab/organized-app
+organized_app_repo: "https://github.com/deldesir/organized-app.git"
+organized_app_version: "main"
 organized_port: 8088
 organized_user: organized
 
