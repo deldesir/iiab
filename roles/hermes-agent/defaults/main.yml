@@ -10,7 +10,7 @@ hermes_agent_user: "{{ iiab_admin_user }}"
 hermes_agent_uv_bin: /root/.local/bin/uv
 
 # Source repository — tracks latest main branch
-hermes_agent_repo: "https://github.com/nousresearch/hermes-agent.git"
+hermes_agent_repo: "https://github.com/deldesir/hermes-agent.git"
 hermes_agent_version: "main"
 
 # AI Gateway virtualenv — Hermes is installed INTO the gateway's venv
