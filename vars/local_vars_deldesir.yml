@@ -33,11 +33,7 @@ admin_console_install: True
 admin_console_enabled: True
 #
 # Homepage: set to /home or /wordpress or /wiki (for MediaWiki)
-iiab_home_url: /live    # ERPNext — Full-featured ERP system (accounting, HR, inventory, manufacturing)
-erpnext_install: True
-erpnext_enabled: True
-
-# Bagisto storefront
+iiab_home_url: /live    # Bagisto storefront
 # You might also want to set captiveportal_splash_page (below!)
 #
 # Set to "False" if you do not want to use the latest js-menus, either because
@@ -298,9 +294,6 @@ kolibri_language: en    # ar,bg-bg,bn-bd,de,el,en,es-es,es-419,fa,fr-fr,ff-cm,gu
 # kiwix_install: True is REQUIRED, if you install IIAB's Admin Console
 kiwix_install: True
 kiwix_enabled: True
-
-anki_install: True
-anki_enabled: True
 
 # Warning: Moodle is a serious LMS, that takes a while to install
 moodle_install: False
