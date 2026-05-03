@@ -7,7 +7,19 @@ location {{ rapidpro_url }}/static/ {
 }
 
 location {{ rapidpro_url }}/media/ {
-    alias {{ rapidpro_dir }}/media/;
+    root {{ rapidpro_dir }};
+    rewrite ^{{ rapidpro_url }}/media/(.*)$ /media/$1 break;
+}
+
+# Forward /api/internal/ to RapidPro — bell notifications, orgs list, shortcuts, templates
+# Must use ^~ to beat the SiYuan regex catch-all: location ~ ^/api/(?!method/|resource/|v2/)
+location ^~ /api/internal/ {
+    rewrite ^/api/internal/(.*)$ {{ rapidpro_url if rapidpro_url.endswith('/') else rapidpro_url + '/' }}api/internal/$1 break;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Host $http_host;
+    proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
+    proxy_pass http://unix:{{ rapidpro_dir }}/run/gunicorn.sock;
 }
 
 # Forward /api/v2/ requests to RapidPro (not /api/ — ERPNext uses that)
