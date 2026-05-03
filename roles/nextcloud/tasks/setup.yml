@@ -1,7 +1,6 @@
 - name: 'Create MySQL database with name: {{ nextcloud_dbname }}'
   mysql_db:
     name: "{{ nextcloud_dbname }}"
-    login_unix_socket: /run/mysqld/mysqld.sock
 
 - name: Add username/password to the MySQL database (associated with trusted IP's like localhost)
   mysql_user:
@@ -9,7 +8,6 @@
     host: "{{ item }}"
     password: "{{ nextcloud_dbpassword }}"
     priv: "{{ nextcloud_dbname }}.*:ALL,GRANT"
-    login_unix_socket: /run/mysqld/mysqld.sock
   with_items:
 #    - 127.0.0.1
 #    - ::1
