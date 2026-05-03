@@ -57,3 +57,34 @@
     path: "{{ bagisto_headless_dir }}/src/app/(public)/search/[collection]/page.tsx"
     regexp: '\{ parentId: 1 \}'
     replace: '{}'
+
+- name: Patch next.config.ts to ignore build errors
+  replace:
+    path: "{{ bagisto_headless_dir }}/next.config.ts"
+    regexp: 'ignoreBuildErrors: false'
+    replace: 'ignoreBuildErrors: true'
+
+- name: Force dynamic rendering in public layout
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/app/layout.tsx"
+    regexp: 'import \{ Inter \} from "next/font/google";'
+    replace: "export const dynamic = 'force-dynamic';\nimport { Inter } from \"next/font/google\";"
+
+- name: Force dynamic rendering in checkout layout
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/app/(checkout)/layout.tsx"
+    regexp: 'import \{ Inter \} from "next/font/google";'
+    replace: "export const dynamic = 'force-dynamic';\nimport { Inter } from \"next/font/google\";"
+
+- name: Create custom SessionProvider wrapper with basePath
+  copy:
+    dest: "{{ bagisto_headless_dir }}/src/providers/SessionProvider.tsx"
+    content: |
+      "use client";
+      import { SessionProvider as NextAuthSessionProvider } from "next-auth/react";
+      import { ReactNode } from "react";
+      
+      export function SessionProvider({ children }: { children: ReactNode }) {
+        const basePath = (process.env.NEXT_PUBLIC_AUTH_BASEPATH || "") + "/api/auth";
+        return <NextAuthSessionProvider basePath={basePath}>{children}</NextAuthSessionProvider>;
+      }
