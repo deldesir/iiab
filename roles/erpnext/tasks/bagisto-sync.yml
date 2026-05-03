@@ -1,0 +1,90 @@
+---
+# Install and configure the iiab_commerce Frappe app for ERPNext ↔ Bagisto sync.
+# This task file is conditionally included from bagisto-headless/tasks/install.yml
+# when erpnext_bagisto_sync is True.
+
+- name: Check if iiab_commerce app is already installed
+  command: bench --site {{ erpnext_site_name }} list-apps
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  register: installed_apps
+  changed_when: false
+
+- name: Get iiab_commerce app from git
+  command: >
+    bench get-app
+    --branch {{ erpnext_bagisto_commerce_version }}
+    {{ erpnext_bagisto_commerce_repo }}
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  when: "'iiab_commerce' not in installed_apps.stdout"
+
+- name: Install iiab_commerce app on site
+  command: bench --site {{ erpnext_site_name }} install-app iiab_commerce
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  when: "'iiab_commerce' not in installed_apps.stdout"
+
+- name: Configure Bagisto API URL in site_config
+  command: bench --site {{ erpnext_site_name }} set-config bagisto_api_url "{{ erpnext_bagisto_api_url }}"
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+
+- name: Configure Bagisto admin email in site_config
+  command: bench --site {{ erpnext_site_name }} set-config bagisto_admin_email "{{ erpnext_bagisto_admin_email }}"
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+
+- name: Configure Bagisto admin password in site_config
+  command: bench --site {{ erpnext_site_name }} set-config bagisto_admin_password "{{ erpnext_bagisto_admin_password }}"
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  no_log: true
+
+- name: Configure Bagisto DB credentials in site_config
+  command: "bench --site {{ erpnext_site_name }} set-config {{ item.key }} {{ item.value }}"
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  loop:
+    - { key: "bagisto_db_user", value: "{{ bagisto_db_user }}" }
+    - { key: "bagisto_db_password", value: "{{ bagisto_db_pass }}" }
+  no_log: true
+
+- name: Grant Bagisto DB user access from localhost (for unix socket)
+  community.mysql.mysql_user:
+    name: "{{ bagisto_db_user }}"
+    password: "{{ bagisto_db_pass }}"
+    priv: "{{ bagisto_db_name }}.*:ALL"
+    host: "localhost"
+    state: present
+    append_privs: yes
+
+- name: Run iiab_commerce migrations
+  command: bench --site {{ erpnext_site_name }} migrate
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+
+- name: Restart ERPNext workers to pick up new hooks
+  systemd:
+    name: "{{ item }}"
+    state: restarted
+  loop:
+    - erpnext-gunicorn
+    - erpnext-worker
+  ignore_errors: yes

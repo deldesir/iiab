@@ -257,3 +257,12 @@
     path: "{{ iiab_state_file }}"
     regexp: '^bagisto_headless_installed'
     line: 'bagisto_headless_installed: True'
+
+# -------------------------------------------------------
+# 6. ERPNext ↔ Bagisto sync (optional)
+# -------------------------------------------------------
+
+- name: Install ERPNext ↔ Bagisto sync layer
+  include_tasks: "{{ role_path }}/../erpnext/tasks/bagisto-sync.yml"
+  when: erpnext_bagisto_sync | default(False) and erpnext_installed | default(False)
+

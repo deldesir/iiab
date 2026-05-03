@@ -23,3 +23,12 @@ erpnext_extra_apps:
   - { name: "builder",    branch: "develop",    app_name: "builder" }
   - { name: "payments",   branch: "version-16", app_name: "payments" }
   - { name: "webshop",    branch: "develop",    app_name: "webshop" }
+
+# ERPNext ↔ Bagisto sync (requires bagisto_headless_install: True)
+erpnext_bagisto_sync: False
+erpnext_bagisto_api_url: "http://127.0.0.1/live"
+erpnext_bagisto_admin_email: "admin@example.com"
+erpnext_bagisto_admin_password: "admin123"
+erpnext_bagisto_sync_secret: "changeme"
+erpnext_bagisto_commerce_repo: "https://github.com/deldesir/iiab-commerce.git"
+erpnext_bagisto_commerce_version: "main"
