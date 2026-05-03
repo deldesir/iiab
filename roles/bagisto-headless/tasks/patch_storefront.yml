@@ -1,4 +1,10 @@
 ---
+- name: Inject basePath into next.config.ts
+  replace:
+    path: "{{ bagisto_headless_dir }}/next.config.ts"
+    regexp: 'const nextConfig: NextConfig = \{'
+    replace: 'const nextConfig: NextConfig = {\n  basePath: process.env.NEXT_BASE_PATH || "",'
+
 - name: Patch utils/constants.ts for image fallback base URLs
   replace:
     path: "{{ bagisto_headless_dir }}/src/utils/constants.ts"

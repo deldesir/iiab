@@ -29,7 +29,7 @@ location ^~ {{ bagisto_subpath }}/admin {
 
 # Next.js API routes — proxy to Next.js (^~ longest-prefix takes priority)
 location ^~ {{ bagisto_subpath }}/api/auth {
-    proxy_pass http://127.0.0.1:{{ bagisto_headless_port | default(3001) }}/;
+    proxy_pass http://127.0.0.1:{{ bagisto_headless_port | default(3001) }};
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -38,7 +38,7 @@ location ^~ {{ bagisto_subpath }}/api/auth {
 }
 
 location ^~ {{ bagisto_subpath }}/api/revalidate {
-    proxy_pass http://127.0.0.1:{{ bagisto_headless_port | default(3001) }}/;
+    proxy_pass http://127.0.0.1:{{ bagisto_headless_port | default(3001) }};
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -76,7 +76,7 @@ location ^~ {{ bagisto_subpath }}/cache {
 
 # Everything else → Next.js on port {{ bagisto_headless_port | default(3001) }}
 location ^~ {{ bagisto_subpath }} {
-    proxy_pass http://127.0.0.1:{{ bagisto_headless_port | default(3001) }}/;
+    proxy_pass http://127.0.0.1:{{ bagisto_headless_port | default(3001) }};
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection 'upgrade';
