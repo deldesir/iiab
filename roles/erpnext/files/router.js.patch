@@ -63,7 +63,7 @@
  	push_state(path, query_params = "") {
 +		// Normalise: ensure path always carries the IIAB subpath prefix
 +		const prefix = this._subpath_prefix;
-+		if (prefix && path.startsWith("/desk")) {
++		if (prefix && !path.startsWith(prefix) && (path.startsWith("/desk") || path.startsWith("/app"))) {
 +			path = prefix + path;
 +		}
  		if (window.location.pathname !== path || window.location.search !== query_params) {
