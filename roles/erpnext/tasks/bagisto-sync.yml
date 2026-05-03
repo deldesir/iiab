@@ -80,6 +80,16 @@
   become: yes
   become_user: "{{ erpnext_user_name }}"
 
+- name: Ensure Bagisto channel currency is set to HTG
+  community.mysql.mysql_query:
+    login_user: "{{ bagisto_db_user }}"
+    login_password: "{{ bagisto_db_pass }}"
+    login_db: "{{ bagisto_db_name }}"
+    login_unix_socket: /run/mysqld/mysqld.sock
+    query: |
+      DELETE FROM channel_currencies WHERE currency_id != 2;
+      INSERT IGNORE INTO channel_currencies (channel_id, currency_id) VALUES (1, 2);
+
 - name: Restart ERPNext workers to pick up new hooks
   systemd:
     name: "{{ item }}"
