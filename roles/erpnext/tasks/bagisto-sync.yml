@@ -80,15 +80,26 @@
   become: yes
   become_user: "{{ erpnext_user_name }}"
 
-- name: Ensure Bagisto channel currency is set to HTG
+- name: Ensure HTG currency exists in Bagisto
   community.mysql.mysql_query:
     login_user: "{{ bagisto_db_user }}"
     login_password: "{{ bagisto_db_pass }}"
     login_db: "{{ bagisto_db_name }}"
     login_unix_socket: /run/mysqld/mysqld.sock
     query: |
-      DELETE FROM channel_currencies WHERE currency_id != 2;
-      INSERT IGNORE INTO channel_currencies (channel_id, currency_id) VALUES (1, 2);
+      INSERT IGNORE INTO currencies (id, code, name, symbol, `decimal`, group_separator, decimal_separator)
+      VALUES (2, 'HTG', 'Haitian Gourde', 'G', 2, ',', '.');
+
+- name: Set Bagisto channel base currency to HTG
+  community.mysql.mysql_query:
+    login_user: "{{ bagisto_db_user }}"
+    login_password: "{{ bagisto_db_pass }}"
+    login_db: "{{ bagisto_db_name }}"
+    login_unix_socket: /run/mysqld/mysqld.sock
+    query: |
+      UPDATE channels SET base_currency_id = 2 WHERE id = 1;
+      DELETE FROM channel_currencies WHERE channel_id = 1;
+      INSERT INTO channel_currencies (channel_id, currency_id) VALUES (1, 2);
 
 - name: Deploy sync_category.php helper script to Bagisto
   copy:

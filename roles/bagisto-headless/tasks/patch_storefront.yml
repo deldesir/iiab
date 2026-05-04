@@ -153,3 +153,48 @@
                   { status: 200 }
               );
           }
+
+# -------------------------------------------------------
+# Currency: Replace hardcoded "USD" with env-driven constant
+# -------------------------------------------------------
+
+# Add CURRENCY_CODE export to constants.ts so all components can import it
+- name: Add CURRENCY_CODE constant to constants.ts
+  lineinfile:
+    path: "{{ bagisto_headless_dir }}/src/utils/constants.ts"
+    insertafter: "export const STOREFRONT_KEY"
+    line: 'export const CURRENCY_CODE = process.env.NEXT_PUBLIC_DEFAULT_CURRENCY || "HTG";'
+
+# Fix the x-currency header in the Bagisto GraphQL fetch client
+- name: Patch bagisto fetch x-currency header to use CURRENCY_CODE
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/utils/bagisto/index.ts"
+    regexp: '"x-currency": "USD"'
+    replace: '"x-currency": process.env.NEXT_PUBLIC_DEFAULT_CURRENCY || "HTG"'
+
+# Fix the Price component default
+- name: Patch Price component default currency
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/components/theme/ui/Price.tsx"
+    regexp: 'currencyCode = "USD"'
+    replace: 'currencyCode = "HTG"'
+
+# Fix safeCurrencyCode fallback in helper.ts
+- name: Patch safeCurrencyCode fallback in helper.ts
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/utils/helper.ts"
+    regexp: '  return "USD";'
+    replace: '  return "HTG";'
+
+# Replace all hardcoded currencyCode={"USD"} props across components
+- name: Replace hardcoded currencyCode USD in all components
+  shell: |
+    find {{ bagisto_headless_dir }}/src/components -name "*.tsx" \
+      -exec sed -i 's/currencyCode={"USD"}/currencyCode={"HTG"}/g' {} +
+    find {{ bagisto_headless_dir }}/src/components -name "*.tsx" \
+      -exec sed -i "s/currencyCode: \"USD\"/currencyCode: \"HTG\"/g" {} +
+    find {{ bagisto_headless_dir }}/src/components -name "*.tsx" \
+      -exec sed -i "s/currencyCode: 'USD'/currencyCode: 'HTG'/g" {} +
+    find {{ bagisto_headless_dir }}/src/components -name "*.tsx" \
+      -exec sed -i 's/currency="USD"/currency="HTG"/g' {} +
+  changed_when: true
