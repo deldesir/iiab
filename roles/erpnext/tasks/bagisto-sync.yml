@@ -90,6 +90,26 @@
       DELETE FROM channel_currencies WHERE currency_id != 2;
       INSERT IGNORE INTO channel_currencies (channel_id, currency_id) VALUES (1, 2);
 
+- name: Deploy sync_category.php helper script to Bagisto
+  copy:
+    src: "{{ role_path }}/files/sync_category.php"
+    dest: "{{ bagisto_abs_path }}/sync_category.php"
+    owner: www-data
+    group: www-data
+    mode: '0644'
+
+- name: Ensure Bagisto .env is group-readable (frappe sync reads DB creds via PHP)
+  file:
+    path: "{{ bagisto_abs_path }}/.env"
+    mode: '0640'
+    group: www-data
+
+- name: Ensure Bagisto storage is group-writable for frappe sync
+  shell: |
+    find {{ bagisto_abs_path }}/storage -type d -exec chmod 775 {} +
+    find {{ bagisto_abs_path }}/storage -type f -exec chmod 664 {} +
+  changed_when: false
+
 - name: Restart ERPNext workers to pick up new hooks
   systemd:
     name: "{{ item }}"

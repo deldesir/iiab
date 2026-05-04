@@ -81,6 +81,8 @@
     name: "{{ erpnext_user_name }}"
     shell: /bin/bash
     home: /home/{{ erpnext_user_name }}
+    groups: www-data
+    append: yes
   when: erpnext_enabled | bool
 
 - name: Ensure pipx is installed and in path for frappe user

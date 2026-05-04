@@ -11,6 +11,12 @@
     regexp: 'export const (SIGNUP_IMG|SIGNIN_IMG|FORGET_PASSWORD_IMG|NOT_IMAGE) = "/image/([^"]*)";'
     replace: 'export const \1 = `${baseUrl}/image/\2`;'
 
+- name: Patch utils/constants.ts to use internal backend URL for server-side fetches to avoid Nginx proxy loops
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/utils/constants.ts"
+    regexp: 'export const GRAPHQL_URL = `\$\{\(process.env.NEXT_PUBLIC_BAGISTO_ENDPOINT \|\| .\'\'\)\.replace\(\/\\\\/\$\/, .\'\'\)\}\$\{BAGISTO_GRAPHQL_API_ENDPOINT\}`;'
+    replace: 'export const GRAPHQL_URL = typeof window === "undefined" ? "http://127.0.0.1{{ bagisto_app_url | regex_replace(\"^https?://[^/]+\", \"\") | regex_replace(\"/$\", \"\") }}/graphql-backend" : `${(process.env.NEXT_PUBLIC_BAGISTO_ENDPOINT || "").replace(/\\/$/, "")}${BAGISTO_GRAPHQL_API_ENDPOINT}`;'
+
 - name: Patch utils/fetch-handler.ts to prepend basePath
   replace:
     path: "{{ bagisto_headless_dir }}/src/utils/fetch-handler.ts"
@@ -58,11 +64,35 @@
     regexp: '\{ parentId: 1 \}'
     replace: '{}'
 
+- name: Patch apollo-client.ts to prepend basePath on client side
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/lib/apollo-client.ts"
+    regexp: 'uri: ssrMode \? GRAPHQL_URL : "/api/graphql",'
+    replace: 'uri: ssrMode ? GRAPHQL_URL : `${process.env.NEXT_PUBLIC_AUTH_BASEPATH || ""}/api/graphql`,'
+
+- name: Patch GlobalProviders.tsx to wrap app in SessionProvider
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/providers/GlobalProviders.tsx"
+    regexp: 'export function GlobalProviders\(\{ children \}: \{ children: ReactNode \}\) \{\n  return \(\n    <ThemeProvider>'
+    replace: "import { SessionProvider } from \"./SessionProvider\";\n\nexport function GlobalProviders({ children }: { children: ReactNode }) {\n  return (\n    <SessionProvider>\n      <ThemeProvider>"
+
+- name: Patch GlobalProviders.tsx to close SessionProvider
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/providers/GlobalProviders.tsx"
+    regexp: '    </ThemeProvider>\n  \);\n\}'
+    replace: "    </ThemeProvider>\n    </SessionProvider>\n  );\n}"
+
 - name: Patch next.config.ts to ignore build errors
   replace:
     path: "{{ bagisto_headless_dir }}/next.config.ts"
     regexp: 'ignoreBuildErrors: false'
     replace: 'ignoreBuildErrors: true'
+
+- name: Enable Next.js image optimization to fix sluggish UX
+  replace:
+    path: "{{ bagisto_headless_dir }}/next.config.ts"
+    regexp: 'unoptimized: true,\s*remotePatterns: \[\],'
+    replace: 'unoptimized: false, remotePatterns: [{ protocol: "http", hostname: "**" }, { protocol: "https", hostname: "**" }],'
 
 - name: Force dynamic rendering in public layout
   replace:
@@ -88,3 +118,38 @@
         const basePath = (process.env.NEXT_PUBLIC_AUTH_BASEPATH || "") + "/api/auth";
         return <NextAuthSessionProvider basePath={basePath}>{children}</NextAuthSessionProvider>;
       }
+
+# Fix GraphQL API route error handler: the upstream code returns Bagisto errors
+# as HTTP 500, which crashes Apollo Client. This patch returns them as HTTP 200
+# with a proper GraphQL `errors` array so the frontend can handle them gracefully.
+- name: Fix GraphQL route error handler (return errors as 200, not 500)
+  replace:
+    path: "{{ bagisto_headless_dir }}/src/app/api/graphql/route.ts"
+    regexp: '\} catch \(error\) \{\s+if \(isBagistoError\(error\)\) \{\s+return NextResponse\.json\(\s+\{\s+data: null,\s+error: error\.cause \?\? error,\s+\},\s+\{ status: 200 \}\s+\);\s+\}\s+return NextResponse\.json\(\s+\{\s+message: "Network error",\s+error: error instanceof Error \? error\.message : error,\s+\},\s+\{ status: 500 \}\s+\);\s+\}'
+    replace: |
+      } catch (error: any) {
+              // If the error object has a message and extensions, it's likely the GraphQL error thrown by bagistoFetch
+              if (error && typeof error === 'object' && error.message) {
+                  return NextResponse.json(
+                      {
+                          data: null,
+                          errors: [error],
+                      },
+                      { status: 200 }
+                  );
+              }
+
+              // Generic fallback for network or unknown errors
+              return NextResponse.json(
+                  {
+                      data: null,
+                      errors: [
+                          {
+                              message: error instanceof Error ? error.message : "Unknown Error",
+                              extensions: { originalError: error }
+                          }
+                      ]
+                  },
+                  { status: 200 }
+              );
+          }
