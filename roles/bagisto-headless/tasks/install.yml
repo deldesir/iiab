@@ -211,10 +211,6 @@
   environment:
     NODE_ENV: production
     NEXT_TELEMETRY_DISABLED: "1"
-    # Override HTTPS endpoint to HTTP for build-time SSR pre-rendering.
-    # The production HTTPS URL is baked into .env.local for runtime,
-    # but at build time we need to reach Bagisto via local HTTP.
-    NEXT_PUBLIC_BAGISTO_ENDPOINT: "http://127.0.0.1{{ bagisto_app_url | regex_replace('^https?://[^/]+', '') }}"
 
 - name: Fix .next cache ownership for www-data service
   file:
