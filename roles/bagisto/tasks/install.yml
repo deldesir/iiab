@@ -21,6 +21,8 @@
       with_items:
         - .env
         - .iiab-setup-done
+        - config/api-platform.php
+        - config/graphql.php
 
     - name: Drop previous Bagisto database on reinstall
       community.mysql.mysql_db:
@@ -100,6 +102,11 @@
 - name: Install Composer
   command: "php /tmp/installer.php --install-dir=/usr/local/bin --filename=composer"
   when: not composer_bin.stat.exists
+
+- name: Remove stale api-platform config before composer install (prevents fatal errors if headless was previously installed)
+  file:
+    path: "{{ bagisto_abs_path }}/config/api-platform.php"
+    state: absent
 
 - name: Install Bagisto PHP dependencies via composer
   composer:

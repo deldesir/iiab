@@ -216,6 +216,13 @@
     # but at build time we need to reach Bagisto via local HTTP.
     NEXT_PUBLIC_BAGISTO_ENDPOINT: "http://127.0.0.1{{ bagisto_app_url | regex_replace('^https?://[^/]+', '') }}"
 
+- name: Fix .next cache ownership for www-data service
+  file:
+    path: "{{ bagisto_headless_dir }}/.next"
+    owner: www-data
+    group: www-data
+    recurse: yes
+
 # -------------------------------------------------------
 # 4. Systemd service
 # -------------------------------------------------------

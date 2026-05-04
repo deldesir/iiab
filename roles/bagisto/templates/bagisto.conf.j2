@@ -46,6 +46,25 @@ location ^~ {{ bagisto_subpath }}/api/revalidate {
     proxy_set_header X-Forwarded-Proto $scheme;
 }
 
+location ^~ {{ bagisto_subpath }}/api/graphql {
+    proxy_pass http://127.0.0.1:{{ bagisto_headless_port | default(3001) }};
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# Internal backend endpoint for Next.js server-side fetches to avoid infinite proxy loop
+location ^~ {{ bagisto_subpath }}/graphql-backend {
+    include fastcgi_params;
+    fastcgi_pass php;
+    fastcgi_param SCRIPT_FILENAME {{ bagisto_abs_path }}/public/index.php;
+    fastcgi_param SCRIPT_NAME {{ bagisto_subpath }}/index.php;
+    fastcgi_param REQUEST_URI {{ bagisto_subpath }}/api/graphql;
+    fastcgi_hide_header X-Powered-By;
+}
+
 # Bagisto REST + GraphQL API → PHP-FPM (all other /api/*)
 location ^~ {{ bagisto_subpath }}/api {
     try_files $uri $uri/ @bagisto;

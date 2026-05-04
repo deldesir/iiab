@@ -34,12 +34,8 @@ try {
             'meta_description' => '',
             'meta_keywords' => '',
         ],
-        'locale' => 'all'
+        'locale' => ['en']
     ];
-
-    if (!empty($data['logo_path'])) {
-        $categoryData['logo_path'] = $data['logo_path']; // e.g. "category/image.png" (relative to storage/app/public)
-    }
 
     if ($existing) {
         $categoryId = $existing->category_id;
@@ -48,6 +44,16 @@ try {
         $category = $categoryRepository->create($categoryData);
         $categoryId = $category->id;
     }
+
+    // Set logo_path and status directly via SQL — the repository
+    // ignores logo_path (expects file upload) and may reset status
+    $updates = ['status' => $data['status'] ?? 1];
+    if (!empty($data['logo_path'])) {
+        $updates['logo_path'] = $data['logo_path'];
+    }
+    \DB::table('categories')
+        ->where('id', $categoryId)
+        ->update($updates);
 
     echo json_encode(["status" => "success", "category_id" => $categoryId]);
     exit(0);
