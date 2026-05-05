@@ -1,0 +1,17 @@
+--- a/crm/demo/api.py
++++ b/crm/demo/api.py
+@@ -13,6 +13,14 @@
+ 
+ 
+ def create_demo_data(_args: dict | None = None):
++# Only create demo data when explicitly requested via the setup wizard
++# checkbox ("Generate Demo Data for Exploration").  The CRM hook
++# setup_wizard_complete fires on every wizard completion; without this
++# guard, demo users/leads/deals are injected even when the user did NOT
++# opt in.  (Mirrors ERPNext's own check in setup_wizard.py line 33.)
++if _args and not _args.get("setup_demo"):
++return
++
+ if frappe.db.get_default(DEMO_STATE_KEY):
+ return
+ 
