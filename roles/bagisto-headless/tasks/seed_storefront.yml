@@ -1,0 +1,124 @@
+---
+# Seed essential Bagisto theme customization blocks for the headless storefront.
+# Idempotent: uses INSERT IGNORE / conditional inserts.
+#
+# These blocks control what appears on the storefront homepage:
+# - category_carousel: shows navigable category tiles
+# - product_carousel: shows product listings by category
+
+- name: Ensure 'Shop' root category exists for storefront product listing
+  community.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_db: "{{ bagisto_db_name }}"
+    query: |
+      INSERT INTO categories (position, status, _lft, _rgt, parent_id)
+      SELECT 99, 1, COALESCE(MAX(_rgt),1)+1, COALESCE(MAX(_rgt),1)+2, 1
+      FROM categories
+      WHERE NOT EXISTS (
+        SELECT 1 FROM category_translations WHERE slug = 'shop'
+      );
+  ignore_errors: yes
+
+- name: Add translation for Shop category if missing
+  community.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_db: "{{ bagisto_db_name }}"
+    query: |
+      INSERT IGNORE INTO category_translations (category_id, locale, name, slug, description)
+      SELECT id, 'en', 'Shop', 'shop', 'All products'
+      FROM categories c
+      WHERE NOT EXISTS (
+        SELECT 1 FROM category_translations WHERE category_id = c.id AND locale = 'en'
+      )
+      AND c.parent_id = 1
+      ORDER BY c.id DESC LIMIT 1;
+  ignore_errors: yes
+
+- name: Look up Shop category ID
+  community.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_db: "{{ bagisto_db_name }}"
+    query: "SELECT ct.category_id FROM category_translations ct WHERE ct.slug = 'shop' LIMIT 1"
+  register: shop_cat_result
+  ignore_errors: yes
+
+- name: Set shop_category_id fact
+  set_fact:
+    shop_category_id: "{{ shop_cat_result.query_result[0][0].category_id | default(1) }}"
+  when: shop_cat_result is defined and shop_cat_result.query_result is defined
+
+# --- Theme customization blocks ---
+
+- name: Check existing theme customization types
+  community.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_db: "{{ bagisto_db_name }}"
+    query: "SELECT type, COUNT(*) as cnt FROM theme_customizations GROUP BY type"
+  register: existing_blocks
+
+- name: Seed category_carousel block if missing
+  community.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_db: "{{ bagisto_db_name }}"
+    query: |
+      INSERT INTO theme_customizations (type, name, sort_order, status, channel_id, theme_code)
+      VALUES ('category_carousel', 'Categories Collections', 3, 1, 1, 'default');
+  when: existing_blocks.query_result[0] | selectattr('type', 'eq', 'category_carousel') | list | length == 0
+
+- name: Seed category_carousel translation if missing
+  community.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_db: "{{ bagisto_db_name }}"
+    query: |
+      INSERT IGNORE INTO theme_customization_translations
+        (theme_customization_id, locale, options)
+      SELECT id, 'en', '{"filters":{"parent_id":1,"sort":"asc","limit":10}}'
+      FROM theme_customizations
+      WHERE type = 'category_carousel'
+      AND id NOT IN (SELECT theme_customization_id FROM theme_customization_translations WHERE locale = 'en')
+      LIMIT 1;
+  ignore_errors: yes
+
+- name: Seed product_carousel blocks if missing
+  community.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_db: "{{ bagisto_db_name }}"
+    query: |
+      INSERT INTO theme_customizations (type, name, sort_order, status, channel_id, theme_code)
+      VALUES
+        ('product_carousel', 'New Arrivals', 4, 1, 1, 'default'),
+        ('product_carousel', 'Featured Products', 5, 1, 1, 'default');
+  when: existing_blocks.query_result[0] | selectattr('type', 'eq', 'product_carousel') | list | length == 0
+
+- name: Seed product_carousel translations if missing
+  community.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_db: "{{ bagisto_db_name }}"
+    query: |
+      INSERT IGNORE INTO theme_customization_translations
+        (theme_customization_id, locale, options)
+      SELECT id, 'en',
+        CASE name
+          WHEN 'New Arrivals' THEN CONCAT('{"title":"New Arrivals","filters":{"category_id":"{{ shop_category_id | default(1) }}","sort":"created_at-desc","limit":10}}')
+          WHEN 'Featured Products' THEN CONCAT('{"title":"Featured Products","filters":{"category_id":"{{ shop_category_id | default(1) }}","sort":"price-desc","limit":10}}')
+        END
+      FROM theme_customizations
+      WHERE type = 'product_carousel'
+      AND id NOT IN (SELECT theme_customization_id FROM theme_customization_translations WHERE locale = 'en');
+  ignore_errors: yes
+
+# --- Sync admin logo to channel (so storefront picks up admin panel logo) ---
+
+- name: Sync admin panel logo to channel (storefront reads channel logo)
+  community.mysql.mysql_query:
+    login_unix_socket: /run/mysqld/mysqld.sock
+    login_db: "{{ bagisto_db_name }}"
+    query: |
+      UPDATE channels SET logo = (
+        SELECT value FROM core_config
+        WHERE code = 'general.design.admin_logo.logo_image'
+        LIMIT 1
+      ) WHERE id = 1 AND EXISTS (
+        SELECT 1 FROM core_config WHERE code = 'general.design.admin_logo.logo_image'
+      );
+  ignore_errors: yes

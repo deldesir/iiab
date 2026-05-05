@@ -204,6 +204,9 @@
     - "{{ bagisto_abs_path }}/storage"
     - "{{ bagisto_abs_path }}/bootstrap/cache"
 
+- name: Seed Bagisto storefront data (theme blocks, logo sync)
+  include_tasks: seed_storefront.yml
+
 - name: Build Next.js Application
   command: npx next build
   args:

@@ -1,7 +1,7 @@
 ---
 # Install and configure the iiab_commerce Frappe app for ERPNext ↔ Bagisto sync.
 # This task file is conditionally included from bagisto-headless/tasks/install.yml
-# when erpnext_bagisto_sync is True.
+# when erpnext_installed is True (auto-enabled by bagisto-headless).
 
 - name: Check if iiab_commerce app is already installed
   command: bench --site {{ erpnext_site_name }} list-apps
@@ -115,10 +115,17 @@
     mode: '0640'
     group: www-data
 
+- name: Add frappe user to www-data group (for Bagisto storage writes)
+  user:
+    name: "{{ erpnext_user_name }}"
+    groups: www-data
+    append: yes
+
 - name: Ensure Bagisto storage is group-writable for frappe sync
   shell: |
     find {{ bagisto_abs_path }}/storage -type d -exec chmod 775 {} +
     find {{ bagisto_abs_path }}/storage -type f -exec chmod 664 {} +
+    chgrp -R www-data {{ bagisto_abs_path }}/storage {{ bagisto_abs_path }}/bootstrap/cache
   changed_when: false
 
 - name: Restart ERPNext workers to pick up new hooks
@@ -126,6 +133,7 @@
     name: "{{ item }}"
     state: restarted
   loop:
-    - erpnext-gunicorn
-    - erpnext-worker
+    - frappe-bench-frappe-web
+    - frappe-bench-frappe-default-worker@1
+    - frappe-bench-frappe-schedule
   ignore_errors: yes
