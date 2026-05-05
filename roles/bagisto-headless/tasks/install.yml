@@ -262,10 +262,10 @@
     line: 'bagisto_headless_installed: True'
 
 # -------------------------------------------------------
-# 6. ERPNext ↔ Bagisto sync (optional)
+# 6. ERPNext ↔ Bagisto sync (auto-enabled when ERPNext is present)
 # -------------------------------------------------------
 
 - name: Install ERPNext ↔ Bagisto sync layer
   include_tasks: "{{ role_path }}/../erpnext/tasks/bagisto-sync.yml"
-  when: erpnext_bagisto_sync | default(False) and erpnext_installed | default(False)
+  when: erpnext_installed | default(False)
 
