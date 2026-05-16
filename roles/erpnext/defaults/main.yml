@@ -11,7 +11,7 @@ erpnext_user_name: "frappe"
 erpnext_db_name: "_site_local"
 erpnext_db_user: "_site_local"
 erpnext_db_password: "CHANGEME" # User should ideally override this
-# Public URL for email/PDF links (e.g. "https://garantie.boutique/erpnext").
+# Public URL for email/PDF links (e.g. "https://garantie.boutique/erp").
 # Leave empty ("") to let Frappe use the HTTP Host header dynamically.
 erpnext_host_name: ""
 
@@ -22,13 +22,5 @@ erpnext_extra_apps:
   - { name: "crm",        branch: "main",       app_name: "crm" }
   - { name: "builder",    branch: "develop",    app_name: "builder" }
   - { name: "payments",   branch: "version-16", app_name: "payments" }
-  - { name: "webshop",    branch: "develop",    app_name: "webshop" }
-
-# ERPNext ↔ Bagisto sync (requires bagisto_headless_install: True)
-erpnext_bagisto_sync: False
-erpnext_bagisto_api_url: "http://127.0.0.1/live"
-erpnext_bagisto_admin_email: "admin@example.com"
-erpnext_bagisto_admin_password: "admin123"
-erpnext_bagisto_sync_secret: "changeme"
-erpnext_bagisto_commerce_repo: "https://github.com/deldesir/commerce.git"
-erpnext_bagisto_commerce_version: "main"
+  - { name: "webshop",    branch: "builder-port", app_name: "webshop" }
+  - { name: "https://github.com/BrainWise-DEV/POSNext.git", branch: "master", app_name: "pos_next" }

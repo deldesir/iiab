@@ -31,7 +31,7 @@ You can review sizing profiles and default passwords in `/opt/iiab/iiab/roles/de
 
 ## Using It
 
-Log in to ERPNext at http://box/erpnext, http://box.lan/erpnext, http://10.10.10.10/erpnext (or similar) using:
+Log in to ERPNext at http://box/erp, http://box.lan/erp, http://10.10.10.10/erp (or similar) using:
 
     Username: Administrator
     Password: changeme

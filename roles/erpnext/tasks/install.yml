@@ -410,8 +410,8 @@
 
 # ── IIAB subpath patches ───────────────────────────────────────────────────────
 # Frappe hard-codes /desk/ paths in 13 JS source files.  These patches teach
-# each file to prepend frappe.router._subpath_prefix (e.g. "/erpnext") so that
-# all internally generated links stay within the /erpnext/ mount point.
+# each file to prepend frappe.router._subpath_prefix (e.g. "/erp") so that
+# all internally generated links stay within the /erp/ mount point.
 - name: Define IIAB JS patch targets
   set_fact:
     iiab_js_patches:
@@ -471,7 +471,7 @@
 
 # ── HRMS subpath patch (must happen BEFORE the build) ──────────────────────────
 # hrms/public/js/utils/index.js hard-codes window.location.href = "/hr/roster".
-# Under the /erpnext/ subpath this must become frappe.router._subpath_prefix + "/hr/roster".
+# Under the /erp/ subpath this must become frappe.router._subpath_prefix + "/hr/roster".
 - name: Back up hrms utils/index.js before patching (idempotent)
   copy:
     src: "/home/{{ erpnext_user_name }}/frappe-bench/apps/hrms/hrms/public/js/utils/index.js"

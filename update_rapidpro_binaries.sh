@@ -111,10 +111,10 @@ sync_and_release() {
     "$GO_BIN" mod tidy || true
     
     echo "  - Synthesizing heavily AMD64..."
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 "$GO_BIN" build -v -ldflags="-s -w" -o "$BIN_AMD" "$PKG_PATH" || echo "Warning: Build for AMD64 failed gracefully."
+    GOMAXPROCS=1 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 "$GO_BIN" build -v -ldflags="-s -w" -o "$BIN_AMD" "$PKG_PATH" || echo "Warning: Build for AMD64 failed gracefully."
     
     echo "  - Synthesizing heavily ARM64..."
-    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 "$GO_BIN" build -v -ldflags="-s -w" -o "$BIN_ARM" "$PKG_PATH" || echo "Warning: Build for ARM64 failed gracefully natively."
+    GOMAXPROCS=1 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 "$GO_BIN" build -v -ldflags="-s -w" -o "$BIN_ARM" "$PKG_PATH" || echo "Warning: Build for ARM64 failed gracefully natively."
 
     # ENHANCEMENT: UPX Compression to strip immense backend fat securely!
     for BIN in "$BIN_AMD" "$BIN_ARM"; do
@@ -135,6 +135,10 @@ sync_and_release() {
     fi
     
     echo "[$REPO] Subsystem completely automated securely."
+
+    # Cleanup built binaries locally to avoid git tracking them accidentally
+    echo "Cleaning up local binaries..."
+    rm -f ${REPO}-linux-*
 
     # OPTIONAL: Ansible Auto-Yaml Hardcoder (Option B)
     # If explicitly required to hardcode Ansible securely instead of relying on generic 'latest', uncomment:

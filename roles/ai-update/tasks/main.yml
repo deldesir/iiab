@@ -224,6 +224,23 @@
       when: wuzapi_src_result.changed | default(false)
 
     # ═══════════════════════════════════════════════════════════════
+    # STAGE 3e: Clear stale bytecode caches
+    # ═══════════════════════════════════════════════════════════════
+    # Ported from hermes update's _clear_bytecode_cache — prevents
+    # ImportError on gateway restart when updated source references
+    # names that didn't exist in the old bytecode (.pyc files).
+
+    - name: "Clear stale __pycache__ in gateway components"
+      shell: find {{ item }} -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+      become: yes
+      changed_when: false
+      loop:
+        - "{{ ai_update_gateway_dir }}"
+        - /opt/iiab/hermes-agent
+        - /opt/iiab/mempalace
+      when: gateway_git_results.changed
+
+    # ═══════════════════════════════════════════════════════════════
     # STAGE 4: Verify imports
     # ═══════════════════════════════════════════════════════════════
 
