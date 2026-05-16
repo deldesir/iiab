@@ -23,4 +23,4 @@ erpnext_extra_apps:
   - { name: "builder",    branch: "develop",    app_name: "builder" }
   - { name: "payments",   branch: "version-16", app_name: "payments" }
   - { name: "webshop",    branch: "builder-port", app_name: "webshop" }
-  - { name: "https://github.com/BrainWise-DEV/POSNext.git", branch: "master", app_name: "pos_next" }
+  - { name: "https://github.com/BrainWise-DEV/POSNext.git", branch: "version-16", app_name: "pos_next" }
