@@ -55,13 +55,13 @@
 #   become_user: "{{ ai_gateway_user }}"
 #   no_log: true
 
-- name: Clone AI Gateway repository
-  git:
-    repo: "{{ ai_gateway_repo }}"
-    dest: "{{ ai_gateway_dir }}"
-    version: "{{ ai_gateway_repo_version }}"
-    force: yes
-    update: yes
+- name: Clone or Update AI Gateway repository
+  shell: |
+    if [ -d "{{ ai_gateway_dir }}/.git" ]; then
+      cd "{{ ai_gateway_dir }}" && git fetch origin && git reset --hard origin/{{ ai_gateway_repo_version }}
+    else
+      git clone --branch "{{ ai_gateway_repo_version }}" --origin origin "{{ ai_gateway_repo }}" "{{ ai_gateway_dir }}"
+    fi
   become: yes
   become_user: "{{ ai_gateway_user }}"
   notify: restart ai-gateway
