@@ -376,6 +376,20 @@
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   when: erpnext_enabled | bool
 
+- name: Set Webshop as default Home Page
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  command: >-
+    ~/.local/bin/bench --site {{ erpnext_site_name }} execute
+    frappe.db.set_single_value --args "('Website Settings', 'home_page', 'shop')"
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+  ignore_errors: yes
+
+
 - name: Enable scheduler for the site
   become: yes
   become_user: "{{ erpnext_user_name }}"

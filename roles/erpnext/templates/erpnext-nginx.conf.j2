@@ -248,6 +248,24 @@ location ^~ /pos {
     proxy_read_timeout 300;
 }
 
+# ── Frappe Root / Webshop Proxy ────────────────────────────────────────────────
+# Proxy root (/) and legacy bagisto (/live) directly to Frappe so the Webshop
+# is served natively without subpath conflicts.
+location / {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_set_header Host               $host;
+    proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
+    proxy_read_timeout 300;
+}
+
+location ^~ /live {
+    rewrite ^/live/(.*) /$1 break;
+    proxy_pass http://127.0.0.1:8000;
+    proxy_set_header Host               $host;
+    proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
+    proxy_read_timeout 300;
+}
+
 # ── Private files (X-Accel-Redirect) ──────────────────────────────────────────
 location ~ ^/protected/(.*) {
     internal;

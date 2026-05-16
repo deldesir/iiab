@@ -41,6 +41,7 @@
     force: yes
     update: yes
   become: yes
+  become_user: "{{ ai_gateway_user }}"
   no_log: true
 
 - name: Clone JWLinker library
@@ -51,6 +52,7 @@
     force: yes
     update: yes
   become: yes
+  become_user: "{{ ai_gateway_user }}"
   no_log: true
 
 - name: Clone AI Gateway repository
@@ -61,6 +63,7 @@
     force: yes
     update: yes
   become: yes
+  become_user: "{{ ai_gateway_user }}"
   notify: restart ai-gateway
 
 - name: Set ownership of AI Gateway directory
