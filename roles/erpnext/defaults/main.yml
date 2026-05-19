@@ -11,9 +11,10 @@ erpnext_user_name: "frappe"
 erpnext_db_name: "_site_local"
 erpnext_db_user: "_site_local"
 erpnext_db_password: "CHANGEME" # User should ideally override this
-# Public URL for email/PDF links (e.g. "https://garantie.boutique/erp").
-# Leave empty ("") to let Frappe use the HTTP Host header dynamically.
-erpnext_host_name: ""
+# Public URL for email/PDF links (e.g. "https://example.com/erp").
+# Auto-derived from iiab_ssl_domain when SSL is enabled.
+# Override explicitly in local_vars.yml if needed.
+erpnext_host_name: "{% if iiab_ssl_enabled | default(False) %}https://{{ iiab_ssl_domain }}/erp{% else %}http://box.lan/erp{% endif %}"
 
 # Extra Frappe apps to install alongside ERPNext (HR, CRM, etc.)
 # Each entry needs: name (pip/git name), branch, and app_name (bench install-app name).

@@ -281,7 +281,7 @@
     force: no
   when: erpnext_enabled | bool
 
-- name: Set site host_name for IIAB subpath (only when erpnext_host_name is defined)
+- name: Set site host_name for IIAB subpath
   become: yes
   become_user: "{{ erpnext_user_name }}"
   command: ~/.local/bin/bench --site {{ erpnext_site_name }} set-config host_name "{{ erpnext_host_name }}"
@@ -289,7 +289,7 @@
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-  when: erpnext_enabled | bool and erpnext_host_name != ''
+  when: erpnext_enabled | bool
 
 - name: Generate Systemd Services (replaces Supervisor)
   become: yes
