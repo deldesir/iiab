@@ -1,0 +1,58 @@
+diff --git a/frontend/src/utils/helpers.ts b/frontend/src/utils/helpers.ts
+index a6d5e7d..4610cec 100644
+--- a/frontend/src/utils/helpers.ts
++++ b/frontend/src/utils/helpers.ts
+@@ -1449,6 +1449,12 @@ function executeBlockClientScriptRestricted(
+ 
+ 	const handler = {
+ 		get(target: Element, prop: string, receiver: any) {
++			if (prop === "__target") return target;
++			if (prop === "getElementById") return (id: string) => wrap(document.getElementById(id) as Element);
++			if (prop === "createElement") return (tag: string) => wrap(document.createElement(tag));
++			if (prop === "body") return wrap(document.body);
++			if (prop === "head") return wrap(document.head);
++
+ 			if (BLOCKED_GET.has(prop)) return undefined;
+ 
+ 			// Always pass `target` (not the proxy) as the receiver so that native DOM
+@@ -1485,7 +1491,8 @@ function executeBlockClientScriptRestricted(
+ 
+ 					// Do not allow inserting nodes outside the sandbox
+ 					for (const a of realArgs) {
+-						if (a instanceof Node && !sandboxRoot.contains(a)) {
++						const targetNode = a?.__target || a;
++						if (targetNode instanceof Node && !sandboxRoot.contains(targetNode)) {
+ 							throw new Error("Blocked: external node insertion");
+ 						}
+ 					}
+@@ -1524,8 +1531,20 @@ function executeBlockClientScriptRestricted(
+ 		document: proxiedRoot,
+ 		thisRef: proxiedThis,
+ 		props,
++		window: {
++			getComputedStyle: (el: any) => {
++				const target = el?.__target || el;
++				if (!target || !(target instanceof Element)) {
++					return { getPropertyValue: () => "" } as any;
++				}
++				return window.getComputedStyle(target);
++			},
++		},
++		$clamp: (window as any).$clamp || (() => {}),
++		listen: (window as any).listen || (() => {}),
++		block_data: {},
++		dispatch: () => {},
+ 		// Escape hatches blocked
+-		window: undefined,
+ 		globalThis: undefined,
+ 		eval: undefined,
+ 		Function: undefined,
+@@ -1540,6 +1559,8 @@ function executeBlockClientScriptRestricted(
+ 		}`,
+ 	);
+ 
++	if (!proxiedThis) return;
++
+ 	try {
+ 		fn.call(proxiedThis, context);
+ 	} catch (e) {
