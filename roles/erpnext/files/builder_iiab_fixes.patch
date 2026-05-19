@@ -1,5 +1,5 @@
 diff --git a/builder/builder/doctype/builder_page/builder_page.py b/builder/builder/doctype/builder_page/builder_page.py
-index 64de37b..88c4e38 100644
+index 64de37b..88c89b8 100644
 --- a/builder/builder/doctype/builder_page/builder_page.py
 +++ b/builder/builder/doctype/builder_page/builder_page.py
 @@ -28,6 +28,7 @@ from builder.builder.doctype.user_font.user_font import get_all_user_fonts
@@ -63,7 +63,19 @@ index 64de37b..88c4e38 100644
  			raise
  
  	def set_meta_tags(self, context, page_data=None):
-@@ -500,9 +509,12 @@ def save_as_template(page_doc: BuilderPage):
+@@ -372,8 +381,9 @@ class BuilderPage(WebsiteGenerator):
+ 		if self.body_html:
+ 			context._body_html += self.body_html
+ 
+-		context["_head_html"] = render_template(context._head_html, context)
+-		context["_body_html"] = render_template(context._body_html, context)
++		from builder.utils import rewrite_html_links
++		context["_head_html"] = rewrite_html_links(render_template(context._head_html, context))
++		context["_body_html"] = rewrite_html_links(render_template(context._body_html, context))
+ 
+ 	@frappe.whitelist()
+ 	def get_page_data(self, route_variables: dict | None = None) -> dict:
+@@ -500,9 +510,12 @@ def save_as_template(page_doc: BuilderPage):
  			record_list=[
  				["Builder Client Script", s.builder_script, "builder_client_script"] for s in scripts
  			],
@@ -78,7 +90,7 @@ index 64de37b..88c4e38 100644
  
  @frappe.whitelist()
  def get_block_data(
-@@ -515,9 +527,17 @@ def get_block_data(
+@@ -515,9 +528,17 @@ def get_block_data(
  	if route_variables:
  		frappe.form_dict.update({k: v for k, v in route_variables.items()})
  	frappe.has_permission("Builder Page", "write", throw=True)
@@ -98,7 +110,7 @@ index 64de37b..88c4e38 100644
  	execute_script(block_data_script, _locals, block_id)
  
  	if isinstance(_locals["block"], dict):
-@@ -631,8 +651,8 @@ def get_block_context(block: dict, props: dict) -> dict:
+@@ -631,8 +652,8 @@ def get_block_context(block: dict, props: dict) -> dict:
  	passed_down_props = {name: info["value"] for name, info in props.items() if info["is_passed_down"]}
  
  	return {
@@ -109,7 +121,7 @@ index 64de37b..88c4e38 100644
  		"block_data_script": block.get("blockDataScript"),
  	}
  
-@@ -727,8 +747,14 @@ def create_html_tag(block: dict, state: dict, ancestor_font: str | None = None)
+@@ -727,8 +748,14 @@ def create_html_tag(block: dict, state: dict, ancestor_font: str | None = None)
  
  	if element == "img":
  		attributes = block.get("attributes", {})
@@ -126,7 +138,7 @@ index 64de37b..88c4e38 100644
  		if dark_src and light_src:
  			picture_tag = soup.new_tag("picture")
  
-@@ -741,16 +767,25 @@ def create_html_tag(block: dict, state: dict, ancestor_font: str | None = None)
+@@ -741,16 +768,25 @@ def create_html_tag(block: dict, state: dict, ancestor_font: str | None = None)
  
  			tag = soup.new_tag("img")
  			tag.attrs = {k: v for k, v in attributes.items() if k != "darkSrc"}
@@ -154,7 +166,16 @@ index 64de37b..88c4e38 100644
  		picture_tag = None
  
  	for key, value in block.get("customAttributes", {}).items():
-@@ -1365,18 +1400,30 @@ def get_web_pages_with_dynamic_routes() -> list[dict]:
+@@ -831,6 +867,8 @@ def add_inner_html_content(tag: bs.Tag, block: dict, state: dict):
+ 	"""Add inner HTML content to the tag."""
+ 	inner_content = block.get("innerHTML")
+ 	if inner_content:
++		from builder.utils import rewrite_html_links
++		inner_content = rewrite_html_links(inner_content)
+ 		# Ensure inner_content is a string before passing to BeautifulSoup
+ 		if not isinstance(inner_content, (str, bytes)):
+ 			inner_content = str(inner_content)
+@@ -1365,18 +1403,30 @@ def get_web_pages_with_dynamic_routes() -> list[dict]:
  
  
  def resolve_path(path):
@@ -189,10 +210,10 @@ index 64de37b..88c4e38 100644
  
  def reset_with_component(block, extended_with_component, component_children):
 diff --git a/builder/utils.py b/builder/utils.py
-index 82c0f9a..6d9b43e 100644
+index 82c0f9a..0712d6f 100644
 --- a/builder/utils.py
 +++ b/builder/utils.py
-@@ -29,6 +29,16 @@ from RestrictedPython import safe_globals as restricted_safe_globals
+@@ -29,6 +29,36 @@ from RestrictedPython import safe_globals as restricted_safe_globals
  from werkzeug.routing import Rule
  
  
@@ -206,10 +227,30 @@ index 82c0f9a..6d9b43e 100644
 +	return path
 +
 +
++def rewrite_html_links(html):
++	if not html or not isinstance(html, str):
++		return html
++	
++	import bs4 as bs
++	soup = bs.BeautifulSoup(html, "html.parser")
++	changed = False
++	
++	for tag in soup.find_all(True):
++		for attr in ["src", "href", "action"]:
++			if tag.has_attr(attr):
++				val = tag[attr]
++				new_val = abs_url(val)
++				if new_val != val:
++					tag[attr] = new_val
++					changed = True
++	
++	return str(soup) if changed else html
++
++
  def has_page_write(message: str | None = None):
  	"""Decorator to check if user has permission to edit Builder Page.
  
-@@ -213,6 +223,46 @@ def remove_unsafe_fields(fields):
+@@ -213,6 +243,46 @@ def remove_unsafe_fields(fields):
  	return [f for f in fields if "(" not in f]
  
  
@@ -256,7 +297,7 @@ index 82c0f9a..6d9b43e 100644
  def get_safer_globals():
  	safe_globals = get_safe_globals()
  
-@@ -238,6 +288,7 @@ def get_safer_globals():
+@@ -238,6 +308,7 @@ def get_safer_globals():
  			make_get_request=make_safe_get_request,
  			get_doc=get_doc_as_dict,
  			get_cached_doc=get_cached_doc_as_dict,
@@ -264,7 +305,7 @@ index 82c0f9a..6d9b43e 100644
  			_=frappe._,
  			session=safe_globals["frappe"]["session"],
  		),
-@@ -455,11 +506,8 @@ def sanitize_style_value(value):
+@@ -455,11 +526,8 @@ def sanitize_style_value(value):
  	return value
  
  
@@ -278,7 +319,7 @@ index 82c0f9a..6d9b43e 100644
  
  
  def get_dummy_blocks():
-@@ -682,12 +730,12 @@ def get_export_paths(app_path, export_name):
+@@ -682,12 +750,12 @@ def get_export_paths(app_path, export_name):
  
  def to_dict_with_fallback(obj):
  	try:
@@ -294,7 +335,7 @@ index 82c0f9a..6d9b43e 100644
  
  
  def combine(a, b):
-@@ -709,7 +757,7 @@ def to_safe_json(data):
+@@ -709,7 +777,7 @@ def to_safe_json(data):
  
  
  def execute_script_and_combine(prev_block_data, block_data_script, props):
