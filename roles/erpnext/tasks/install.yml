@@ -376,18 +376,13 @@
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   when: erpnext_enabled | bool
 
-- name: Set Webshop as default Home Page
-  become: yes
-  become_user: "{{ erpnext_user_name }}"
-  command: >-
-    ~/.local/bin/bench --site {{ erpnext_site_name }} execute
-    frappe.db.set_single_value --args "('Website Settings', 'home_page', 'shop')"
-  args:
-    chdir: /home/{{ erpnext_user_name }}/frappe-bench
-  environment:
-    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-  when: erpnext_enabled | bool
-  ignore_errors: yes
+# NOTE: Do NOT set home_page to 'shop' at install time.
+# On a fresh site the setup wizard hasn't run yet, so the shop page will
+# crash with a 500 (no Company, no Item Groups). Frappe's built-in logic
+# auto-redirects to the setup wizard when the default home page is used.
+# Set home_page to 'shop' only AFTER the setup wizard has been completed,
+# either manually or via a post-setup hook.
+
 
 
 - name: Enable scheduler for the site
