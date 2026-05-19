@@ -547,19 +547,17 @@
   when: erpnext_enabled | bool
   ignore_errors: yes
 
-- name: Copy Builder utils.py patch to /tmp
+- name: Copy Builder IIAB Fixes patch to /tmp
   copy:
-    src: "{{ role_path }}/files/builder_utils.py.patch"
-    dest: /tmp/builder_utils.py.patch
+    src: "{{ role_path }}/files/builder_iiab_fixes.patch"
+    dest: /tmp/builder_iiab_fixes.patch
   when: erpnext_enabled | bool
 
-- name: Apply Builder safer_exec patch (idempotent via --forward)
+- name: Apply Builder IIAB Fixes patch (idempotent via --forward)
   shell: |
-    patch --forward --reject-file=/dev/null -p1 \
-      "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/builder/utils.py" \
-      /tmp/builder_utils.py.patch
-  register: builder_patch_result
-  failed_when: builder_patch_result.rc not in [0, 1]
+    patch --forward --reject-file=/dev/null -p1 -d "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder" < /tmp/builder_iiab_fixes.patch
+  register: builder_iiab_patch_result
+  failed_when: builder_iiab_patch_result.rc not in [0, 1]
   when: erpnext_enabled | bool
   ignore_errors: yes
 

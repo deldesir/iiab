@@ -232,28 +232,19 @@ location ^~ /hr/ {
 # It has its own Vue Router (createWebHistory('/crm')) and talks to /api/method/
 # directly (already proxied above). No JS patches required.
 location ^~ /crm {
-    proxy_pass http://127.0.0.1:8000;
-    proxy_set_header Host               $host;
-    proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
-    proxy_read_timeout 300;
+    return 301 /erp$request_uri;
 }
 
 # ── Frappe Builder standalone SPA ──────────────────────────────────────────────
 # Builder is a separate Vue app served by Frappe at /builder via website_route_rules.
 location ^~ /builder {
-    proxy_pass http://127.0.0.1:8000;
-    proxy_set_header Host               $host;
-    proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
-    proxy_read_timeout 300;
+    return 301 /erp$request_uri;
 }
 
 # ── POSNext standalone SPA ─────────────────────────────────────────────────────
 # POSNext is a Vue 3 app served by Frappe at /pos via website_route_rules.
 location ^~ /pos {
-    proxy_pass http://127.0.0.1:8000;
-    proxy_set_header Host               $host;
-    proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
-    proxy_read_timeout 300;
+    return 301 /erp$request_uri;
 }
 
 # ── Root-level socket.io (Builder/Desk realtime) ──────────────────────────────

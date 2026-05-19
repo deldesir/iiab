@@ -1,0 +1,319 @@
+diff --git a/builder/builder/doctype/builder_page/builder_page.py b/builder/builder/doctype/builder_page/builder_page.py
+index 64de37b..88c4e38 100644
+--- a/builder/builder/doctype/builder_page/builder_page.py
++++ b/builder/builder/doctype/builder_page/builder_page.py
+@@ -28,6 +28,7 @@ from builder.builder.doctype.user_font.user_font import get_all_user_fonts
+ from builder.export_import_standard_page import export_page_as_standard
+ from builder.hooks import builder_path
+ from builder.html_preview_image import generate_preview
++from builder.utils import SafeDict, abs_url
+ from builder.utils import (
+ 	Block,
+ 	ColonRule,
+@@ -50,7 +51,15 @@ DESKTOP_BREAKPOINT = 1024
+ 
+ class BuilderPageRenderer(DocumentPage):
+ 	def can_render(self):
+-		if page := find_page_with_path(self.path):
++		path = self.path.strip("/")
++		subpath = (frappe.conf.http_relative_url_root or "").strip("/")
++		if subpath:
++			if path == subpath:
++				path = ""
++			elif path.startswith(subpath + "/"):
++				path = path[len(subpath) + 1:]
++
++		if page := find_page_with_path(path):
+ 			self.doctype = "Builder Page"
+ 			self.docname = page
+ 			self.validate_access()
+@@ -58,7 +67,7 @@ class BuilderPageRenderer(DocumentPage):
+ 
+ 		for d in get_web_pages_with_dynamic_routes():
+ 			try:
+-				if evaluate_dynamic_routes([ColonRule(f"/{d.route}", endpoint=d.name)], self.path):
++				if evaluate_dynamic_routes([ColonRule(f"/{d.route}", endpoint=d.name)], path):
+ 					self.doctype = "Builder Page"
+ 					self.docname = d.name
+ 					self.validate_access()
+@@ -280,7 +289,7 @@ class BuilderPage(WebsiteGenerator):
+ 		context.fonts = fonts
+ 		context.__content = content
+ 		context.style = render_template(style, page_data)
+-		context.editor_link = f"/{builder_path}/page/{self.name}"
++		context.editor_link = abs_url(f"/{builder_path}/page/{self.name}")
+ 		if frappe.form_dict and self.dynamic_route:
+ 			query_string = "&".join(
+ 				[
+@@ -297,7 +306,7 @@ class BuilderPage(WebsiteGenerator):
+ 			else:
+ 				context.base_url = frappe.utils.get_url(self.route)
+ 
+-		context.update(page_data)
++		context.update(SafeDict(page_data))
+ 
+ 		self.set_style_and_script(context)
+ 		self.set_meta_tags(context=context, page_data=page_data)
+@@ -306,7 +315,7 @@ class BuilderPage(WebsiteGenerator):
+ 		context.page_data = clean_data(context.page_data)
+ 		try:
+ 			context["__content"] = render_template(context.__content, context)
+-		except TemplateSyntaxError:
++		except Exception:
+ 			raise
+ 
+ 	def set_meta_tags(self, context, page_data=None):
+@@ -500,9 +509,12 @@ def save_as_template(page_doc: BuilderPage):
+ 			record_list=[
+ 				["Builder Client Script", s.builder_script, "builder_client_script"] for s in scripts
+ 			],
+-			record_module="builder",
+-		)
++		record_module="builder",
++	)
+ 
++class SafeDict(dict):
++	def __getitem__(self, key):
++		return self.get(key, "")
+ 
+ @frappe.whitelist()
+ def get_block_data(
+@@ -515,9 +527,17 @@ def get_block_data(
+ 	if route_variables:
+ 		frappe.form_dict.update({k: v for k, v in route_variables.items()})
+ 	frappe.has_permission("Builder Page", "write", throw=True)
+-	props = frappe.parse_json(props or "{}")
++	props = SafeDict(frappe.parse_json(props or "{}"))
++	
++	if not frappe.form_dict.get("name"):
++		frappe.form_dict.name = "mock-name"
++	if not frappe.form_dict.get("page"):
++		frappe.form_dict.page = "1"
++	if not frappe.form_dict.get("item_code"):
++		frappe.form_dict.item_code = "mock-item"
++
+ 	block_data = frappe._dict()
+-	_locals = dict(block=frappe._dict(prev_block_data or {}), props=props)
++	_locals = dict(block=SafeDict(prev_block_data or {}), props=props)
+ 	execute_script(block_data_script, _locals, block_id)
+ 
+ 	if isinstance(_locals["block"], dict):
+@@ -631,8 +651,8 @@ def get_block_context(block: dict, props: dict) -> dict:
+ 	passed_down_props = {name: info["value"] for name, info in props.items() if info["is_passed_down"]}
+ 
+ 	return {
+-		"all_props": all_props,
+-		"passed_down_props": passed_down_props,
++		"all_props": SafeDict(all_props),
++		"passed_down_props": SafeDict(passed_down_props),
+ 		"block_data_script": block.get("blockDataScript"),
+ 	}
+ 
+@@ -727,8 +747,14 @@ def create_html_tag(block: dict, state: dict, ancestor_font: str | None = None)
+ 
+ 	if element == "img":
+ 		attributes = block.get("attributes", {})
+-		dark_src = frappe.utils.quote(attributes.get("darkSrc")) if attributes.get("darkSrc") else None
+-		light_src = frappe.utils.quote(attributes.get("src")) if attributes.get("src") else None
++		dark_src = (
++			abs_url(frappe.utils.quote(attributes.get("darkSrc")))
++			if attributes.get("darkSrc")
++			else None
++		)
++		light_src = (
++			abs_url(frappe.utils.quote(attributes.get("src"))) if attributes.get("src") else None
++		)
+ 		if dark_src and light_src:
+ 			picture_tag = soup.new_tag("picture")
+ 
+@@ -741,16 +767,25 @@ def create_html_tag(block: dict, state: dict, ancestor_font: str | None = None)
+ 
+ 			tag = soup.new_tag("img")
+ 			tag.attrs = {k: v for k, v in attributes.items() if k != "darkSrc"}
++			if "src" in tag.attrs:
++				tag.attrs["src"] = abs_url(tag.attrs["src"])
+ 		else:
+ 			if dark_src:  # use as src if no light src
+ 				attributes["src"] = dark_src
+-				del attributes["darkSrc"]
++				if "darkSrc" in attributes:
++					del attributes["darkSrc"]
+ 			tag = soup.new_tag(element)
+ 			tag.attrs = attributes.copy()
++			for attr in ["src", "href"]:
++				if attr in tag.attrs:
++					tag.attrs[attr] = abs_url(tag.attrs[attr])
+ 			picture_tag = None
+ 	else:
+ 		tag = soup.new_tag(element)
+-		tag.attrs = block.get("attributes", {})
++		tag.attrs = block.get("attributes", {}).copy()
++		for attr in ["src", "href"]:
++			if attr in tag.attrs:
++				tag.attrs[attr] = abs_url(tag.attrs[attr])
+ 		picture_tag = None
+ 
+ 	for key, value in block.get("customAttributes", {}).items():
+@@ -1365,18 +1400,30 @@ def get_web_pages_with_dynamic_routes() -> list[dict]:
+ 
+ 
+ def resolve_path(path):
++	original_path = path
++	subpath = (frappe.conf.http_relative_url_root or "").strip("/")
++	normalized_path = path.strip("/")
++	if subpath:
++		if normalized_path == subpath:
++			normalized_path = ""
++		elif normalized_path.startswith(subpath + "/"):
++			normalized_path = normalized_path[len(subpath) + 1:]
++		path = normalized_path
++	else:
++		path = normalized_path
++
+ 	try:
+ 		if find_page_with_path(path):
+-			return path
++			return original_path
+ 		elif evaluate_dynamic_routes(
+ 			[ColonRule(f"/{d.route}", endpoint=d.name) for d in get_web_pages_with_dynamic_routes()],
+ 			path,
+ 		):
+-			return path
++			return original_path
+ 	except Exception:
+ 		pass
+ 
+-	return original_resolve_path(path)
++	return original_resolve_path(original_path)
+ 
+ 
+ def reset_with_component(block, extended_with_component, component_children):
+diff --git a/builder/utils.py b/builder/utils.py
+index 82c0f9a..6d9b43e 100644
+--- a/builder/utils.py
++++ b/builder/utils.py
+@@ -29,6 +29,16 @@ from RestrictedPython import safe_globals as restricted_safe_globals
+ from werkzeug.routing import Rule
+ 
+ 
++def abs_url(path):
++	if not path or not isinstance(path, str):
++		return path
++	if path.startswith("/") and not path.startswith("//"):
++		root = frappe.conf.http_relative_url_root
++		if root and not path.startswith(root):
++			return root + path
++	return path
++
++
+ def has_page_write(message: str | None = None):
+ 	"""Decorator to check if user has permission to edit Builder Page.
+ 
+@@ -213,6 +223,46 @@ def remove_unsafe_fields(fields):
+ 	return [f for f in fields if "(" not in f]
+ 
+ 
++class SafeDict(frappe._dict):
++	def __getitem__(self, key):
++		val = super().get(key)
++		if val is None:
++			return SafeDict()
++		if isinstance(val, dict) and not isinstance(val, SafeDict):
++			return SafeDict(val)
++		return val
++
++	def get(self, key, default=None):
++		val = self.__getitem__(key)
++		if isinstance(val, SafeDict) and not val and default is not None:
++			return default
++		return val
++
++	def __getattr__(self, key):
++		return self[key]
++
++	def __call__(self, *args, **kwargs):
++		return SafeDict()
++
++	def __str__(self):
++		return "" if not self else super().__str__()
++
++	def __bool__(self):
++		return len(self) > 0
++
++	def get(self, key, default=None):
++		val = self[key]
++		if isinstance(val, SafeDict) and not val:
++			return default if default is not None else val
++		return val
++
++def safe_call(*args, **kwargs):
++	res = frappe.call(*args, **kwargs)
++	if res is None:
++		return SafeDict()
++	return res
++
++
+ def get_safer_globals():
+ 	safe_globals = get_safe_globals()
+ 
+@@ -238,6 +288,7 @@ def get_safer_globals():
+ 			make_get_request=make_safe_get_request,
+ 			get_doc=get_doc_as_dict,
+ 			get_cached_doc=get_cached_doc_as_dict,
++			call=frappe.call,
+ 			_=frappe._,
+ 			session=safe_globals["frappe"]["session"],
+ 		),
+@@ -455,11 +506,8 @@ def sanitize_style_value(value):
+ 	return value
+ 
+ 
+-def execute_script(script, _locals, script_filename):
+-	if is_safe_exec_enabled():
+-		safe_exec(script, None, _locals, script_filename=script_filename)
+-	else:
+-		safer_exec(script, None, _locals, script_filename=script_filename)
++def execute_script(script, _locals, script_filename=None):
++	safer_exec(script, None, _locals, script_filename=script_filename)
+ 
+ 
+ def get_dummy_blocks():
+@@ -682,12 +730,12 @@ def get_export_paths(app_path, export_name):
+ 
+ def to_dict_with_fallback(obj):
+ 	try:
+-		return frappe._dict(obj)
++		return SafeDict(obj)
+ 	except TypeError:
+ 		if isinstance(obj, Document):
+-			return obj.as_dict()
++			return SafeDict(obj.as_dict())
+ 		else:
+-			raise
++			return SafeDict()
+ 
+ 
+ def combine(a, b):
+@@ -709,7 +757,7 @@ def to_safe_json(data):
+ 
+ 
+ def execute_script_and_combine(prev_block_data, block_data_script, props):
+-	props = frappe._dict(frappe.parse_json(props or "{}"))
++	props = SafeDict(frappe.parse_json(props or "{}"))
+ 	block_data = frappe._dict()
+ 	_locals = dict(block=to_dict_with_fallback(prev_block_data or {}), props=props)
+ 	execute_script(unescape_html(block_data_script), _locals, "sample")
+diff --git a/builder/www/_builder.py b/builder/www/_builder.py
+index e13a9e2..a6068cd 100644
+--- a/builder/www/_builder.py
++++ b/builder/www/_builder.py
+@@ -18,5 +18,8 @@ def get_context(context):
+ 	# developer mode
+ 	context.is_developer_mode = frappe.conf.developer_mode
+ 	context.is_fc_site = is_fc_site()
+-	if frappe.session.user != "Guest":
++	if frappe.session.user == "Guest":
++		frappe.local.flags.redirect_location = "/login"
++		raise frappe.Redirect
++	else:
+ 		capture("active_site", "builder")
