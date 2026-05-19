@@ -343,6 +343,24 @@ index 0523c6d..e3e1d55 100644
  
  const folderOptions = computed(() => {
  	const homeOption = {
+diff --git a/frontend/src/router.ts b/frontend/src/router.ts
+index 54eea40..f284e7a 100644
+--- a/frontend/src/router.ts
++++ b/frontend/src/router.ts
+@@ -10,10 +10,11 @@ function validatePermission(next: NavigationGuardNext) {
+ 		next();
+ 	} else {
+ 		alert("You do not have permission to access this page");
++		const subpath = window.location.pathname.split("/builder")[0];
+ 		if (isUserLoggedIn()) {
+-			window.location.href = "/app";
++			window.location.href = subpath + "/app";
+ 		} else {
+-			window.location.href = "/login?redirect-to=/builder";
++			window.location.href = subpath + "/login?redirect-to=" + subpath + "/builder";
+ 		}
+ 	}
+ }
 diff --git a/frontend/src/setupFrappeUIResource.ts b/frontend/src/setupFrappeUIResource.ts
 index ca4b373..fac9a02 100644
 --- a/frontend/src/setupFrappeUIResource.ts
