@@ -1,0 +1,22 @@
+diff --git a/webshop/webshop/api.py b/webshop/webshop/api.py
+index 3f5fe7e..1b1c8b5 100644
+--- a/webshop/webshop/api.py
++++ b/webshop/webshop/api.py
+@@ -353,7 +353,7 @@ def get_collection(name: str, raise_redirect=False):
+ 		return doc.as_dict()
+ 	else:
+ 		if raise_redirect:
+-			frappe.local.flags.redirect_location = "/login"
++			frappe.local.flags.redirect_location = (frappe.conf.http_relative_url_root or "") + "/login"
+ 			raise frappe.Redirect
+ 		else:
+ 			return None
+@@ -397,7 +397,7 @@ def get_category(
+ 		return category_doc
+ 	else:
+ 		if raise_redirect:
+-			frappe.local.flags.redirect_location = "/login"
++			frappe.local.flags.redirect_location = (frappe.conf.http_relative_url_root or "") + "/login"
+ 			raise frappe.Redirect
+ 		else:
+ 			return None
