@@ -38,8 +38,25 @@ Log in to ERPNext at http://box/erp, http://box.lan/erp, http://10.10.10.10/erp 
 
 *(The default Administrator password is automatically configured. It is strongly advised to change this as soon as you log in via the web interface).*
 
+## SSL / Domain Configuration
+
+When running ERPNext behind a public domain with SSL (e.g. `https://example.com`), you **must** set `erpnext_host_name` in `/etc/iiab/local_vars.yml` so that Frappe knows its full public URL including the `/erp` subpath:
+
+    erpnext_host_name: "https://example.com/erp"
+
+Without this, Frappe cannot resolve the subpath prefix and the `/erp` route will return 404 errors. The setup wizard will also be unreachable.
+
+**Why is this necessary?** The ERPNext role runs before the SSL/certbot role in the IIAB playbook. At install time, the domain and certificate may not exist yet. Setting `erpnext_host_name` explicitly ensures the site config is correct regardless of role ordering.
+
+If you forget to set it before install, you can fix it manually:
+
+    sudo -u frappe bash -c 'cd /home/frappe/frappe-bench && \
+      ~/.local/bin/bench --site site.local set-config host_name "https://example.com/erp"'
+    systemctl restart frappe-bench-frappe-web.service
+
 ## Technical Details
 
 To remain deeply integrated with IIAB:
 * ERPNext runs cleanly over IIAB's Nginx proxy via a dedicated socket listener at `127.0.0.1:8000` (`/etc/nginx/conf.d/erpnext-nginx.conf`).
 * All background schedulers, queues, and web workers are converted from supervisor into native IIAB **Systemd** targets (e.g., `frappe-bench.target`). You can reboot them safely at any time using `systemctl start frappe-bench.target`.
+
