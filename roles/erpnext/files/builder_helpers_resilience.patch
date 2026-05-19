@@ -1,5 +1,5 @@
 diff --git a/frontend/src/utils/helpers.ts b/frontend/src/utils/helpers.ts
-index a6d5e7d..4610cec 100644
+index a6d5e7d..e9ae228 100644
 --- a/frontend/src/utils/helpers.ts
 +++ b/frontend/src/utils/helpers.ts
 @@ -1449,6 +1449,12 @@ function executeBlockClientScriptRestricted(
@@ -15,25 +15,40 @@ index a6d5e7d..4610cec 100644
  			if (BLOCKED_GET.has(prop)) return undefined;
  
  			// Always pass `target` (not the proxy) as the receiver so that native DOM
-@@ -1485,7 +1491,8 @@ function executeBlockClientScriptRestricted(
+@@ -1481,12 +1487,15 @@ function executeBlockClientScriptRestricted(
+ 					};
+ 				}
+ 				return (...args) => {
+-					const realArgs = args.map((a) => cache.get(a) || a);
++					// Unwrap Proxy objects back to real Nodes/Elements for native methods
++					const realArgs = args.map((a) => (a && typeof a === "object" && "__target" in a ? a.__target : a));
  
  					// Do not allow inserting nodes outside the sandbox
- 					for (const a of realArgs) {
+-					for (const a of realArgs) {
 -						if (a instanceof Node && !sandboxRoot.contains(a)) {
-+						const targetNode = a?.__target || a;
-+						if (targetNode instanceof Node && !sandboxRoot.contains(targetNode)) {
- 							throw new Error("Blocked: external node insertion");
+-							throw new Error("Blocked: external node insertion");
++					if (sandboxRoot) {
++						for (const a of realArgs) {
++							if (a instanceof Node && !sandboxRoot.contains(a)) {
++								throw new Error("Blocked: external node insertion");
++							}
  						}
  					}
-@@ -1524,8 +1531,20 @@ function executeBlockClientScriptRestricted(
+ 
+@@ -1524,8 +1533,25 @@ function executeBlockClientScriptRestricted(
  		document: proxiedRoot,
  		thisRef: proxiedThis,
  		props,
 +		window: {
 +			getComputedStyle: (el: any) => {
-+				const target = el?.__target || el;
++				const target = el && typeof el === "object" && "__target" in el ? el.__target : el;
 +				if (!target || !(target instanceof Element)) {
-+					return { getPropertyValue: () => "" } as any;
++					return {
++						width: "0px",
++						height: "0px",
++						getPropertyValue: () => "",
++						display: "none",
++					} as any;
 +				}
 +				return window.getComputedStyle(target);
 +			},
@@ -47,7 +62,7 @@ index a6d5e7d..4610cec 100644
  		globalThis: undefined,
  		eval: undefined,
  		Function: undefined,
-@@ -1540,6 +1559,8 @@ function executeBlockClientScriptRestricted(
+@@ -1540,6 +1566,8 @@ function executeBlockClientScriptRestricted(
  		}`,
  	);
  
