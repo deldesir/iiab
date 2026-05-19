@@ -1,0 +1,81 @@
+import os
+import re
+
+TARGET_DIR = "/home/{{ erpnext_user_name }}/frappe-bench/sites/assets"
+SUBPATH = "{{ erpnext_subpath | default('/erp') }}"
+
+REPLACEMENTS = [
+    # General URL patterns in JS/CSS strings
+    ('"/app"', f'"{SUBPATH}/app"'),
+    ("'/app'", f"'{SUBPATH}/app'"),
+    ('"/desk"', f'"{SUBPATH}/desk"'),
+    ("'/desk'", f"'{SUBPATH}/desk'"),
+    ('"/login"', f'"{SUBPATH}/login"'),
+    ("'/login'", f"'{SUBPATH}/login'"),
+    ('"/logout"', f'"{SUBPATH}/logout"'),
+    ("'/logout'", f"'{SUBPATH}/logout'"),
+    
+    # API and Assets
+    ('"/api/method/"', f'"{SUBPATH}/api/method/"'),
+    ("'/api/method/'", f"'{SUBPATH}/api/method/'"),
+    ('"/api/resource/"', f'"{SUBPATH}/api/resource/"'),
+    ("'/api/resource/'", f"'{SUBPATH}/api/resource/'"),
+    ('"/assets/"', f'"{SUBPATH}/assets/"'),
+    ("'/assets/'", f"'{SUBPATH}/assets/'"),
+    ('"/files/"', f'"{SUBPATH}/files/"'),
+    ("'/files/'", f"'{SUBPATH}/files/'"),
+    ('"/socket.io"', f'"{SUBPATH}/socket.io"'),
+    ("'/socket.io'", f"'{SUBPATH}/socket.io'"),
+
+    # Common dynamic constructions in Frappe
+    ('url("/assets/', f'url("{SUBPATH}/assets/'),
+    ("url('/assets/", f"url('{SUBPATH}/assets/"),
+    ('src="/assets/', f'src="{SUBPATH}/assets/'),
+    ('href="/assets/', f'href="{SUBPATH}/assets/'),
+    
+    # login redirect
+    ('"/login?redirect-to="', f'"{SUBPATH}/login?redirect-to="'),
+    ("'/login?redirect-to='", f"'{SUBPATH}/login?redirect-to='"),
+]
+
+def patch_file(filepath):
+    try:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+        
+        new_content = content
+        for pattern, replacement in REPLACEMENTS:
+            new_content = new_content.replace(pattern, replacement)
+
+        # Cleanup double prefixes if any occurred (safety net)
+        double_prefix = f"{SUBPATH}{SUBPATH}"
+        if double_prefix in new_content:
+             new_content = new_content.replace(double_prefix, SUBPATH)
+
+        if new_content != content:
+            print(f"Patching {filepath}")
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(new_content)
+                
+    except Exception as e:
+        print(f"Error patching {filepath}: {e}")
+
+if __name__ == "__main__":
+    if not os.path.exists(TARGET_DIR):
+        print(f"Target directory {TARGET_DIR} does not exist.")
+    else:
+        print(f"Scanning {TARGET_DIR} for assets to patch...")
+        for root, dirs, files in os.walk(TARGET_DIR, followlinks=True):
+            for name in files:
+                # Remove stale compressed files to force Nginx to serve patched versions
+                if name.endswith(".gz") or name.endswith(".br"):
+                    try:
+                        os.remove(os.path.join(root, name))
+                    except Exception:
+                        pass
+                    continue
+                    
+                if name.endswith(".js") or name.endswith(".css"):
+                    patch_file(os.path.join(root, name))
+                    
+        print("Patching complete.")

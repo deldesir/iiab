@@ -1,0 +1,115 @@
+diff --git a/builder/utils.py b/builder/utils.py
+index 82c0f9a..6d9b43e 100644
+--- a/builder/utils.py
++++ b/builder/utils.py
+@@ -29,6 +29,16 @@ from RestrictedPython import safe_globals as restricted_safe_globals
+ from werkzeug.routing import Rule
+ 
+ 
++def abs_url(path):
++	if not path or not isinstance(path, str):
++		return path
++	if path.startswith("/") and not path.startswith("//"):
++		root = frappe.conf.http_relative_url_root
++		if root and not path.startswith(root):
++			return root + path
++	return path
++
++
+ def has_page_write(message: str | None = None):
+ 	"""Decorator to check if user has permission to edit Builder Page.
+ 
+@@ -213,6 +223,46 @@ def remove_unsafe_fields(fields):
+ 	return [f for f in fields if "(" not in f]
+ 
+ 
++class SafeDict(frappe._dict):
++	def __getitem__(self, key):
++		val = super().get(key)
++		if val is None:
++			return SafeDict()
++		if isinstance(val, dict) and not isinstance(val, SafeDict):
++			return SafeDict(val)
++		return val
++
++	def get(self, key, default=None):
++		val = self.__getitem__(key)
++		if isinstance(val, SafeDict) and not val and default is not None:
++			return default
++		return val
++
++	def __getattr__(self, key):
++		return self[key]
++
++	def __call__(self, *args, **kwargs):
++		return SafeDict()
++
++	def __str__(self):
++		return "" if not self else super().__str__()
++
++	def __bool__(self):
++		return len(self) > 0
++
++	def get(self, key, default=None):
++		val = self[key]
++		if isinstance(val, SafeDict) and not val:
++			return default if default is not None else val
++		return val
++
++def safe_call(*args, **kwargs):
++	res = frappe.call(*args, **kwargs)
++	if res is None:
++		return SafeDict()
++	return res
++
++
+ def get_safer_globals():
+ 	safe_globals = get_safe_globals()
+ 
+@@ -238,6 +288,7 @@ def get_safer_globals():
+ 			make_get_request=make_safe_get_request,
+ 			get_doc=get_doc_as_dict,
+ 			get_cached_doc=get_cached_doc_as_dict,
++			call=frappe.call,
+ 			_=frappe._,
+ 			session=safe_globals["frappe"]["session"],
+ 		),
+@@ -455,11 +506,8 @@ def sanitize_style_value(value):
+ 	return value
+ 
+ 
+-def execute_script(script, _locals, script_filename):
+-	if is_safe_exec_enabled():
+-		safe_exec(script, None, _locals, script_filename=script_filename)
+-	else:
+-		safer_exec(script, None, _locals, script_filename=script_filename)
++def execute_script(script, _locals, script_filename=None):
++	safer_exec(script, None, _locals, script_filename=script_filename)
+ 
+ 
+ def get_dummy_blocks():
+@@ -682,12 +730,12 @@ def get_export_paths(app_path, export_name):
+ 
+ def to_dict_with_fallback(obj):
+ 	try:
+-		return frappe._dict(obj)
++		return SafeDict(obj)
+ 	except TypeError:
+ 		if isinstance(obj, Document):
+-			return obj.as_dict()
++			return SafeDict(obj.as_dict())
+ 		else:
+-			raise
++			return SafeDict()
+ 
+ 
+ def combine(a, b):
+@@ -709,7 +757,7 @@ def to_safe_json(data):
+ 
+ 
+ def execute_script_and_combine(prev_block_data, block_data_script, props):
+-	props = frappe._dict(frappe.parse_json(props or "{}"))
++	props = SafeDict(frappe.parse_json(props or "{}"))
+ 	block_data = frappe._dict()
+ 	_locals = dict(block=to_dict_with_fallback(prev_block_data or {}), props=props)
+ 	execute_script(unescape_html(block_data_script), _locals, "sample")

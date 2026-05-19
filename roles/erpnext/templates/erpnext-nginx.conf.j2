@@ -20,6 +20,9 @@ location = /erp {
 }
 
 location /erp/ {
+    # Safety net: handle double-prefixing gracefully
+    rewrite ^/erp/erp/(.*) /erp/$1 last;
+
     rewrite ^/erp/(.*) /$1 break;
     proxy_pass http://127.0.0.1:8000/;
 
@@ -40,7 +43,7 @@ location /erp/ {
     # Rewrite them so browsers fetch through /erp/ instead of polluting
     # the root namespace. Only applied to text/html responses (not JS/JSON).
     sub_filter_once off;
-    sub_filter_types *;
+    sub_filter_types text/html text/css;
     sub_filter '="/' '="/erp/';
     sub_filter '=\'/' '=\'/erp/';
     sub_filter 'url("/' 'url("/erp/';

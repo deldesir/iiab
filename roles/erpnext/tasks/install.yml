@@ -650,6 +650,23 @@
       environment:
         PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+    - name: Deploy IIAB asset patching script
+      template:
+        src: patch_erpnext_assets.py.j2
+        dest: /home/{{ erpnext_user_name }}/frappe-bench/patch_erpnext_assets.py
+        owner: "{{ erpnext_user_name }}"
+        group: "{{ erpnext_user_name }}"
+        mode: '0755'
+      when: erpnext_enabled | bool
+
+    - name: Run IIAB asset patching script (idempotent subpath fix for compiled artifacts)
+      command: python3 /home/{{ erpnext_user_name }}/frappe-bench/patch_erpnext_assets.py
+      args:
+        chdir: /home/{{ erpnext_user_name }}/frappe-bench
+      become: yes
+      become_user: "{{ erpnext_user_name }}"
+      when: erpnext_enabled | bool
+
   always:
     - name: Remove temporary swapfile after build
       shell: |

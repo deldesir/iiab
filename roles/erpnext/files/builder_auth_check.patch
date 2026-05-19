@@ -1,0 +1,14 @@
+diff --git a/builder/www/_builder.py b/builder/www/_builder.py
+index e13a9e2..a6068cd 100644
+--- a/builder/www/_builder.py
++++ b/builder/www/_builder.py
+@@ -18,5 +18,8 @@ def get_context(context):
+ 	# developer mode
+ 	context.is_developer_mode = frappe.conf.developer_mode
+ 	context.is_fc_site = is_fc_site()
+-	if frappe.session.user != "Guest":
++	if frappe.session.user == "Guest":
++		frappe.local.flags.redirect_location = "/login"
++		raise frappe.Redirect
++	else:
+ 		capture("active_site", "builder")
