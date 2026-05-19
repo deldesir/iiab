@@ -583,7 +583,7 @@
     chdir: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/frontend"
   become: yes
   become_user: "{{ erpnext_user_name }}"
-  when: erpnext_enabled | bool and builder_webshop_patch_result.rc == 0
+  when: erpnext_enabled | bool and (builder_webshop_patch_result.rc == 0 or builder_iiab_patch_result.rc == 0)
   ignore_errors: yes
 
 # ── Stop ALL services before build ─────────────────────────────────────────────
