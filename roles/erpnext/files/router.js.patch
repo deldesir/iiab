@@ -18,7 +18,7 @@
 +		// Derive prefix from the current URL at boot time so this file
 +		// never needs to hard-code the value.
 +		var p = window.location.pathname;
-+		var m = p.match(/^\/([^\/]+)\/(?:desk|login|app)/);
++		var m = p.match(/^\/([^\/]+)\/(?:desk|login|app|builder|webshop|crm|pos|hrms)/);
 +		return m ? "/" + m[1] : "";
 +	})(),
 +

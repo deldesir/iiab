@@ -4,11 +4,10 @@
  		this.lazy_connect = lazy_connect;
  		let me = this;
  
-+		// IIAB: derive the subpath prefix (e.g. "/erpnext") from the current
 +		// URL so socket.io connects through Nginx at /erpnext/socket.io/
 +		// instead of the root /socket.io/.
 +		var pathname = window.location.pathname;
-+		var match = pathname.match(/^\/([^\/]+)\/(?:desk|login|app)/);
++		var match = pathname.match(/^\/([^\/]+)\/(?:desk|login|app|builder|webshop|crm|pos|hrms)/);
 +		var iiab_subpath = match ? "/" + match[1] : "";
 +		var socket_path = iiab_subpath ? iiab_subpath + "/socket.io" : "/socket.io";
 +
