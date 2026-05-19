@@ -304,16 +304,15 @@ index 82c0f9a..6d9b43e 100644
  	_locals = dict(block=to_dict_with_fallback(prev_block_data or {}), props=props)
  	execute_script(unescape_html(block_data_script), _locals, "sample")
 diff --git a/builder/www/_builder.py b/builder/www/_builder.py
-index e13a9e2..77b18c8 100644
+index e13a9e2..dcc3f6d 100644
 --- a/builder/www/_builder.py
 +++ b/builder/www/_builder.py
 @@ -13,10 +13,14 @@ def get_context(context):
  	frappe.db.commit()
  	context.csrf_token = csrf_token
  	context.site_name = frappe.local.site
--	context.builder_path = builder_path
 +	from builder.utils import abs_url
-+	context.builder_path = abs_url(builder_path)
+ 	context.builder_path = builder_path
  	context.builder_version = get_app_version("builder")
  	# developer mode
  	context.is_developer_mode = frappe.conf.developer_mode
@@ -344,7 +343,7 @@ index 0523c6d..e3e1d55 100644
  const folderOptions = computed(() => {
  	const homeOption = {
 diff --git a/frontend/src/router.ts b/frontend/src/router.ts
-index 54eea40..f284e7a 100644
+index 54eea40..b6ade16 100644
 --- a/frontend/src/router.ts
 +++ b/frontend/src/router.ts
 @@ -10,10 +10,11 @@ function validatePermission(next: NavigationGuardNext) {
@@ -361,6 +360,18 @@ index 54eea40..f284e7a 100644
  		}
  	}
  }
+@@ -94,6 +95,11 @@ let builder_path = window.builder_path || "/builder";
+ if (builder_path.startsWith("{{")) {
+ 	builder_path = "/builder";
+ }
++// Ensure builder_path starts with the current subpath if we are in one
++const subpath = window.location.pathname.split("/builder")[0];
++if (subpath && !builder_path.startsWith(subpath)) {
++	builder_path = subpath + (builder_path.startsWith("/") ? "" : "/") + builder_path;
++}
+ const router = createRouter({
+ 	history: createWebHistory(builder_path),
+ 	routes,
 diff --git a/frontend/src/setupFrappeUIResource.ts b/frontend/src/setupFrappeUIResource.ts
 index ca4b373..fac9a02 100644
 --- a/frontend/src/setupFrappeUIResource.ts
