@@ -40,10 +40,20 @@ location /erp/ {
     # Rewrite them so browsers fetch through /erp/ instead of polluting
     # the root namespace. Only applied to text/html responses (not JS/JSON).
     sub_filter_once off;
-    sub_filter '="/assets/' '="/erp/assets/';
-    sub_filter '="/files/'  '="/erp/files/';
-    sub_filter 'src=\"/assets/' 'src=\"/erp/assets/';
-    sub_filter 'href=\"/assets/' 'href=\"/erp/assets/';
+    sub_filter_types *;
+    sub_filter 'src="/assets/'   'src="/erp/assets/';
+    sub_filter 'href="/assets/'  'href="/erp/assets/';
+    sub_filter 'url("/assets/'   'url("/erp/assets/';
+    sub_filter 'url(\'/assets/'  'url(\'/erp/assets/';
+    sub_filter 'src="/files/'    'src="/erp/files/';
+    sub_filter 'href="/files/'   'href="/erp/files/';
+    sub_filter 'url("/files/'    'url("/erp/files/';
+    sub_filter 'url(\'/files/'   'url(\'/erp/files/';
+    sub_filter 'action="/files/' 'action="/erp/files/';
+    sub_filter '="/files/'       '="/erp/files/';
+    sub_filter '="/assets/'      '="/erp/assets/';
+    sub_filter '="/api/method/'  '="/erp/api/method/';
+    sub_filter '="/api/'         '="/erp/api/';
 }
 
 # ── Realtime / socket.io ───────────────────────────────────────────────────────
