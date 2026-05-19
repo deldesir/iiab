@@ -10,6 +10,15 @@
 #   4. JS source patches (router.js, socketio_client.js) handle SPA routing
 
 # ── Primary application proxy ──────────────────────────────────────────────────
+# Bare /erp/ must redirect to /erp/desk so the SPA router's subpath
+# prefix detection regex (/PREFIX/desk|login|app) fires correctly.
+location = /erp/ {
+    return 302 /erp/desk;
+}
+location = /erp {
+    return 302 /erp/desk;
+}
+
 location /erp/ {
     rewrite ^/erp/(.*) /$1 break;
     proxy_pass http://127.0.0.1:8000/;
