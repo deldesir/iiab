@@ -30,7 +30,7 @@ location /erp/ {
     proxy_set_header X-Use-X-Accel-Redirect True;
 
     # Rewrite backend HTTP Location: headers so redirects stay within /erp/
-    proxy_redirect ~^/(.*)$ /erp/$1;
+    proxy_redirect /erp/ /erp/;
     proxy_redirect / /erp/;
 
     proxy_read_timeout 300;
