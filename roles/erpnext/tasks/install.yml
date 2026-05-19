@@ -577,6 +577,17 @@
   when: erpnext_enabled | bool
   ignore_errors: yes
 
+- name: Rebuild Builder Frontend (Vite)
+  shell: |
+    yarn install
+    yarn build
+  args:
+    chdir: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/frontend"
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  when: erpnext_enabled | bool and builder_webshop_patch_result.rc == 0
+  ignore_errors: yes
+
 # ── Stop ALL services before build ─────────────────────────────────────────────
 # 1) Frees ~900 MB of RAM held by gunicorn workers + background jobs, which is
 #    critical for CRM's heavy Vite/Rollup build on low-RAM deployments.
