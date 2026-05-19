@@ -1,10 +1,52 @@
---- a/builder/utils.py
-+++ b/builder/utils.py
-@@ -238,6 +238,7 @@
- 			make_get_request=make_safe_get_request,
- 			get_doc=get_doc_as_dict,
- 			get_cached_doc=get_cached_doc_as_dict,
-+			call=frappe.call,
- 			_=frappe._,
- 			session=safe_globals["frappe"]["session"],
- 		),
+--- a/apps/builder/builder/builder/doctype/builder_page/builder_page.py
++++ b/apps/builder/builder/builder/doctype/builder_page/builder_page.py
+@@ -490,9 +490,16 @@
+ 
+ 
+ class SafeDict(dict):
+-        def __getitem__(self, key):
+-                return self.get(key, "")
++def __getitem__(self, key):
++val = super().get(key)
++return val if val is not None else SafeDict()
++def __getattr__(self, name):
++val = super().get(name)
++return val if val is not None else SafeDict()
++def get(self, key, default=None):
++val = super().get(key, default)
++return val if val is not None else SafeDict()
+ 
+ 
+ @frappe.whitelist()
+ def get_block_data(
+@@ -528,7 +535,7 @@
+ frappe.has_permission("Builder Page", "write", throw=True)
+ props = SafeDict(frappe.parse_json(props or "{}"))
+ prev_block_data = frappe.parse_json(prev_block_data or "{}")
+-_locals = dict(block=frappe._dict(prev_block_data or {}), props=props)
++_locals = dict(block=SafeDict(prev_block_data or {}), props=props)
+ 
+ execute_script(block_data_script, _locals, block_id)
+ 
+--- a/apps/builder/builder/utils.py
++++ b/apps/builder/builder/utils.py
+@@ -211,10 +211,14 @@
+ 
+ 
+ class SafeDict(dict):
+-def __getitem__(self, key):
+-return self.get(key, "")
+-
+-def __getattr__(self, name):
+-return self.get(name, "")
++def __getitem__(self, key):
++val = super().get(key)
++return val if val is not None else SafeDict()
++def __getattr__(self, name):
++val = super().get(name)
++return val if val is not None else SafeDict()
++def get(self, key, default=None):
++val = super().get(key, default)
++return val if val is not None else SafeDict()
+ 
+ def safe_call(*args, **kwargs):
