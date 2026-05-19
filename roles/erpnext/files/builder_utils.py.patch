@@ -1,0 +1,10 @@
+--- a/builder/utils.py
++++ b/builder/utils.py
+@@ -238,6 +238,7 @@
+ 			make_get_request=make_safe_get_request,
+ 			get_doc=get_doc_as_dict,
+ 			get_cached_doc=get_cached_doc_as_dict,
++			call=frappe.call,
+ 			_=frappe._,
+ 			session=safe_globals["frappe"]["session"],
+ 		),

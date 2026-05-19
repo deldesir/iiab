@@ -534,6 +534,35 @@
   when: erpnext_enabled | bool
   ignore_errors: yes
 
+# ── Builder safer_exec patch ───────────────────────────────────────────────────
+# Builder's sandbox (safer_exec) doesn't expose frappe.call, but every Webshop
+# page data script uses it to call whitelisted API methods like
+# webshop.webshop.api.get_item.  This patch adds frappe.call to the sandbox.
+- name: Back up Builder utils.py before patching (idempotent)
+  copy:
+    src: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/builder/utils.py"
+    dest: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/builder/utils.py.iiab-bak"
+    remote_src: yes
+    force: no
+  when: erpnext_enabled | bool
+  ignore_errors: yes
+
+- name: Copy Builder utils.py patch to /tmp
+  copy:
+    src: "{{ role_path }}/files/builder_utils.py.patch"
+    dest: /tmp/builder_utils.py.patch
+  when: erpnext_enabled | bool
+
+- name: Apply Builder safer_exec patch (idempotent via --forward)
+  shell: |
+    patch --forward --reject-file=/dev/null -p1 \
+      "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/builder/utils.py" \
+      /tmp/builder_utils.py.patch
+  register: builder_patch_result
+  failed_when: builder_patch_result.rc not in [0, 1]
+  when: erpnext_enabled | bool
+  ignore_errors: yes
+
 # ── Stop ALL services before build ─────────────────────────────────────────────
 # 1) Frees ~900 MB of RAM held by gunicorn workers + background jobs, which is
 #    critical for CRM's heavy Vite/Rollup build on low-RAM deployments.
