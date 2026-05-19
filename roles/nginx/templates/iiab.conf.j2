@@ -1,8 +1,10 @@
-{% if not erpnext_enabled | default(False) %}
-location / {
+location = / {
+{% if erpnext_enabled | default(False) %}
+    return 302 /erp;
+{% else %}
     rewrite ^/$ $1{{ iiab_home_url }};
-}
 {% endif %}
+}
 
 location /usb {
     alias /library/www/html/local_content/;

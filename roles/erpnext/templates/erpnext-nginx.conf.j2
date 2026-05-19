@@ -254,25 +254,21 @@ location ^~ /pos {
     proxy_set_header Host               $host;
     proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
     proxy_read_timeout 300;
-}# ── Frappe Root / Webshop Proxy ────────────────────────────────────────────────
-# Proxy root (/) and legacy bagisto (/live) directly to Frappe so the Webshop
-# is served natively without subpath conflicts. Builder components also depend
-# on root-level routing for /api/, /files/, and /socket.io/.
-location / {
-    proxy_pass http://127.0.0.1:8000;
-    proxy_set_header Host               $host;
-    proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
-    proxy_read_timeout 300;
 }
 
-location ^~ /live {
-    rewrite ^/live/(.*) /$1 break;
-    proxy_pass http://127.0.0.1:8000;
-    proxy_set_header Host               $host;
+# ── Root-level socket.io (Builder/Desk realtime) ──────────────────────────────
+# Builder and Desk JS connect to /socket.io/ at the root domain.
+# The /erp/socket.io/ block handles requests from the subpath SPA;
+# this block handles the root-level requests that bypass the subpath.
+location ^~ /socket.io/ {
+    proxy_pass http://127.0.0.1:9000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade    $http_upgrade;
+    proxy_set_header Connection "upgrade";
     proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
-    proxy_read_timeout 300;
+    proxy_set_header Origin $scheme://$http_host;
+    proxy_set_header Host   $http_host;
 }
-
 
 # ── Private files (X-Accel-Redirect) ──────────────────────────────────────────
 location ~ ^/protected/(.*) {
