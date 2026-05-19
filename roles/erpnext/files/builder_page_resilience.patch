@@ -1,0 +1,106 @@
+diff --git a/builder/builder/doctype/builder_page/builder_page.py b/builder/builder/doctype/builder_page/builder_page.py
+index 64de37b..46e7f05 100644
+--- a/builder/builder/doctype/builder_page/builder_page.py
++++ b/builder/builder/doctype/builder_page/builder_page.py
+@@ -50,7 +50,15 @@ DESKTOP_BREAKPOINT = 1024
+ 
+ class BuilderPageRenderer(DocumentPage):
+ 	def can_render(self):
+-		if page := find_page_with_path(self.path):
++		path = self.path
++		subpath = (frappe.conf.http_relative_url_root or "").strip("/")
++		if subpath:
++			if path == subpath:
++				path = ""
++			elif path.startswith(subpath + "/"):
++				path = path[len(subpath) + 1:]
++
++		if page := find_page_with_path(path):
+ 			self.doctype = "Builder Page"
+ 			self.docname = page
+ 			self.validate_access()
+@@ -58,7 +66,7 @@ class BuilderPageRenderer(DocumentPage):
+ 
+ 		for d in get_web_pages_with_dynamic_routes():
+ 			try:
+-				if evaluate_dynamic_routes([ColonRule(f"/{d.route}", endpoint=d.name)], self.path):
++				if evaluate_dynamic_routes([ColonRule(f"/{d.route}", endpoint=d.name)], path):
+ 					self.doctype = "Builder Page"
+ 					self.docname = d.name
+ 					self.validate_access()
+@@ -500,9 +508,12 @@ def save_as_template(page_doc: BuilderPage):
+ 			record_list=[
+ 				["Builder Client Script", s.builder_script, "builder_client_script"] for s in scripts
+ 			],
+-			record_module="builder",
+-		)
++		record_module="builder",
++	)
+ 
++class SafeDict(dict):
++	def __getitem__(self, key):
++		return self.get(key, "")
+ 
+ @frappe.whitelist()
+ def get_block_data(
+@@ -515,9 +526,17 @@ def get_block_data(
+ 	if route_variables:
+ 		frappe.form_dict.update({k: v for k, v in route_variables.items()})
+ 	frappe.has_permission("Builder Page", "write", throw=True)
+-	props = frappe.parse_json(props or "{}")
++	props = SafeDict(frappe.parse_json(props or "{}"))
++	
++	if not frappe.form_dict.get("name"):
++		frappe.form_dict.name = "mock-name"
++	if not frappe.form_dict.get("page"):
++		frappe.form_dict.page = "1"
++	if not frappe.form_dict.get("item_code"):
++		frappe.form_dict.item_code = "mock-item"
++
+ 	block_data = frappe._dict()
+-	_locals = dict(block=frappe._dict(prev_block_data or {}), props=props)
++	_locals = dict(block=SafeDict(prev_block_data or {}), props=props)
+ 	execute_script(block_data_script, _locals, block_id)
+ 
+ 	if isinstance(_locals["block"], dict):
+@@ -631,8 +650,8 @@ def get_block_context(block: dict, props: dict) -> dict:
+ 	passed_down_props = {name: info["value"] for name, info in props.items() if info["is_passed_down"]}
+ 
+ 	return {
+-		"all_props": all_props,
+-		"passed_down_props": passed_down_props,
++		"all_props": SafeDict(all_props),
++		"passed_down_props": SafeDict(passed_down_props),
+ 		"block_data_script": block.get("blockDataScript"),
+ 	}
+ 
+@@ -1365,18 +1384,26 @@ def get_web_pages_with_dynamic_routes() -> list[dict]:
+ 
+ 
+ def resolve_path(path):
++	original_path = path
++	subpath = (frappe.conf.http_relative_url_root or "").strip("/")
++	if subpath:
++		if path == subpath:
++			path = ""
++		elif path.startswith(subpath + "/"):
++			path = path[len(subpath) + 1:]
++
+ 	try:
+ 		if find_page_with_path(path):
+-			return path
++			return original_path
+ 		elif evaluate_dynamic_routes(
+ 			[ColonRule(f"/{d.route}", endpoint=d.name) for d in get_web_pages_with_dynamic_routes()],
+ 			path,
+ 		):
+-			return path
++			return original_path
+ 	except Exception:
+ 		pass
+ 
+-	return original_resolve_path(path)
++	return original_resolve_path(original_path)
+ 
+ 
+ def reset_with_component(block, extended_with_component, component_children):
