@@ -1,0 +1,87 @@
+diff --git a/builder/builder/doctype/builder_page/builder_page.py b/builder/builder/doctype/builder_page/builder_page.py
+index dc44007..36882cc 100644
+--- a/builder/builder/doctype/builder_page/builder_page.py
++++ b/builder/builder/doctype/builder_page/builder_page.py
+@@ -487,9 +487,12 @@ def save_as_template(page_doc: BuilderPage):
+ 			record_list=[
+ 				["Builder Client Script", s.builder_script, "builder_client_script"] for s in scripts
+ 			],
+-			record_module="builder",
+-		)
++		record_module="builder",
++	)
+ 
++class SafeDict(dict):
++	def __getitem__(self, key):
++		return self.get(key, "")
+ 
+ @frappe.whitelist()
+ def get_block_data(
+@@ -502,7 +505,15 @@ def get_block_data(
+ 	if route_variables:
+ 		frappe.form_dict.update({k: v for k, v in route_variables.items()})
+ 	frappe.has_permission("Builder Page", "write", throw=True)
+-	props = frappe.parse_json(props or "{}")
++	props = SafeDict(frappe.parse_json(props or "{}"))
++	
++	if not frappe.form_dict.get("name"):
++		frappe.form_dict.name = "mock-name"
++	if not frappe.form_dict.get("page"):
++		frappe.form_dict.page = "1"
++	if not frappe.form_dict.get("item_code"):
++		frappe.form_dict.item_code = "mock-item"
++
+ 	block_data = frappe._dict()
+ 	_locals = dict(block=frappe._dict(prev_block_data or {}), props=props)
+ 	execute_script(block_data_script, _locals, block_id)
+diff --git a/builder/utils.py b/builder/utils.py
+index 82c0f9a..f2c35d5 100644
+--- a/builder/utils.py
++++ b/builder/utils.py
+@@ -707,9 +707,12 @@ def hash(s):
+ def to_safe_json(data):
+ 	return frappe.as_json(data or {})
+ 
++class SafeDict(dict):
++	def __getitem__(self, key):
++		return self.get(key, "")
+ 
+ def execute_script_and_combine(prev_block_data, block_data_script, props):
+-	props = frappe._dict(frappe.parse_json(props or "{}"))
++	props = SafeDict(frappe.parse_json(props or "{}"))
+ 	block_data = frappe._dict()
+ 	_locals = dict(block=to_dict_with_fallback(prev_block_data or {}), props=props)
+ 	execute_script(unescape_html(block_data_script), _locals, "sample")
+diff --git a/frontend/src/utils/helpers.ts b/frontend/src/utils/helpers.ts
+index 5f12db6..d6a8bb6 100644
+--- a/frontend/src/utils/helpers.ts
++++ b/frontend/src/utils/helpers.ts
+@@ -1430,6 +1430,12 @@ function executeBlockClientScriptRestricted(
+ 
+ 	const handler = {
+ 		get(target: Element, prop: string, receiver: any) {
++			if (prop === "__target") return target;
++			if (prop === "getElementById") return (id: string) => wrap(document.getElementById(id) as Element);
++			if (prop === "createElement") return (tag: string) => wrap(document.createElement(tag));
++			if (prop === "body") return wrap(document.body);
++			if (prop === "head") return wrap(document.head);
++
+ 			if (BLOCKED_GET.has(prop)) return undefined;
+ 
+ 			let val = Reflect.get(target, prop, receiver);
+@@ -1500,8 +1506,14 @@ function executeBlockClientScriptRestricted(
+ 		document: proxiedRoot,
+ 		thisRef: proxiedThis,
+ 		props,
++		window: {
++			getComputedStyle: (el: any) => window.getComputedStyle(el?.__target || el)
++		},
++		$clamp: (window as any).$clamp || (() => {}),
++		listen: (window as any).listen || (() => {}),
++		block_data: {},
++		dispatch: () => {},
+ 		// Escape hatches blocked
+-		window: undefined,
+ 		globalThis: undefined,
+ 		eval: undefined,
+ 		Function: undefined,

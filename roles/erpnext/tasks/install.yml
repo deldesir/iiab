@@ -563,6 +563,20 @@
   when: erpnext_enabled | bool
   ignore_errors: yes
 
+- name: Copy Builder Webshop Fixes patch to /tmp
+  copy:
+    src: "{{ role_path }}/files/builder_webshop_fixes.patch"
+    dest: /tmp/builder_webshop_fixes.patch
+  when: erpnext_enabled | bool
+
+- name: Apply Builder Webshop Fixes patch (idempotent via --forward)
+  shell: |
+    patch --forward --reject-file=/dev/null -p1 -d "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder" < /tmp/builder_webshop_fixes.patch
+  register: builder_webshop_patch_result
+  failed_when: builder_webshop_patch_result.rc not in [0, 1]
+  when: erpnext_enabled | bool
+  ignore_errors: yes
+
 # ── Stop ALL services before build ─────────────────────────────────────────────
 # 1) Frees ~900 MB of RAM held by gunicorn workers + background jobs, which is
 #    critical for CRM's heavy Vite/Rollup build on low-RAM deployments.
