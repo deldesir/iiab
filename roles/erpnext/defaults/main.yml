@@ -21,7 +21,7 @@ erpnext_host_name: "{% if iiab_ssl_enabled | default(False) %}https://{{ iiab_ss
 erpnext_extra_apps:
   - { name: "hrms",       branch: "version-16", app_name: "hrms" }
   - { name: "crm",        branch: "main",       app_name: "crm" }
-  - { name: "builder",    branch: "develop",    app_name: "builder" }
+  - { name: "https://github.com/deldesir/builder.git", branch: "develop", app_name: "builder" }
   - { name: "payments",   branch: "version-16", app_name: "payments" }
-  - { name: "webshop",    branch: "builder-port", app_name: "webshop" }
+  - { name: "https://github.com/deldesir/webshop.git", branch: "builder-port", app_name: "webshop" }
   - { name: "https://github.com/BrainWise-DEV/POSNext.git", branch: "version-16", app_name: "pos_next" }

@@ -561,46 +561,46 @@
   when: erpnext_enabled | bool
   ignore_errors: yes
 
-# ── Builder safer_exec patch ───────────────────────────────────────────────────
-# Builder's sandbox (safer_exec) doesn't expose frappe.call, but every Webshop
-# page data script uses it to call whitelisted API methods like
-# webshop.webshop.api.get_item.  This patch adds frappe.call to the sandbox.
-- name: Back up Builder utils.py before patching (idempotent)
-  copy:
-    src: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/builder/utils.py"
-    dest: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/builder/utils.py.iiab-bak"
-    remote_src: yes
-    force: no
-  when: erpnext_enabled | bool
-  ignore_errors: yes
-
-- name: Copy Builder IIAB Fixes patch to /tmp
-  copy:
-    src: "{{ role_path }}/files/builder_iiab_fixes.patch"
-    dest: /tmp/builder_iiab_fixes.patch
-  when: erpnext_enabled | bool
-
-- name: Apply Builder IIAB Fixes patch (idempotent via --forward)
-  shell: |
-    patch --forward --reject-file=/dev/null -p1 -d "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder" < /tmp/builder_iiab_fixes.patch
-  register: builder_iiab_patch_result
-  failed_when: builder_iiab_patch_result.rc not in [0, 1]
-  when: erpnext_enabled | bool
-  ignore_errors: yes
-
-- name: Copy Builder Webshop Fixes patch to /tmp
-  copy:
-    src: "{{ role_path }}/files/builder_webshop_fixes.patch"
-    dest: /tmp/builder_webshop_fixes.patch
-  when: erpnext_enabled | bool
-
-- name: Apply Builder Webshop Fixes patch (idempotent via --forward)
-  shell: |
-    patch --forward --reject-file=/dev/null -p1 -d "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder" < /tmp/builder_webshop_fixes.patch
-  register: builder_webshop_patch_result
-  failed_when: builder_webshop_patch_result.rc not in [0, 1]
-  when: erpnext_enabled | bool
-  ignore_errors: yes
+# # ── Builder safer_exec patch ───────────────────────────────────────────────────
+# # Builder's sandbox (safer_exec) doesn't expose frappe.call, but every Webshop
+# # page data script uses it to call whitelisted API methods like
+# # webshop.webshop.api.get_item.  This patch adds frappe.call to the sandbox.
+# - name: Back up Builder utils.py before patching (idempotent)
+#   copy:
+#     src: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/builder/utils.py"
+#     dest: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/builder/utils.py.iiab-bak"
+#     remote_src: yes
+#     force: no
+#   when: erpnext_enabled | bool
+#   ignore_errors: yes
+# 
+# - name: Copy Builder IIAB Fixes patch to /tmp
+#   copy:
+#     src: "{{ role_path }}/files/builder_iiab_fixes.patch"
+#     dest: /tmp/builder_iiab_fixes.patch
+#   when: erpnext_enabled | bool
+# 
+# - name: Apply Builder IIAB Fixes patch (idempotent via --forward)
+#   shell: |
+#     patch --forward --reject-file=/dev/null -p1 -d "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder" < /tmp/builder_iiab_fixes.patch
+#   register: builder_iiab_patch_result
+#   failed_when: builder_iiab_patch_result.rc not in [0, 1]
+#   when: erpnext_enabled | bool
+#   ignore_errors: yes
+# 
+# - name: Copy Builder Webshop Fixes patch to /tmp
+#   copy:
+#     src: "{{ role_path }}/files/builder_webshop_fixes.patch"
+#     dest: /tmp/builder_webshop_fixes.patch
+#   when: erpnext_enabled | bool
+# 
+# - name: Apply Builder Webshop Fixes patch (idempotent via --forward)
+#   shell: |
+#     patch --forward --reject-file=/dev/null -p1 -d "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder" < /tmp/builder_webshop_fixes.patch
+#   register: builder_webshop_patch_result
+#   failed_when: builder_webshop_patch_result.rc not in [0, 1]
+#   when: erpnext_enabled | bool
+#   ignore_errors: yes
 
 - name: Rebuild Builder Frontend (Vite)
   shell: |
@@ -610,7 +610,7 @@
     chdir: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/frontend"
   become: yes
   become_user: "{{ erpnext_user_name }}"
-  when: erpnext_enabled | bool and (builder_webshop_patch_result.rc == 0 or builder_iiab_patch_result.rc == 0)
+  when: erpnext_enabled | bool
   ignore_errors: yes
 
 # ── Stop ALL services before build ─────────────────────────────────────────────
