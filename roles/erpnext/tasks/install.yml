@@ -694,6 +694,26 @@
       become_user: "{{ erpnext_user_name }}"
       when: erpnext_enabled | bool
 
+    - name: Deploy IIAB About page translation and custom styling script
+      template:
+        src: update_about_page.py.j2
+        dest: /home/{{ erpnext_user_name }}/frappe-bench/update_about_page.py
+        owner: "{{ erpnext_user_name }}"
+        group: "{{ erpnext_user_name }}"
+        mode: '0755'
+      when: erpnext_enabled | bool
+
+    - name: Run IIAB About page translation and custom styling script
+      become: yes
+      become_user: "{{ erpnext_user_name }}"
+      shell: |
+        ~/.local/bin/bench --site {{ erpnext_site_name }} execute "exec('import sys; sys.path.insert(0, \"/home/{{ erpnext_user_name }}/frappe-bench\"); import update_about_page; update_about_page.run()')"
+      args:
+        chdir: /home/{{ erpnext_user_name }}/frappe-bench
+      environment:
+        PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      when: erpnext_enabled | bool
+
   always:
     - name: Remove temporary swapfile after build
       shell: |
