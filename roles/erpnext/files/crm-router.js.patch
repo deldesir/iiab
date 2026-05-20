@@ -1,0 +1,12 @@
+diff --git a/frontend/src/router.js b/frontend/src/router.js
+index 3ae5d43..9898a53 100644
+--- a/frontend/src/router.js
++++ b/frontend/src/router.js
+@@ -123,7 +123,7 @@ const handleMobileView = (componentName) => {
+ }
+ 
+ let router = createRouter({
+-  history: createWebHistory('/crm'),
++  history: createWebHistory((window._subpath_prefix || (window.location.pathname.startsWith('/erp') ? '/erp' : '')) + '/crm'),
+   routes,
+ })

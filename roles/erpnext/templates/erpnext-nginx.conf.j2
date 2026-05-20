@@ -43,7 +43,7 @@ location /erp/ {
     # Rewrite them so browsers fetch through /erp/ instead of polluting
     # the root namespace. Only applied to text/html responses (not JS/JSON).
     sub_filter_once off;
-    sub_filter_types text/html text/css;
+    sub_filter_types text/css;
     sub_filter '="/' '="/erp/';
     sub_filter '=\'/' '=\'/erp/';
     sub_filter 'url("/' 'url("/erp/';
@@ -92,8 +92,15 @@ location ^~ /erp/files/ {
     try_files $uri =404;
 }
 
+# Builder template assets
+location ^~ /erp/builder_assets/ {
+    alias /home/frappe/frappe-bench/apps/builder/builder/www/builder_assets/;
+    try_files $uri =404;
+}
+
 # Root-level /files/ fallback: Redirect to /erp/files/
 location ^~ /files/ { return 301 /erp$request_uri; }
+location ^~ /builder_assets/ { return 301 /erp$request_uri; }
 
 # ── Root-level Frappe endpoints (Redirect to /erp/ for subpath consistency) ─────
 # These ensure that even if the app produces a root-level link (e.g. /login),

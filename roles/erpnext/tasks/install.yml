@@ -524,6 +524,7 @@
     dest: /tmp/crm-demo-opt-in.patch
   when: erpnext_enabled | bool
 
+
 - name: Apply CRM demo opt-in patch (idempotent via --forward)
   shell: |
     patch --forward --reject-file=/dev/null -p1 \
@@ -531,6 +532,32 @@
       /tmp/crm-demo-opt-in.patch
   register: crm_demo_patch_result
   failed_when: crm_demo_patch_result.rc not in [0, 1]
+  when: erpnext_enabled | bool
+  ignore_errors: yes
+
+# ── CRM router subpath patch (must happen BEFORE the build) ────────────────────
+- name: Back up CRM router.js before patching (idempotent)
+  copy:
+    src: "/home/{{ erpnext_user_name }}/frappe-bench/apps/crm/frontend/src/router.js"
+    dest: "/home/{{ erpnext_user_name }}/frappe-bench/apps/crm/frontend/src/router.js.iiab-bak"
+    remote_src: yes
+    force: no
+  when: erpnext_enabled | bool
+  ignore_errors: yes
+
+- name: Copy crm-router.js.patch to /tmp
+  copy:
+    src: "{{ role_path }}/files/crm-router.js.patch"
+    dest: /tmp/crm-router.js.patch
+  when: erpnext_enabled | bool
+
+- name: Apply CRM router subpath patch (idempotent via --forward)
+  shell: |
+    patch --forward --reject-file=/dev/null -p1 \
+      "/home/{{ erpnext_user_name }}/frappe-bench/apps/crm/frontend/src/router.js" \
+      /tmp/crm-router.js.patch
+  register: crm_router_patch_result
+  failed_when: crm_router_patch_result.rc not in [0, 1]
   when: erpnext_enabled | bool
   ignore_errors: yes
 
