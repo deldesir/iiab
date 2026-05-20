@@ -45,11 +45,17 @@ location /erp/ {
     # the root namespace. Only applied to text/html responses (not JS/JSON).
     sub_filter_once off;
     sub_filter_types text/css;
+    sub_filter '="/erp/' '="/erp/';
     sub_filter '="/' '="/erp/';
+    sub_filter '=\'/erp/' '=\'/erp/';
     sub_filter '=\'/' '=\'/erp/';
+    sub_filter 'url("/erp/' 'url("/erp/';
     sub_filter 'url("/' 'url("/erp/';
+    sub_filter 'url(\'/erp/' 'url(\'/erp/';
     sub_filter 'url(\'/' 'url(\'/erp/';
+    sub_filter 'src=\\"/erp/' 'src=\\"/erp/';
     sub_filter 'src=\\"/' 'src=\\"/erp/';
+    sub_filter 'href=\\"/erp/' 'href=\\"/erp/';
     sub_filter 'href=\\"/' 'href=\\"/erp/';
 }
 
