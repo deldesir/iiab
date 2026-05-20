@@ -111,6 +111,20 @@ location ^~ /cart/ { return 301 /erp$request_uri; }
 location = /cart { return 301 /erp/cart; }
 location ^~ /checkout/ { return 301 /erp$request_uri; }
 location = /checkout { return 301 /erp/checkout; }
+location ^~ /orders/ { return 301 /erp$request_uri; }
+location = /orders { return 301 /erp/orders; }
+location ^~ /wishlist/ { return 301 /erp$request_uri; }
+location = /wishlist { return 301 /erp/wishlist; }
+location ^~ /me/ { return 301 /erp$request_uri; }
+location = /me { return 301 /erp/me; }
+location ^~ /profile/ { return 301 /erp$request_uri; }
+location = /profile { return 301 /erp/profile; }
+location ^~ /blog/ { return 301 /erp$request_uri; }
+location = /blog { return 301 /erp/blog; }
+location ^~ /about/ { return 301 /erp$request_uri; }
+location = /about { return 301 /erp/about; }
+location ^~ /contact/ { return 301 /erp$request_uri; }
+location = /contact { return 301 /erp/contact; }
 
 # ── Root-level Frappe endpoints (Redirect to /erp/ for subpath consistency) ─────
 # These ensure that even if the app produces a root-level link (e.g. /login),
