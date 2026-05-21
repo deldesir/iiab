@@ -13,9 +13,9 @@
     name: git
     state: present
 
-- name: Clone or pull deldesir/builder (builder-cli)
+- name: Clone or pull stravo1/builder-cli (builder-cli)
   git:
-    repo: "{{ builder_cli_repo | default('https://github.com/deldesir/builder.git') }}"
+    repo: "{{ builder_cli_repo | default('https://github.com/stravo1/builder-cli.git') }}"
     dest: "{{ builder_cli_dir | default('/opt/iiab/builder-cli') }}"
     version: "{{ builder_cli_branch | default('main') }}"
     force: yes
