@@ -112,7 +112,11 @@ location ^~ /builder_assets/ { return 301 /erp$request_uri; }
 # Root-level webshop routing redirects
 location ^~ /item/ { return 301 /erp$request_uri; }
 location ^~ /category/ { return 301 /erp$request_uri; }
+location ^~ /categories/ { return 301 /erp$request_uri; }
+location = /categories { return 301 /erp/categories; }
 location ^~ /collection/ { return 301 /erp$request_uri; }
+location ^~ /collections/ { return 301 /erp$request_uri; }
+location = /collections { return 301 /erp/collections; }
 location ^~ /products/ { return 301 /erp$request_uri; }
 location ^~ /shop/ { return 301 /erp$request_uri; }
 location = /shop { return 301 /erp/shop; }
