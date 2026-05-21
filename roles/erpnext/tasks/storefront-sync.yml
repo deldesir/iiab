@@ -49,11 +49,13 @@
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   register: admin_keys_result
+  no_log: true
 
 - name: Set API key and secret facts
   set_fact:
     storefront_api_key: "{{ admin_keys_result.stdout.strip().split(':')[0] }}"
     storefront_api_secret: "{{ admin_keys_result.stdout.strip().split(':')[1] }}"
+  no_log: true
 
 - name: Write storefront config.json
   copy:
