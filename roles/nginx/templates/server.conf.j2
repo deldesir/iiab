@@ -5,7 +5,7 @@ server {
     listen {{ nginx_port }};
     
     # Dynamic server names: $hostname + custom SSL domain (if enabled)
-    server_name $hostname {% if iiab_ssl_enabled and iiab_ssl_domain != "box.lan" %}{{ iiab_ssl_domain }}{% endif %};
+    server_name $hostname {% if iiab_ssl_enabled and iiab_ssl_domain != "box.lan" %}{{ iiab_ssl_domain }}{% if iiab_ssl_www_resolved | default(False) | bool %} www.{{ iiab_ssl_domain }}{% endif %}{% endif %};
 
 {% if iiab_ssl_enabled %}
     # Listen on HTTPS
@@ -24,6 +24,11 @@ server {
     if ($host = "{{ iiab_ssl_domain }}") {
         set $redirect_to_https "${redirect_to_https}1";
     }
+    {% if iiab_ssl_www_resolved | default(False) | bool %}
+    if ($host = "www.{{ iiab_ssl_domain }}") {
+        set $redirect_to_https "${redirect_to_https}1";
+    }
+    {% endif %}
     if ($redirect_to_https = 11) {
         return 301 https://$host$request_uri;
     }
