@@ -143,8 +143,8 @@ location = /contact { return 301 /erp/contact; }
 # These ensure that even if the app produces a root-level link (e.g. /login),
 # the browser is immediately bounced back into the /erp/ namespace.
 
-location = /login  { return 302 /erp/login; }
-location = /logout { return 302 /erp/logout; }
+location = /login  { return 307 /erp/login; }
+location = /logout { return 307 /erp/logout; }
 location = /website_script.js { return 302 /erp/website_script.js; }
 
 # ── Frappe API endpoints ────────────────────────────────────────────────────────
@@ -163,6 +163,8 @@ location = /desk  { return 302 /erp/desk; }
 location ^~ /desk/ { return 302 /erp$request_uri; }
 location = /app   { return 302 /erp/app; }
 location ^~ /app/  { return 302 /erp$request_uri; }
+location = /apps  { return 307 /erp/apps; }
+location ^~ /apps/ { return 307 /erp$request_uri; }
 # /hr/ is served by Frappe when hrms is installed — proxy through /erp/ mount
 location ^~ /hr/ {
     rewrite ^/hr/(.*) /hr/$1 break;
