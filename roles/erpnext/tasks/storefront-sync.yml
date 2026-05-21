@@ -1,0 +1,72 @@
+---
+# Storefront Synchronization for IIAB
+# Automatically installs builder-cli and pushes/pulls the storefront repo
+
+- name: Assert that erpnext is enabled
+  assert:
+    that: erpnext_enabled is sameas true
+    fail_msg: "ERPNext is not enabled, skipping storefront synchronization."
+    quiet: yes
+
+- name: Install Git if not present
+  apt:
+    name: git
+    state: present
+
+- name: Clone or pull deldesir/builder (builder-cli)
+  git:
+    repo: "{{ builder_cli_repo | default('https://github.com/deldesir/builder.git') }}"
+    dest: "{{ builder_cli_dir | default('/opt/iiab/builder-cli') }}"
+    version: "{{ builder_cli_branch | default('main') }}"
+    force: yes
+
+- name: Install dependencies and build builder-cli
+  shell: |
+    npm install
+    npm run build
+  args:
+    chdir: "{{ builder_cli_dir | default('/opt/iiab/builder-cli') }}"
+
+- name: Globally install builder-cli executable
+  shell: npm install -g .
+  args:
+    chdir: "{{ builder_cli_dir | default('/opt/iiab/builder-cli') }}"
+
+- name: Clone or pull storefront repository
+  git:
+    repo: "{{ storefront_repo | default('https://github.com/deldesir/novadah-storefront.git') }}"
+    dest: "{{ storefront_dir | default('/opt/iiab/novadah-storefront') }}"
+    version: "{{ storefront_branch | default('main') }}"
+    force: yes
+
+- name: Get or generate Administrator API keys from Frappe
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  shell: |
+    ~/.local/bin/bench --site {{ erpnext_site_name }} execute 'exec("import frappe\nfrom frappe.core.doctype.user.user import generate_keys\nuser = frappe.get_doc(\"User\", \"Administrator\")\nkey = user.api_key\ntry:\n    sec = user.get_password(\"api_secret\")\nexcept:\n    sec = None\nif not key or not sec:\n    sec = generate_keys(\"Administrator\")\n    frappe.db.commit()\n    user.reload()\n    key = user.api_key\nprint(f\"{key}:{sec}\")")'
+  args:
+    chdir: "/home/{{ erpnext_user_name }}/frappe-bench"
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  register: admin_keys_result
+
+- name: Set API key and secret facts
+  set_fact:
+    storefront_api_key: "{{ admin_keys_result.stdout.strip().split(':')[0] }}"
+    storefront_api_secret: "{{ admin_keys_result.stdout.strip().split(':')[1] }}"
+
+- name: Write storefront config.json
+  copy:
+    dest: "{{ storefront_dir | default('/opt/iiab/novadah-storefront') }}/config.json"
+    content: |
+      {
+        "siteUrl": "http://{{ erpnext_site_name }}:8000",
+        "siteName": "{{ erpnext_site_name }}",
+        "authToken": "{{ storefront_api_key }}:{{ storefront_api_secret }}"
+      }
+    mode: '0600'
+
+- name: Push storefront pages and components to local ERPNext database
+  shell: builder push
+  args:
+    chdir: "{{ storefront_dir | default('/opt/iiab/novadah-storefront') }}"

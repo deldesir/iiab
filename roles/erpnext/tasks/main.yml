@@ -21,6 +21,11 @@
         - erpnext_install | bool
         - erpnext_installed is undefined
 
+    - name: Sync Storefront if erpnext is enabled
+      include_tasks: storefront-sync.yml
+      when:
+        - erpnext_enabled | bool
+
     - name: Add 'erpnext' variable values to {{ iiab_ini_file }}
       ini_file:
         path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
