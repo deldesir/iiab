@@ -10,13 +10,9 @@
 #   4. JS source patches (router.js, socketio_client.js) handle SPA routing
 
 # ── Primary application proxy ──────────────────────────────────────────────────
-# Bare /erp/ must redirect to /erp/shop so guest homepage and brand links point
-# to the storefront, while admins can still access /erp/desk directly.
-location = /erp/ {
-    return 302 /erp/shop;
-}
+# Bare /erp/ proxies to Gunicorn root (storefront homepage), while /erp redirects to /erp/
 location = /erp {
-    return 302 /erp/shop;
+    return 302 /erp/;
 }
 
 location /erp/ {
