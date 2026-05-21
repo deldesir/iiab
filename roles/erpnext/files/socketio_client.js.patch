@@ -1,6 +1,6 @@
 --- /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/socketio_client.js.iiab-bak	2026-04-09 04:22:01.051353793 +0200
 +++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/socketio_client.js	2026-04-09 13:28:15.191631793 +0200
-@@ -48,22 +48,28 @@
+@@ -48,22 +48,27 @@
  		this.lazy_connect = lazy_connect;
  		let me = this;
  
