@@ -72,3 +72,7 @@
   shell: builder push
   args:
     chdir: "{{ storefront_dir | default('/opt/iiab/novadah-storefront') }}"
+  register: push_result
+  until: push_result is succeeded
+  retries: 3
+  delay: 5
