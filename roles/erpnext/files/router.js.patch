@@ -18,8 +18,12 @@
 +		// Derive prefix from the current URL at boot time so this file
 +		// never needs to hard-code the value.
 +		var p = window.location.pathname;
-+		var m = p.match(/^\/([^\/]+)\/(?:desk|login|app|builder|webshop|crm|pos|hrms)/);
-+		return m ? "/" + m[1] : "";
++		var parts = p.split("/");
++		var first = parts[1] || "";
++		if (!first || ["desk", "login", "app", "builder", "webshop", "crm", "pos", "hrms", "assets", "files", "api", "protected", "private"].includes(first)) {
++			return "";
++		}
++		return "/" + first;
 +	})(),
 +
  	make_url(params) {

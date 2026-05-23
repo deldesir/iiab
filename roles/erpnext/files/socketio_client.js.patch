@@ -7,8 +7,12 @@
 +		// URL so socket.io connects through Nginx at /erpnext/socket.io/
 +		// instead of the root /socket.io/.
 +		var pathname = window.location.pathname;
-+		var match = pathname.match(/^\/([^\/]+)\/(?:desk|login|app|builder|webshop|crm|pos|hrms)/);
-+		var iiab_subpath = match ? "/" + match[1] : "";
++		var parts = pathname.split("/");
++		var first = parts[1] || "";
++		var iiab_subpath = "";
++		if (first && !["desk", "login", "app", "builder", "webshop", "crm", "pos", "hrms", "assets", "files", "api", "protected", "private"].includes(first)) {
++			iiab_subpath = "/" + first;
++		}
 +		var socket_path = iiab_subpath ? iiab_subpath + "/socket" + ".io" : "/socket" + ".io";
 +
 +		var socket_opts = {
