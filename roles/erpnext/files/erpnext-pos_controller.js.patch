@@ -1,0 +1,25 @@
+--- a/erpnext/selling/page/point_of_sale/pos_controller.js
++++ b/erpnext/selling/page/point_of_sale/pos_controller.js
+@@ -160,7 +160,21 @@
+ 
+ 	async fetch_invoice_fields() {
+ 		this.settings.invoice_fields = new Array();
+-		const pos_settings = await frappe.db.get_doc("POS Settings", undefined);
++		let pos_settings;
++		try {
++			pos_settings = await frappe.db.get_doc("POS Settings", undefined);
++		} catch (e) {
++			// POS Settings may not be a Single doctype (e.g. when POSNext is installed)
++			// Fall back to fetching the first record from the list
++			const list = await frappe.call({
++				method: "frappe.client.get_list",
++				args: { doctype: "POS Settings", limit_page_length: 1 },
++			});
++			if (list.message && list.message.length) {
++				pos_settings = await frappe.db.get_doc("POS Settings", list.message[0].name);
++			}
++		}
++		if (!pos_settings || !pos_settings.invoice_fields) return;
+ 		pos_settings.invoice_fields.forEach((field) => {
+ 			this.settings.invoice_fields.push({
+ 				fieldname: field.fieldname,

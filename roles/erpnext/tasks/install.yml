@@ -506,6 +506,47 @@
   when: erpnext_enabled | bool
   ignore_errors: yes  # skip gracefully if hrms not installed
 
+# ── ERPNext POS compatibility patches (POSNext integration) ────────────────────
+# ERPNext v16 added an invoice_type field to POS Settings but hardcoded
+# "POS Invoice" in the JS.  POSNext overrides POS Settings as a non-single
+# doctype, breaking the traditional POS page's fetch_invoice_fields().
+# These patches fix both issues.
+
+- name: Define ERPNext POS patch targets
+  set_fact:
+    iiab_erpnext_patches:
+      - src: "erpnext/accounts/doctype/pos_settings/pos_settings.js"
+        patch: "erpnext-pos_settings.js.patch"
+      - src: "erpnext/selling/page/point_of_sale/pos_controller.js"
+        patch: "erpnext-pos_controller.js.patch"
+  when: erpnext_enabled | bool
+
+- name: Back up ERPNext POS source files before patching (idempotent)
+  copy:
+    src: "/home/{{ erpnext_user_name }}/frappe-bench/apps/erpnext/{{ item.src }}"
+    dest: "/home/{{ erpnext_user_name }}/frappe-bench/apps/erpnext/{{ item.src }}.iiab-bak"
+    remote_src: yes
+    force: no
+  loop: "{{ iiab_erpnext_patches }}"
+  when: erpnext_enabled | bool
+
+- name: Copy ERPNext POS patches to /tmp
+  copy:
+    src: "{{ role_path }}/files/{{ item.patch }}"
+    dest: "/tmp/{{ item.patch }}"
+  loop: "{{ iiab_erpnext_patches }}"
+  when: erpnext_enabled | bool
+
+- name: Apply ERPNext POS patches (idempotent via --forward)
+  shell: |
+    patch --forward --reject-file=/dev/null -p1 \
+      "/home/{{ erpnext_user_name }}/frappe-bench/apps/erpnext/{{ item.src }}" \
+      "/tmp/{{ item.patch }}"
+  loop: "{{ iiab_erpnext_patches }}"
+  register: erpnext_patch_results
+  failed_when: erpnext_patch_results.rc not in [0, 1]
+  when: erpnext_enabled | bool
+
 # ── CRM demo data opt-in patch ─────────────────────────────────────────────────
 # CRM's setup_wizard_complete hook unconditionally creates demo users/leads/deals
 # on every wizard completion.  This patch gates it behind the setup_demo checkbox.

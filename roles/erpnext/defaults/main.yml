@@ -24,4 +24,4 @@ erpnext_extra_apps:
   - { name: "https://github.com/deldesir/builder.git", branch: "develop", app_name: "builder" }
   - { name: "payments",   branch: "version-16", app_name: "payments" }
   - { name: "https://github.com/deldesir/webshop.git", branch: "develop", app_name: "webshop" }
-  - { name: "https://github.com/BrainWise-DEV/POSNext.git", branch: "version-16", app_name: "pos_next" }
+  - { name: "https://github.com/deldesir/POSNext.git", branch: "version-16", app_name: "pos_next" }
