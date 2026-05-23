@@ -7,21 +7,13 @@
 is_proot: True
 
 ##############################
-# Currently it targets RapidPro & Maps
-# Heavy apps are disabled by default below.
-##############################
-
-##############################
-# Explicitly Disable Heavy/Unused Apps
-# (These default to True in default_vars.yml)
-kolibri_install: False
-kolibri_enabled: False
-kiwix_install: False
-kiwix_enabled: False
-calibreweb_install: False
-calibreweb_enabled: False
-captiveportal_install: False
-captiveportal_enabled: False
+# Currently it targets 6 main apps
+# 1 Kiwix          localhost:8085/kiwix
+# 2 New Maps       localhost:8085/maps
+# 3 Calibre-Web    localhost:8085/books
+# 4 Kolibri        localhost:8085/kolibri
+# 5 Matomo         localhost:8085/matomo
+# 6 Code on the Go localhost:8085/code
 ##############################
 
 ##############################
@@ -41,12 +33,6 @@ admin_console_enabled: False
 # Kiwix
 kiwix_install: True
 kiwix_enabled: True
-##############################
-
-##############################
-# Disable Anki sync on proot-distro
-anki_install: False
-anki_enabled: False
 ##############################
 
 ##############################
@@ -71,22 +57,26 @@ maps_region_downloader: True            # Tool to select regions for full-qualit
 
 ##############################
 # Calibre-web
-# (Set to False for typical 4GB RAM phones)
 calibreweb_install: False
 calibreweb_enabled: False
 ##############################
 
 ##############################
 # Kolibri
-# (Set to False for typical 4GB RAM phones)
-kolibri_install: False
-kolibri_enabled: False
+kolibri_install: True
+kolibri_enabled: True
 ##############################
 
 ##############################
 # Matomo - enable at will.
 matomo_install: False
 matomo_enabled: False
+##############################
+
+##############################
+# Code on the Go
+code_install: False
+code_enabled: False
 ##############################
 
 ##############################
@@ -124,19 +114,6 @@ usb_lib_enabled: False
 network_install: False
 network_enabled: False
 ##############################
-
-##############################
-# RapidPro & Wuzapi
-# Enable for Android usage
-rapidpro_install: True
-rapidpro_enabled: True
-wuzapi_install: True
-wuzapi_enabled: True
-##############################
-rapidpro_db_pass: "temba"
-rapidpro_secret_key: "changeme_secret_key_for_rapidpro"
-wuzapi_admintoken: "changeme"
-rapidpro_admin_password: "changeme"
 
 ##############################
 # Disable captiveportal
