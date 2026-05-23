@@ -1,5 +1,5 @@
---- /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/views/breadcrumbs.js.iiab-bak	2026-04-09 20:35:08.132445405 +0200
-+++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/views/breadcrumbs.js	2026-04-09 20:36:04.242913280 +0200
+--- frappe/public/js/frappe/views/breadcrumbs.js.orig
++++ frappe/public/js/frappe/views/breadcrumbs.js
 @@ -213,7 +213,7 @@
  			} else {
  				route = doctype_route;
@@ -27,3 +27,12 @@
  		$(`<li><a href="${dashboard_route}">${__(docname)}</a></li>`).appendTo(this.$breadcrumbs);
  	},
  
+@@ -275,7 +275,7 @@
+ 
+ 	clear() {
+ 		this.$breadcrumbs = $(".navbar-breadcrumbs").empty();
+-		this.append_breadcrumb_element("/desk", frappe.utils.icon("home"));
++		this.append_breadcrumb_element(((frappe.router && frappe.router._subpath_prefix) || "") + "/desk", frappe.utils.icon("home"));
+ 	},
+ 
+ 	toggle(show) {

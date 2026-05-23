@@ -1,5 +1,5 @@
---- /tmp/p_orig	2026-04-09 20:37:54.832863084 +0200
-+++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/form/sidebar/attachments.js	2026-04-09 20:36:45.669520091 +0200
+--- frappe/public/js/frappe/form/sidebar/attachments.js.orig
++++ frappe/public/js/frappe/form/sidebar/attachments.js
 @@ -147,7 +147,7 @@
  			};
  		}
@@ -8,4 +8,13 @@
 +		const icon = `<a href="${(frappe.router && frappe.router._subpath_prefix) || ""}/desk/file/${fileid}" class="attachment-icon">
  				${frappe.utils.icon(attachment.is_private ? "es-line-lock" : "es-line-unlock", "sm ml-0")}
  			</a>`;
+ 
+@@ -177,7 +177,7 @@
+ 			if (attachment.file_name.indexOf("files/") === 0) {
+ 				file_url = "/" + attachment.file_name;
+ 			} else {
+-				file_url = "/files/" + attachment.file_name;
++				file_url = ((frappe.router && frappe.router._subpath_prefix) || "") + "/files/" + attachment.file_name;
+ 			}
+ 		}
  

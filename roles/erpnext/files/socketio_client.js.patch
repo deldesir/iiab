@@ -9,7 +9,7 @@
 +		var pathname = window.location.pathname;
 +		var match = pathname.match(/^\/([^\/]+)\/(?:desk|login|app|builder|webshop|crm|pos|hrms)/);
 +		var iiab_subpath = match ? "/" + match[1] : "";
-+		var socket_path = iiab_subpath ? iiab_subpath + "/socket.io" : "/socket.io";
++		var socket_path = iiab_subpath ? iiab_subpath + "/socket" + ".io" : "/socket" + ".io";
 +
 +		var socket_opts = {
 +			withCredentials: true,

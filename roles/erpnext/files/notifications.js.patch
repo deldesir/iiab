@@ -1,5 +1,5 @@
---- /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/ui/notifications/notifications.js.iiab-bak	2026-04-09 20:35:08.107445642 +0200
-+++ /home/frappe/frappe-bench/apps/frappe/frappe/public/js/frappe/ui/notifications/notifications.js	2026-04-09 20:36:04.213913555 +0200
+--- frappe/public/js/frappe/ui/notifications/notifications.js.orig
++++ frappe/public/js/frappe/ui/notifications/notifications.js
 @@ -254,7 +254,7 @@
  		if (this.container.find(".activity-status")) {
  			this.container.find(".activity-status").replaceWith(
@@ -9,7 +9,7 @@
  					<div class="full-log-btn">${__("View Full Log")}</div>
  				</a>`
  			);
-@@ -343,7 +343,7 @@
+@@ -343,14 +343,14 @@
  					this.container.append(this.get_dropdown_item_html(notification_log));
  				});
  				this.container.append(`<a class="list-footer"
@@ -18,6 +18,14 @@
  						<div class="full-log-btn">${__("See all Activity")}</div>
  					</a>`);
  			} else {
+ 				this.container.append(
+ 					$(`<div class="notification-null-state">
+ 					<div class="text-center">
+-						<img src="/assets/frappe/images/ui-states/notification-empty-state.svg" alt="Generic Empty State" class="null-state">
++						<img src="${(frappe.router && frappe.router._subpath_prefix) || ""}/assets/frappe/images/ui-states/notification-empty-state.svg" alt="Generic Empty State" class="null-state">
+ 						<div class="title">${__("No New notifications")}</div>
+ 						<div class="subtitle">
+ 							${__("Looks like you haven’t received any notifications.")}
 @@ -464,7 +464,7 @@
  					location = `, ${event.location}`;
  				}
@@ -27,3 +35,21 @@
  					<div class="event-border" style="border-color: ${event.color}"></div>
  					<div class="event-item">
  						<div class="event-subject">${event.subject}</div>
+@@ -478,7 +478,7 @@
+ 			html = `
+ 				<div class="notification-null-state">
+ 					<div class="text-center">
+-					<img src="/assets/frappe/images/ui-states/event-empty-state.svg" alt="Generic Empty State" class="null-state">
++					<img src="${(frappe.router && frappe.router._subpath_prefix) || ""}/assets/frappe/images/ui-states/event-empty-state.svg" alt="Generic Empty State" class="null-state">
+ 					<div class="title">${__("No Upcoming Events")}</div>
+ 					<div class="subtitle">
+ 						${__("There are no upcoming events for you.")}
+@@ -527,7 +527,7 @@
+ 		} else {
+ 			html = `<div class="notification-null-state">
+ 						<div class="text-center">
+-							<img src="/assets/frappe/images/ui-states/notification-empty-state.svg" alt="Generic Empty State" class="null-state">
++							<img src="${(frappe.router && frappe.router._subpath_prefix) || ""}/assets/frappe/images/ui-states/notification-empty-state.svg" alt="Generic Empty State" class="null-state">
+ 							<div class="title">${__("Nothing New")}</div>
+ 							<div class="subtitle">
+ 								${__("There is nothing new to show you right now.")}
