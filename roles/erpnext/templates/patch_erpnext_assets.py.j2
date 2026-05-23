@@ -95,9 +95,9 @@ if __name__ == "__main__":
                         pass
                     continue
 
-                # Only patch compiled/minified production assets (inside /dist/ directories)
+                # Only patch compiled/minified production assets (inside /dist/, /pos/, /builder/, /webshop/, or /crm/ directories)
                 # to prevent polluting the original git-tracked source code in apps/
-                if "/dist/" in os.path.join(root, name):
+                if any(folder in os.path.join(root, name) for folder in ["/dist/", "/pos/", "/builder/", "/webshop/", "/crm/"]):
                     if name.endswith(".js") or name.endswith(".css"):
                         patch_file(os.path.join(root, name))
 
