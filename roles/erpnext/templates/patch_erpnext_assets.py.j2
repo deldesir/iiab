@@ -4,30 +4,23 @@ import re
 TARGET_DIR = "/home/{{ erpnext_user_name }}/frappe-bench/sites/assets"
 SUBPATH = "{{ erpnext_subpath | default('/erp') }}"
 
-REPLACEMENTS = [
-    # General URL patterns in JS/CSS strings
-    ('"/app"', f'"{SUBPATH}/app"'),
-    ("'/app'", f"'{SUBPATH}/app'"),
-    ('"/desk"', f'"{SUBPATH}/desk"'),
-    ("'/desk'", f"'{SUBPATH}/desk'"),
-    ('"/login"', f'"{SUBPATH}/login"'),
-    ("'/login'", f"'{SUBPATH}/login'"),
-    ('"/logout"', f'"{SUBPATH}/logout"'),
-    ("'/logout'", f"'{SUBPATH}/logout'"),
-    
-    # App-specific root paths
-    ('"/builder"', f'"{SUBPATH}/builder"'),
-    ("'/builder'", f"'{SUBPATH}/builder'"),
-    ('"/webshop"', f'"{SUBPATH}/webshop"'),
-    ("'/webshop'", f"'{SUBPATH}/webshop'"),
-    ('"/crm"', f'"{SUBPATH}/crm"'),
-    ("'/crm'", f"'{SUBPATH}/crm'"),
-    ('"/pos"', f'"{SUBPATH}/pos"'),
-    ("'/pos'", f"'{SUBPATH}/pos'"),
-    ('"/hrms"', f'"{SUBPATH}/hrms"'),
-    ("'/hrms'", f"'{SUBPATH}/hrms'"),
+# Patterns that are ALREADY handled by the IIAB source-level JS patches
+# (router.js, desk.js, logout.js, etc.) via the _subpath_prefix variable.
+# These MUST NOT be replaced in compiled bundles — doing so causes double-prefix
+# bugs like "/erp/erp/desk" at runtime when the variable is concatenated.
+SOURCE_PATCHED_PATTERNS = {
+    '"/desk"', '"/desk/',
+    "'/desk'", "'/desk/",
+    '"/app"', '"/app/',
+    "'/app'", "'/app/",
+    '"/login"', '"/login?',
+    "'/login'", "'/login?",
+    '"/logout"', "'/logout'",
+}
 
-    # API and Assets
+REPLACEMENTS = [
+    # API and Assets — these are NOT handled by source patches, only the
+    # asset patcher covers them.
     ('"/api/method/"', f'"{SUBPATH}/api/method/"'),
     ("'/api/method/'", f"'{SUBPATH}/api/method/'"),
     ('"/api/resource/"', f'"{SUBPATH}/api/resource/"'),
@@ -41,6 +34,19 @@ REPLACEMENTS = [
     ('"/socket.io"', f'"{SUBPATH}/socket.io"'),
     ("'/socket.io'", f"'{SUBPATH}/socket.io'"),
 
+    # App-specific root paths (these are standalone SPA routes, NOT in the
+    # patched router.js, so they need asset-level patching).
+    ('"/builder"', f'"{SUBPATH}/builder"'),
+    ("'/builder'", f"'{SUBPATH}/builder'"),
+    ('"/webshop"', f'"{SUBPATH}/webshop"'),
+    ("'/webshop'", f"'{SUBPATH}/webshop'"),
+    ('"/crm"', f'"{SUBPATH}/crm"'),
+    ("'/crm'", f"'{SUBPATH}/crm'"),
+    ('"/pos"', f'"{SUBPATH}/pos"'),
+    ("'/pos'", f"'{SUBPATH}/pos'"),
+    ('"/hrms"', f'"{SUBPATH}/hrms"'),
+    ("'/hrms'", f"'{SUBPATH}/hrms'"),
+
     # Common dynamic constructions in Frappe
     ('url("/assets/', f'url("{SUBPATH}/assets/'),
     ("url('/assets/", f"url('{SUBPATH}/assets/"),
@@ -48,31 +54,29 @@ REPLACEMENTS = [
     ('href="/assets/', f'href="{SUBPATH}/assets/'),
     ('window.location.origin + "/app"', f'window.location.origin + "{SUBPATH}/app"'),
     ('window.location.origin + \'/app\'', f'window.location.origin + \'{SUBPATH}/app\''),
-    
-    # login redirect
-    ('"/login?redirect-to="', f'"{SUBPATH}/login?redirect-to="'),
-    ("'/login?redirect-to='", f"'{SUBPATH}/login?redirect-to='"),
 ]
 
 def patch_file(filepath):
     try:
         with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
-        
+
         new_content = content
         for pattern, replacement in REPLACEMENTS:
             new_content = new_content.replace(pattern, replacement)
 
-        # Cleanup double prefixes if any occurred (safety net)
+        # Robust double-prefix cleanup: catch ALL instances of /erp/erp (or
+        # whatever the subpath is) whether they appear literally in the file
+        # or are formed by adjacent string fragments.  Loop until stable.
         double_prefix = f"{SUBPATH}{SUBPATH}"
-        if double_prefix in new_content:
-             new_content = new_content.replace(double_prefix, SUBPATH)
+        while double_prefix in new_content:
+            new_content = new_content.replace(double_prefix, SUBPATH)
 
         if new_content != content:
             print(f"Patching {filepath}")
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(new_content)
-                
+
     except Exception as e:
         print(f"Error patching {filepath}: {e}")
 
@@ -90,8 +94,12 @@ if __name__ == "__main__":
                     except Exception:
                         pass
                     continue
-                    
-                if name.endswith(".js") or name.endswith(".css"):
-                    patch_file(os.path.join(root, name))
-                    
+
+                # Only patch compiled/minified production assets (inside /dist/ directories)
+                # to prevent polluting the original git-tracked source code in apps/
+                if "/dist/" in os.path.join(root, name):
+                    if name.endswith(".js") or name.endswith(".css"):
+                        patch_file(os.path.join(root, name))
+
         print("Patching complete.")
+

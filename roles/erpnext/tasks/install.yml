@@ -426,6 +426,7 @@
     iiab_js_patches:
       # Core router & realtime
       - { src: "frappe/router.js",                  patch: "router.js.patch" }
+      - { src: "frappe/request.js",                 patch: "request.js.patch" }
       - { src: "frappe/socketio_client.js",         patch: "socketio_client.js.patch" }
       - { src: "frappe/desk.js",                    patch: "desk.js.patch" }
       - { src: "frappe/utils/logout.js",            patch: "logout.js.patch" }
