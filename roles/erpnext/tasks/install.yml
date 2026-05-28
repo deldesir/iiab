@@ -442,7 +442,7 @@
 
 - name: Set _needs_build flag
   set_fact:
-    _needs_build: "{{ reinstall | default(False) | bool or erpnext_force_rebuild | default(False) | bool or not (_assets_json.stat.exists | default(false)) }}"
+    _needs_build: "{{ reinstall | default(False) | bool or erpnext_force_rebuild | default(False) | bool or not (_assets_json.stat.exists | default(false)) or erpnext_installed is undefined }}"
 
 
 # ── Stop ALL services before build ─────────────────────────────────────────────
