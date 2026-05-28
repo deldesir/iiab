@@ -211,7 +211,11 @@
 - name: Pull latest code from fork for frappe/erpnext
   become: yes
   become_user: "{{ erpnext_user_name }}"
-  shell: git fetch origin && git reset --hard origin/$(git rev-parse --abbrev-ref HEAD)
+  shell: |
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    # Shallow clones from a different remote need unshallowing to fetch new history
+    [ -f .git/shallow ] && git fetch --unshallow origin $BRANCH 2>/dev/null || git fetch origin $BRANCH
+    git reset --hard origin/$BRANCH
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item }}
   loop:
@@ -223,7 +227,10 @@
 - name: Pull latest code from fork for extra apps
   become: yes
   become_user: "{{ erpnext_user_name }}"
-  shell: git fetch origin && git reset --hard origin/$(git rev-parse --abbrev-ref HEAD)
+  shell: |
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    [ -f .git/shallow ] && git fetch --unshallow origin $BRANCH 2>/dev/null || git fetch origin $BRANCH
+    git reset --hard origin/$BRANCH
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item.app_name }}
   loop: "{{ erpnext_extra_apps }}"
