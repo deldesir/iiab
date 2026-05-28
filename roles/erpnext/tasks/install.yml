@@ -428,16 +428,6 @@
 # Builder patches     → deldesir/builder (develop branch)
 # Historical patch files are archived in files/archive/
 
-- name: Rebuild Builder Frontend (Vite)
-  shell: |
-    yarn install
-    yarn build
-  args:
-    chdir: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/frontend"
-  become: yes
-  become_user: "{{ erpnext_user_name }}"
-  when: erpnext_enabled | bool
-  ignore_errors: yes
 
 # ── Stop ALL services before build ─────────────────────────────────────────────
 # 1) Frees ~900 MB of RAM held by gunicorn workers + background jobs, which is
@@ -485,7 +475,7 @@
           swapon "$SWAPFILE"
         fi
 
-    # All patches (frappe, erpnext, hrms) are applied above.  A single 'bench
+    # All IIAB customizations are baked into deldesir/* forks.  A single 'bench
     # build' (without --app flags) generates a unified assets.json covering
     # every installed app.  Using --app causes each app to overwrite assets.json
     # with only its own entries, breaking CSS/JS references for all other apps.
@@ -493,7 +483,7 @@
     # the V8 heap limit to 75 % of total RAM via get_safe_max_old_space_size()
     # and passes it via popen(env=get_node_env()), which replaces the entire
     # inherited environment.
-    - name: Rebuild all JS bundles (unified assets.json, all IIAB patches applied)
+    - name: Rebuild all JS bundles (unified assets.json)
       shell: |
         /home/{{ erpnext_user_name }}/.local/bin/bench build
       args:
@@ -502,6 +492,17 @@
       become_user: "{{ erpnext_user_name }}"
       environment:
         PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+    - name: Rebuild Builder Frontend (Vite — separate from bench build)
+      shell: |
+        yarn install
+        yarn build
+      args:
+        chdir: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/frontend"
+      become: yes
+      become_user: "{{ erpnext_user_name }}"
+      when: erpnext_enabled | bool
+      ignore_errors: yes
 
     - name: Deploy IIAB asset patching script
       template:
@@ -552,10 +553,10 @@
 
 # ── Start services with clean workers ──────────────────────────────────────────
 # Restart (not just start) every service explicitly to guarantee gunicorn
-# preloads the freshly-patched code.  A simple 'start frappe-bench.target'
+# preloads the freshly-built code.  A simple 'start frappe-bench.target'
 # would skip services that systemd considers "already active" from before
 # the stop, leaving stale workers that crash on missing modules (hrms, crm).
-- name: Start Frappe services with fresh workers (all apps + patches loaded cleanly)
+- name: Start Frappe services with fresh workers (all apps loaded cleanly)
   shell: |
     systemctl restart frappe-bench.target \
                       frappe-bench-frappe-web.service \
