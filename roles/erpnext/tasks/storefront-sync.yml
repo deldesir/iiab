@@ -28,9 +28,12 @@
     chdir: "{{ builder_cli_dir | default('/opt/iiab/builder-cli') }}"
 
 - name: Globally install builder-cli executable
-  shell: npm install -g .
+  shell: |
+    npm install -g .
+    chmod +x dist/index.js
   args:
     chdir: "{{ builder_cli_dir | default('/opt/iiab/builder-cli') }}"
+
 
 - name: Clone or pull storefront repository
   git:
