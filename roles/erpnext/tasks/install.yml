@@ -201,14 +201,14 @@
     state: absent
   when: erpnext_enabled | bool and erpnext_force_drop_db | default(False) | bool
 
-- name: Flush Redis cache + queue on reinstall (eliminates stale assets_json, doctype_meta, boot data)
+- name: Flush Redis cache + queue (eliminates stale assets_json, doctype_meta, boot data)
   command: redis-cli -p {{ item }} FLUSHDB
   loop:
     - 13000
     - 11000
-  when: erpnext_enabled | bool and reinstall | default(False) | bool
+  when: erpnext_enabled | bool
 
-- name: Pull latest code from fork for frappe/erpnext on reinstall
+- name: Pull latest code from fork for frappe/erpnext
   become: yes
   become_user: "{{ erpnext_user_name }}"
   shell: git fetch origin && git reset --hard origin/$(git rev-parse --abbrev-ref HEAD)
@@ -217,17 +217,17 @@
   loop:
     - frappe
     - erpnext
-  when: erpnext_enabled | bool and reinstall | default(False) | bool
+  when: erpnext_enabled | bool
   ignore_errors: yes
 
-- name: Pull latest code from fork for extra apps on reinstall
+- name: Pull latest code from fork for extra apps
   become: yes
   become_user: "{{ erpnext_user_name }}"
   shell: git fetch origin && git reset --hard origin/$(git rev-parse --abbrev-ref HEAD)
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item.app_name }}
   loop: "{{ erpnext_extra_apps }}"
-  when: erpnext_enabled | bool and reinstall | default(False) | bool
+  when: erpnext_enabled | bool
   ignore_errors: yes
 
 
@@ -239,15 +239,15 @@
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-  when: erpnext_enabled | bool and reinstall | default(False) | bool
+  when: erpnext_enabled | bool
   ignore_errors: yes
 
-- name: Wipe compiled JS/CSS bundles on reinstall (forces clean bench build, avoids stale hashes)
+- name: Wipe compiled JS/CSS bundles (forces clean bench build, avoids stale hashes)
   shell: |
     rm -rf /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/*/dist
     rm -f  /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/assets.json
     rm -f  /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/assets-rtl.json
-  when: erpnext_enabled | bool and reinstall | default(False) | bool
+  when: erpnext_enabled | bool
 
 - name: Create ERPNext database
   mysql_db:
