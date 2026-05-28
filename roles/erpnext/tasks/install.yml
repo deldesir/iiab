@@ -180,7 +180,7 @@
   loop: "{{ erpnext_extra_apps }}"
   when: erpnext_enabled | bool
 
-- name: Shut down Frappe services before DB drop if reinstalling (prevents metadata lock hangs)
+- name: Shut down Frappe services before reinstall (prevents metadata lock hangs)
   shell: |
     systemctl stop frappe-bench-frappe-web.service \
                    frappe-bench-node-socketio.service \
@@ -191,18 +191,21 @@
                    frappe-bench.target 2>/dev/null || true
   when: erpnext_enabled | bool and reinstall | default(False) | bool
 
-- name: Drop ERPNext DB if reinstalling
+# DB drop is destructive — only triggered by explicit erpnext_force_drop_db flag,
+# NOT by a standard reinstall.  A normal reinstall preserves all data and just
+# refreshes code + rebuilds + migrates.
+- name: Drop ERPNext DB (ONLY when erpnext_force_drop_db is set)
   mysql_db:
     name: "{{ erpnext_db_name }}"
     state: absent
     login_unix_socket: /run/mysqld/mysqld.sock
-  when: erpnext_enabled | bool and reinstall | default(False) | bool
+  when: erpnext_enabled | bool and erpnext_force_drop_db | default(False) | bool
 
-- name: Drop ERPNext Site Directory if reinstalling
+- name: Drop ERPNext Site Directory (ONLY when erpnext_force_drop_db is set)
   file:
     path: /home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}
     state: absent
-  when: erpnext_enabled | bool and reinstall | default(False) | bool
+  when: erpnext_enabled | bool and erpnext_force_drop_db | default(False) | bool
 
 - name: Flush Redis cache + queue on reinstall (eliminates stale assets_json, doctype_meta, boot data)
   command: redis-cli -p {{ item }} FLUSHDB
@@ -211,8 +214,10 @@
     - 11000
   when: erpnext_enabled | bool and reinstall | default(False) | bool
 
-- name: Git-reset frappe/erpnext source on reinstall (sync with fork)
-  command: git checkout -- .
+- name: Pull latest code from fork for frappe/erpnext on reinstall
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  shell: git fetch origin && git reset --hard origin/$(git rev-parse --abbrev-ref HEAD)
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item }}
   loop:
@@ -221,10 +226,10 @@
   when: erpnext_enabled | bool and reinstall | default(False) | bool
   ignore_errors: yes
 
-- name: Git-reset extra app sources on reinstall (sync with fork)
+- name: Pull latest code from fork for extra apps on reinstall
   become: yes
   become_user: "{{ erpnext_user_name }}"
-  command: git checkout -- .
+  shell: git fetch origin && git reset --hard origin/$(git rev-parse --abbrev-ref HEAD)
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item.app_name }}
   loop: "{{ erpnext_extra_apps }}"
@@ -335,30 +340,30 @@
   when: erpnext_enabled | bool
 
 
-- name: Install ERPNext App in Site (--force on reinstall to repopulate DB data)
+- name: Install ERPNext App in Site
   become: yes
   become_user: "{{ erpnext_user_name }}"
   command: >-
     ~/.local/bin/bench --site {{ erpnext_site_name }} install-app erpnext
-    {{ '--force' if (reinstall | default(False) | bool) else '' }}
+    {{ '--force' if (erpnext_force_drop_db | default(False) | bool) else '' }}
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-  when: erpnext_enabled | bool
+  when: erpnext_enabled | bool and not (reinstall | default(False) | bool) or (erpnext_force_drop_db | default(False) | bool)
 
 - name: Install extra apps in site (HR, CRM, etc.)
   become: yes
   become_user: "{{ erpnext_user_name }}"
   command: >-
     ~/.local/bin/bench --site {{ erpnext_site_name }} install-app {{ item.app_name }}
-    {{ '--force' if (reinstall | default(False) | bool) else '' }}
+    {{ '--force' if (erpnext_force_drop_db | default(False) | bool) else '' }}
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   loop: "{{ erpnext_extra_apps }}"
-  when: erpnext_enabled | bool
+  when: erpnext_enabled | bool and not (reinstall | default(False) | bool) or (erpnext_force_drop_db | default(False) | bool)
 
 - name: Run migrate + clear-cache after all apps installed
   become: yes
