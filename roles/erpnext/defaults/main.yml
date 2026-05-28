@@ -19,9 +19,9 @@ erpnext_host_name: "{% if iiab_ssl_enabled | default(False) %}https://{{ iiab_ss
 # Extra Frappe apps to install alongside ERPNext (HR, CRM, etc.)
 # Each entry needs: name (pip/git name), branch, and app_name (bench install-app name).
 erpnext_extra_apps:
-  - { name: "hrms",       branch: "version-16", app_name: "hrms" }
-  - { name: "crm",        branch: "main",       app_name: "crm" }
-  - { name: "https://github.com/deldesir/builder.git", branch: "develop", app_name: "builder" }
+  - { name: "https://github.com/deldesir/hrms.git",    branch: "version-16", app_name: "hrms" }
+  - { name: "https://github.com/deldesir/crm.git",     branch: "main",       app_name: "crm" }
+  - { name: "https://github.com/deldesir/builder.git",  branch: "develop",    app_name: "builder" }
   - { name: "payments",   branch: "version-16", app_name: "payments" }
-  - { name: "https://github.com/deldesir/webshop.git", branch: "develop", app_name: "webshop" }
-  - { name: "https://github.com/deldesir/POSNext.git", branch: "version-16", app_name: "pos_next" }
+  - { name: "https://github.com/deldesir/webshop.git",  branch: "develop",    app_name: "webshop" }
+  - { name: "https://github.com/deldesir/POSNext.git",  branch: "version-16", app_name: "pos_next" }

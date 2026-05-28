@@ -149,7 +149,7 @@
 - name: Init frappe bench
   become: yes
   become_user: "{{ erpnext_user_name }}"
-  command: ~/.local/bin/bench init frappe-bench --frappe-branch {{ erpnext_version }} {% if erpnext_version == 'version-16' %}--python 3.14{% endif %}
+  command: ~/.local/bin/bench init frappe-bench --frappe-path https://github.com/deldesir/frappe.git --frappe-branch {{ erpnext_version }} {% if erpnext_version == 'version-16' %}--python 3.14{% endif %}
   args:
     chdir: /home/{{ erpnext_user_name }}
     creates: /home/{{ erpnext_user_name }}/frappe-bench
@@ -160,7 +160,7 @@
 - name: Install ERPNext app in bench
   become: yes
   become_user: "{{ erpnext_user_name }}"
-  command: ~/.local/bin/bench get-app erpnext --branch {{ erpnext_version }}
+  command: ~/.local/bin/bench get-app https://github.com/deldesir/erpnext.git --branch {{ erpnext_version }}
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
     creates: /home/{{ erpnext_user_name }}/frappe-bench/apps/erpnext
@@ -211,7 +211,7 @@
     - 11000
   when: erpnext_enabled | bool and reinstall | default(False) | bool
 
-- name: Git-reset frappe/erpnext source on reinstall (reverts stale IIAB patches)
+- name: Git-reset frappe/erpnext source on reinstall (sync with fork)
   command: git checkout -- .
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item }}
@@ -221,7 +221,7 @@
   when: erpnext_enabled | bool and reinstall | default(False) | bool
   ignore_errors: yes
 
-- name: Git-reset extra app sources on reinstall (reverts stale IIAB patches)
+- name: Git-reset extra app sources on reinstall (sync with fork)
   become: yes
   become_user: "{{ erpnext_user_name }}"
   command: git checkout -- .
@@ -231,11 +231,7 @@
   when: erpnext_enabled | bool and reinstall | default(False) | bool
   ignore_errors: yes
 
-- name: Remove IIAB .bak files on reinstall (allows patches to re-apply after frappe version bumps)
-  shell: |
-    find /home/{{ erpnext_user_name }}/frappe-bench/apps \
-      -name "*.iiab-bak" -delete
-  when: erpnext_enabled | bool and reinstall | default(False) | bool
+
 
 - name: Wipe compiled JS/CSS bundles on reinstall (forces clean bench build, avoids stale hashes)
   shell: |
@@ -417,232 +413,13 @@
     - restart nginx
   when: erpnext_enabled | bool
 
-# ── IIAB subpath patches ───────────────────────────────────────────────────────
-# Frappe hard-codes /desk/ paths in 13 JS source files.  These patches teach
-# each file to prepend frappe.router._subpath_prefix (e.g. "/erp") so that
-# all internally generated links stay within the /erp/ mount point.
-- name: Define IIAB JS patch targets
-  set_fact:
-    iiab_js_patches:
-      # Core router & realtime
-      - { src: "frappe/router.js",                  patch: "router.js.patch" }
-      - { src: "frappe/request.js",                 patch: "request.js.patch" }
-      - { src: "frappe/socketio_client.js",         patch: "socketio_client.js.patch" }
-      - { src: "frappe/desk.js",                    patch: "desk.js.patch" }
-      - { src: "frappe/utils/logout.js",            patch: "logout.js.patch" }
-      - { src: "frappe/web_form/webform_script.js", patch: "webform_script.js.patch" }
-      # Link-generation utilities
-      - { src: "frappe/utils/utils.js",        patch: "utils.js.patch" }
-      - { src: "frappe/utils/dashboard_utils.js", patch: "dashboard_utils.js.patch" }
-      # Sidebar & navigation
-      - { src: "frappe/ui/sidebar/sidebar_item.js", patch: "sidebar_item.js.patch" }
-      - { src: "frappe/ui/notifications/notifications.js", patch: "notifications.js.patch" }
-      - { src: "frappe/views/breadcrumbs.js",  patch: "breadcrumbs.js.patch" }
-      - { src: "frappe/ui/dropdown_console.js", patch: "dropdown_console.js.patch" }
-      - { src: "frappe/logtypes.js",           patch: "logtypes.js.patch" }
-      - { src: "frappe/ui/dialog.js",          patch: "dialog.js.patch" }
-      # Form helpers
-      - { src: "frappe/form/form.js",          patch: "form.js.patch" }
-      - { src: "frappe/form/formatters.js",    patch: "formatters.js.patch" }
-      - { src: "frappe/form/linked_with.js",   patch: "linked_with.js.patch" }
-      - { src: "frappe/form/multi_select_dialog.js", patch: "multi_select_dialog.js.patch" }
-      - { src: "frappe/form/sidebar/attachments.js", patch: "attachments.js.patch" }
-      - { src: "frappe/ui/like.js",            patch: "like.js.patch" }
-      # List views
-      - { src: "frappe/list/list_view.js",     patch: "list_view.js.patch" }
-      - { src: "frappe/list/list_view_select.js", patch: "list_view_select.js.patch" }
-  when: erpnext_enabled | bool
-
-- name: Back up Frappe JS source files before patching (idempotent)
-  copy:
-    src: "/home/{{ erpnext_user_name }}/frappe-bench/apps/frappe/frappe/public/js/{{ item.src }}"
-    dest: "/home/{{ erpnext_user_name }}/frappe-bench/apps/frappe/frappe/public/js/{{ item.src }}.iiab-bak"
-    remote_src: yes
-    force: no
-  loop: "{{ iiab_js_patches }}"
-  when: erpnext_enabled | bool
-
-- name: Copy IIAB JS patches to /tmp
-  copy:
-    src: "{{ role_path }}/files/{{ item.patch }}"
-    dest: "/tmp/{{ item.patch }}"
-  loop: "{{ iiab_js_patches }}"
-  when: erpnext_enabled | bool
-
-- name: Apply IIAB subpath JS patches (idempotent via --forward)
-  shell: |
-    patch --forward --reject-file=/dev/null -p0 \
-      "/home/{{ erpnext_user_name }}/frappe-bench/apps/frappe/frappe/public/js/{{ item.src }}" \
-      "/tmp/{{ item.patch }}"
-  loop: "{{ iiab_js_patches }}"
-  register: js_patch_results
-  failed_when: js_patch_results.rc not in [0, 1]
-  when: erpnext_enabled | bool
-
-# ── HRMS subpath patch (must happen BEFORE the build) ──────────────────────────
-# hrms/public/js/utils/index.js hard-codes window.location.href = "/hr/roster".
-# Under the /erp/ subpath this must become frappe.router._subpath_prefix + "/hr/roster".
-- name: Back up hrms utils/index.js before patching (idempotent)
-  copy:
-    src: "/home/{{ erpnext_user_name }}/frappe-bench/apps/hrms/hrms/public/js/utils/index.js"
-    dest: "/home/{{ erpnext_user_name }}/frappe-bench/apps/hrms/hrms/public/js/utils/index.js.iiab-bak"
-    remote_src: yes
-    force: no
-  when: erpnext_enabled | bool
-  ignore_errors: yes  # skip gracefully if hrms not installed
-
-- name: Copy hrms-utils.js.patch to /tmp
-  copy:
-    src: "{{ role_path }}/files/hrms-utils.js.patch"
-    dest: /tmp/hrms-utils.js.patch
-  when: erpnext_enabled | bool
-
-- name: Apply HRMS /hr/roster subpath patch (idempotent via --forward)
-  shell: |
-    patch --forward --reject-file=/dev/null -p1 \
-      "/home/{{ erpnext_user_name }}/frappe-bench/apps/hrms/hrms/public/js/utils/index.js" \
-      /tmp/hrms-utils.js.patch
-  register: hrms_patch_result
-  failed_when: hrms_patch_result.rc not in [0, 1]
-  when: erpnext_enabled | bool
-  ignore_errors: yes  # skip gracefully if hrms not installed
-
-# ── ERPNext POS compatibility patches (POSNext integration) ────────────────────
-# ERPNext v16 added an invoice_type field to POS Settings but hardcoded
-# "POS Invoice" in the JS.  POSNext overrides POS Settings as a non-single
-# doctype, breaking the traditional POS page's fetch_invoice_fields().
-# These patches fix both issues.
-
-- name: Define ERPNext POS patch targets
-  set_fact:
-    iiab_erpnext_patches:
-      - src: "erpnext/accounts/doctype/pos_settings/pos_settings.js"
-        patch: "erpnext-pos_settings.js.patch"
-      - src: "erpnext/selling/page/point_of_sale/pos_controller.js"
-        patch: "erpnext-pos_controller.js.patch"
-  when: erpnext_enabled | bool
-
-- name: Back up ERPNext POS source files before patching (idempotent)
-  copy:
-    src: "/home/{{ erpnext_user_name }}/frappe-bench/apps/erpnext/{{ item.src }}"
-    dest: "/home/{{ erpnext_user_name }}/frappe-bench/apps/erpnext/{{ item.src }}.iiab-bak"
-    remote_src: yes
-    force: no
-  loop: "{{ iiab_erpnext_patches }}"
-  when: erpnext_enabled | bool
-
-- name: Copy ERPNext POS patches to /tmp
-  copy:
-    src: "{{ role_path }}/files/{{ item.patch }}"
-    dest: "/tmp/{{ item.patch }}"
-  loop: "{{ iiab_erpnext_patches }}"
-  when: erpnext_enabled | bool
-
-- name: Apply ERPNext POS patches (idempotent via --forward)
-  shell: |
-    patch --forward --reject-file=/dev/null -p1 \
-      "/home/{{ erpnext_user_name }}/frappe-bench/apps/erpnext/{{ item.src }}" \
-      "/tmp/{{ item.patch }}"
-  loop: "{{ iiab_erpnext_patches }}"
-  register: erpnext_patch_results
-  failed_when: erpnext_patch_results.rc not in [0, 1]
-  when: erpnext_enabled | bool
-
-# ── CRM demo data opt-in patch ─────────────────────────────────────────────────
-# CRM's setup_wizard_complete hook unconditionally creates demo users/leads/deals
-# on every wizard completion.  This patch gates it behind the setup_demo checkbox.
-- name: Back up CRM demo/api.py before patching (idempotent)
-  copy:
-    src: "/home/{{ erpnext_user_name }}/frappe-bench/apps/crm/crm/demo/api.py"
-    dest: "/home/{{ erpnext_user_name }}/frappe-bench/apps/crm/crm/demo/api.py.iiab-bak"
-    remote_src: yes
-    force: no
-  when: erpnext_enabled | bool
-  ignore_errors: yes
-
-- name: Copy CRM demo opt-in patch to /tmp
-  copy:
-    src: "{{ role_path }}/files/crm-demo-opt-in.patch"
-    dest: /tmp/crm-demo-opt-in.patch
-  when: erpnext_enabled | bool
-
-
-- name: Apply CRM demo opt-in patch (idempotent via --forward)
-  shell: |
-    patch --forward --reject-file=/dev/null -p1 \
-      "/home/{{ erpnext_user_name }}/frappe-bench/apps/crm/crm/demo/api.py" \
-      /tmp/crm-demo-opt-in.patch
-  register: crm_demo_patch_result
-  failed_when: crm_demo_patch_result.rc not in [0, 1]
-  when: erpnext_enabled | bool
-  ignore_errors: yes
-
-# ── CRM router subpath patch (must happen BEFORE the build) ────────────────────
-- name: Back up CRM router.js before patching (idempotent)
-  copy:
-    src: "/home/{{ erpnext_user_name }}/frappe-bench/apps/crm/frontend/src/router.js"
-    dest: "/home/{{ erpnext_user_name }}/frappe-bench/apps/crm/frontend/src/router.js.iiab-bak"
-    remote_src: yes
-    force: no
-  when: erpnext_enabled | bool
-  ignore_errors: yes
-
-- name: Copy crm-router.js.patch to /tmp
-  copy:
-    src: "{{ role_path }}/files/crm-router.js.patch"
-    dest: /tmp/crm-router.js.patch
-  when: erpnext_enabled | bool
-
-- name: Apply CRM router subpath patch (idempotent via --forward)
-  shell: |
-    patch --forward --reject-file=/dev/null -p1 \
-      "/home/{{ erpnext_user_name }}/frappe-bench/apps/crm/frontend/src/router.js" \
-      /tmp/crm-router.js.patch
-  register: crm_router_patch_result
-  failed_when: crm_router_patch_result.rc not in [0, 1]
-  when: erpnext_enabled | bool
-  ignore_errors: yes
-
-# # ── Builder safer_exec patch ───────────────────────────────────────────────────
-# # Builder's sandbox (safer_exec) doesn't expose frappe.call, but every Webshop
-# # page data script uses it to call whitelisted API methods like
-# # webshop.webshop.api.get_item.  This patch adds frappe.call to the sandbox.
-# - name: Back up Builder utils.py before patching (idempotent)
-#   copy:
-#     src: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/builder/utils.py"
-#     dest: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/builder/utils.py.iiab-bak"
-#     remote_src: yes
-#     force: no
-#   when: erpnext_enabled | bool
-#   ignore_errors: yes
-# 
-# - name: Copy Builder IIAB Fixes patch to /tmp
-#   copy:
-#     src: "{{ role_path }}/files/builder_iiab_fixes.patch"
-#     dest: /tmp/builder_iiab_fixes.patch
-#   when: erpnext_enabled | bool
-# 
-# - name: Apply Builder IIAB Fixes patch (idempotent via --forward)
-#   shell: |
-#     patch --forward --reject-file=/dev/null -p1 -d "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder" < /tmp/builder_iiab_fixes.patch
-#   register: builder_iiab_patch_result
-#   failed_when: builder_iiab_patch_result.rc not in [0, 1]
-#   when: erpnext_enabled | bool
-#   ignore_errors: yes
-# 
-# - name: Copy Builder Webshop Fixes patch to /tmp
-#   copy:
-#     src: "{{ role_path }}/files/builder_webshop_fixes.patch"
-#     dest: /tmp/builder_webshop_fixes.patch
-#   when: erpnext_enabled | bool
-# 
-# - name: Apply Builder Webshop Fixes patch (idempotent via --forward)
-#   shell: |
-#     patch --forward --reject-file=/dev/null -p1 -d "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder" < /tmp/builder_webshop_fixes.patch
-#   register: builder_webshop_patch_result
-#   failed_when: builder_webshop_patch_result.rc not in [0, 1]
-#   when: erpnext_enabled | bool
-#   ignore_errors: yes
+# ── NOTE: IIAB subpath patches are now baked into deldesir/* forks ──────────────
+# frappe JS patches  → deldesir/frappe   (version-16 branch)
+# ERPNext POS patches → deldesir/erpnext (version-16 branch)
+# HRMS roster patch   → deldesir/hrms    (version-16 branch)
+# CRM demo + router   → deldesir/crm     (main branch)
+# Builder patches     → deldesir/builder (develop branch)
+# Historical patch files are archived in files/archive/
 
 - name: Rebuild Builder Frontend (Vite)
   shell: |
