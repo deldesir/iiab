@@ -1,59 +1,33 @@
 import os
-import re
 
 TARGET_DIR = "/home/{{ erpnext_user_name }}/frappe-bench/sites/assets"
 SUBPATH = "{{ erpnext_subpath | default('/erp') }}"
 
-# Patterns that are ALREADY handled by the IIAB source-level JS patches
-# (router.js, desk.js, logout.js, etc.) via the _subpath_prefix variable.
-# These MUST NOT be replaced in compiled bundles — doing so causes double-prefix
-# bugs like "/erp/erp/desk" at runtime when the variable is concatenated.
-SOURCE_PATCHED_PATTERNS = {
-    '"/desk"', '"/desk/',
-    "'/desk'", "'/desk/",
-    '"/app"', '"/app/',
-    "'/app'", "'/app/",
-    '"/login"', '"/login?',
-    "'/login'", "'/login?",
-    '"/logout"', "'/logout'",
-}
+# ──────────────────────────────────────────────────────────────────────────────
+# POST-BUILD ASSET PATCHER FOR IIAB SUBPATH DEPLOYMENT
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# The deldesir/frappe fork (commit 6c068343d9) handles most subpath routing
+# DYNAMICALLY at runtime via:
+#   - frappe.router._subpath_prefix  (router.js, request.js, etc.)
+#   - iiab_subpath                    (socketio_client.js)
+#
+# Those runtime-detected patterns MUST NOT be patched here — doing so would
+# cause double-prefix bugs like /erp/erp/api/method/ at runtime.
+#
+# This patcher ONLY handles patterns that cannot be fixed at the JS source
+# level: CSS url() references and HTML attributes in compiled bundles that
+# point to /assets/ paths.
+# ──────────────────────────────────────────────────────────────────────────────
 
 REPLACEMENTS = [
-    # API and Assets — these are NOT handled by source patches, only the
-    # asset patcher covers them.
-    ('"/api/method/"', f'"{SUBPATH}/api/method/"'),
-    ("'/api/method/'", f"'{SUBPATH}/api/method/'"),
-    ('"/api/resource/"', f'"{SUBPATH}/api/resource/"'),
-    ("'/api/resource/'", f"'{SUBPATH}/api/resource/'"),
-    ('"/api/v2"', f'"{SUBPATH}/api/v2"'),
-    ("'/api/v2'", f"'{SUBPATH}/api/v2'"),
-    ('"/assets/"', f'"{SUBPATH}/assets/"'),
-    ("'/assets/'", f"'{SUBPATH}/assets/'"),
-    ('"/files/"', f'"{SUBPATH}/files/"'),
-    ("'/files/'", f"'{SUBPATH}/files/'"),
-    ('"/socket.io"', f'"{SUBPATH}/socket.io"'),
-    ("'/socket.io'", f"'{SUBPATH}/socket.io'"),
+    # CSS url() references to /assets/ — not handled by JS source patches
+    ('url("/assets/',  f'url("{SUBPATH}/assets/'),
+    ("url('/assets/",  f"url('{SUBPATH}/assets/"),
 
-    # App-specific root paths (these are standalone SPA routes, NOT in the
-    # patched router.js, so they need asset-level patching).
-    ('"/builder"', f'"{SUBPATH}/builder"'),
-    ("'/builder'", f"'{SUBPATH}/builder'"),
-    ('"/webshop"', f'"{SUBPATH}/webshop"'),
-    ("'/webshop'", f"'{SUBPATH}/webshop'"),
-    ('"/crm"', f'"{SUBPATH}/crm"'),
-    ("'/crm'", f"'{SUBPATH}/crm'"),
-    ('"/pos"', f'"{SUBPATH}/pos"'),
-    ("'/pos'", f"'{SUBPATH}/pos'"),
-    ('"/hrms"', f'"{SUBPATH}/hrms"'),
-    ("'/hrms'", f"'{SUBPATH}/hrms'"),
-
-    # Common dynamic constructions in Frappe
-    ('url("/assets/', f'url("{SUBPATH}/assets/'),
-    ("url('/assets/", f"url('{SUBPATH}/assets/"),
-    ('src="/assets/', f'src="{SUBPATH}/assets/'),
+    # HTML attributes in compiled templates referencing /assets/
+    ('src="/assets/',  f'src="{SUBPATH}/assets/'),
     ('href="/assets/', f'href="{SUBPATH}/assets/'),
-    ('window.location.origin + "/app"', f'window.location.origin + "{SUBPATH}/app"'),
-    ('window.location.origin + \'/app\'', f'window.location.origin + \'{SUBPATH}/app\''),
 ]
 
 def patch_file(filepath):
@@ -65,9 +39,7 @@ def patch_file(filepath):
         for pattern, replacement in REPLACEMENTS:
             new_content = new_content.replace(pattern, replacement)
 
-        # Robust double-prefix cleanup: catch ALL instances of /erp/erp (or
-        # whatever the subpath is) whether they appear literally in the file
-        # or are formed by adjacent string fragments.  Loop until stable.
+        # Safety net: collapse any accidental double-prefix
         double_prefix = f"{SUBPATH}{SUBPATH}"
         while double_prefix in new_content:
             new_content = new_content.replace(double_prefix, SUBPATH)
@@ -84,10 +56,9 @@ if __name__ == "__main__":
     if not os.path.exists(TARGET_DIR):
         print(f"Target directory {TARGET_DIR} does not exist.")
     else:
-        print(f"Scanning {TARGET_DIR} for assets to patch...")
+        print(f"Scanning {TARGET_DIR} for assets to patch (CSS/HTML asset paths only)...")
         for root, dirs, files in os.walk(TARGET_DIR, followlinks=True):
-            # Prune node_modules, bower_components, and hidden directories to speed up traversal
-            # and avoid modifying third-party library source files
+            # Prune node_modules, bower_components, and hidden directories
             dirs[:] = [d for d in dirs if d not in ('node_modules', 'bower_components') and not d.startswith('.')]
             for name in files:
                 # Remove stale compressed files to force Nginx to serve patched versions
@@ -98,11 +69,9 @@ if __name__ == "__main__":
                         pass
                     continue
 
-                # Only patch compiled/minified production assets (inside /dist/, /pos/, /builder/, /webshop/, or /crm/ directories)
-                # to prevent polluting the original git-tracked source code in apps/
+                # Only patch compiled/minified production assets
                 if any(folder in os.path.join(root, name) for folder in ["/dist/", "/pos/", "/builder/", "/webshop/", "/crm/"]):
                     if name.endswith(".js") or name.endswith(".css"):
                         patch_file(os.path.join(root, name))
 
         print("Patching complete.")
-
