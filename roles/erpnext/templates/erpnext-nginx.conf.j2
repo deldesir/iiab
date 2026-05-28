@@ -77,17 +77,17 @@ location ^~ /erp/assets/ {
     add_header Cache-Control "public, immutable";
 }
 
-# Root-level fallbacks: Redirect to /erp/assets/ to keep root clean.
-location ^~ /assets/frappe/ { return 301 /erp$request_uri; }
-location ^~ /assets/erpnext/ { return 301 /erp$request_uri; }
-location ^~ /assets/hrms/ { return 301 /erp$request_uri; }
-location ^~ /assets/crm/ { return 301 /erp$request_uri; }
-location ^~ /assets/builder/ { return 301 /erp$request_uri; }
-location ^~ /assets/webshop/ { return 301 /erp$request_uri; }
-location ^~ /assets/pos_next/ { return 301 /erp$request_uri; }
-location ^~ /assets/css/ { return 301 /erp$request_uri; }
-location ^~ /assets/js/ { return 301 /erp$request_uri; }
-location ^~ /assets/locale/ { return 301 /erp$request_uri; }
+# Root-level /assets/ fallback: serve directly (no redirect round trip).
+# Python-side abs_url() emits bare /assets/... paths in HTTP Link preload
+# headers.  Serving these directly avoids a cache-key mismatch that causes
+# "preloaded but not used" browser warnings.
+location ^~ /assets/ {
+    alias /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/;
+    try_files $uri =404;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+
 
 # ── User-uploaded files ────────────────────────────────────────────────────────
 location ^~ /erp/files/ {
@@ -101,9 +101,16 @@ location ^~ /erp/builder_assets/ {
     try_files $uri =404;
 }
 
-# Root-level /files/ fallback: Redirect to /erp/files/
-location ^~ /files/ { return 301 /erp$request_uri; }
-location ^~ /builder_assets/ { return 301 /erp$request_uri; }
+# Root-level /files/ and /builder_assets/ fallbacks: serve directly
+location ^~ /files/ {
+    alias /home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}/public/files/;
+    try_files $uri =404;
+}
+location ^~ /builder_assets/ {
+    alias /home/{{ erpnext_user_name }}/frappe-bench/apps/builder/builder/www/builder_assets/;
+    try_files $uri =404;
+}
+
 
 # Root-level webshop routing redirects
 location ^~ /item/ { return 301 /erp$request_uri; }
