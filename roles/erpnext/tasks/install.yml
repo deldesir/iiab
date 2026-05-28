@@ -57,7 +57,16 @@
     mode: '0755'
   when: erpnext_enabled | bool
 
-- name: Deploy system-wide secure git hooks
+- name: Deploy system-wide secure git pre-commit hook (templated)
+  template:
+    src: git-hooks/pre-commit.j2
+    dest: /etc/git-hooks/pre-commit
+    owner: root
+    group: root
+    mode: '0755'
+  when: erpnext_enabled | bool
+
+- name: Deploy system-wide static git hooks and docs
   copy:
     src: "git-hooks/{{ item }}"
     dest: "/etc/git-hooks/{{ item }}"
@@ -65,11 +74,11 @@
     group: root
     mode: '0755'
   loop:
-    - pre-commit
     - post-commit
     - pre-push
     - README.md
   when: erpnext_enabled | bool
+
 
 - name: Configure system-wide core.hooksPath
   command: git config --system core.hooksPath /etc/git-hooks
@@ -80,11 +89,12 @@
   become: yes
   become_user: "{{ item.user }}"
   loop:
-    - { user: "root", key: "user.name", value: "Blondel Mondesir" }
-    - { user: "root", key: "user.email", value: "blondel.md@gmail.com" }
-    - { user: "{{ erpnext_user_name }}", key: "user.name", value: "Blondel Mondesir" }
-    - { user: "{{ erpnext_user_name }}", key: "user.email", value: "blondel.md@gmail.com" }
+    - { user: "root", key: "user.name", value: "{{ erpnext_git_name }}" }
+    - { user: "root", key: "user.email", value: "{{ erpnext_git_email }}" }
+    - { user: "{{ erpnext_user_name }}", key: "user.name", value: "{{ erpnext_git_name }}" }
+    - { user: "{{ erpnext_user_name }}", key: "user.email", value: "{{ erpnext_git_email }}" }
   when: erpnext_enabled | bool
+
 
 - name: Install yarn globally via npm
   npm:

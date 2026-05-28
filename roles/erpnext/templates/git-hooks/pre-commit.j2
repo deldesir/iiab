@@ -7,18 +7,17 @@ if [ "$current_user" = "root" ] || [ "$current_user" = "frappe" ]; then
     git_name=$(git config user.name)
     git_email=$(git config user.email)
 
-    if [ "$git_name" != "Blondel Mondesir" ] || [ "$git_email" != "blondel.md@gmail.com" ]; then
+    if [ "$git_name" != "{{ erpnext_git_name }}" ] || [ "$git_email" != "{{ erpnext_git_email }}" ]; then
         echo -e "\033[0;31m[ERROR] Security Violation: Non-standard Git Identity detected for '$current_user' user!\033[0m"
         echo -e "Current identity: '$git_name' <$git_email>"
-        echo -e "Expected identity: 'Blondel Mondesir' <blondel.md@gmail.com>"
+        echo -e "Expected identity: '{{ erpnext_git_name }}' <{{ erpnext_git_email }}>"
         echo -e "\nTo correct your Git configuration globally, run:"
-        echo -e "  git config --global user.name 'Blondel Mondesir'"
-        echo -e "  git config --global user.email 'blondel.md@gmail.com'"
+        echo -e "  git config --global user.name '{{ erpnext_git_name }}'"
+        echo -e "  git config --global user.email '{{ erpnext_git_email }}'"
         echo -e "\nCommit blocked to enforce identity guidelines for administration accounts."
         exit 1
     fi
 fi
-
 
 # 2. Check if local git config has any embedded PATs or passwords
 local_config=$(git config --local -l 2>/dev/null)
