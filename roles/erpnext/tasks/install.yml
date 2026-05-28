@@ -180,16 +180,8 @@
   loop: "{{ erpnext_extra_apps }}"
   when: erpnext_enabled | bool
 
-- name: Shut down Frappe services before reinstall (prevents metadata lock hangs)
-  shell: |
-    systemctl stop frappe-bench-frappe-web.service \
-                   frappe-bench-node-socketio.service \
-                   frappe-bench-frappe-schedule.service \
-                   'frappe-bench-frappe-default-worker@*.service' \
-                   'frappe-bench-frappe-short-worker@*.service' \
-                   'frappe-bench-frappe-long-worker@*.service' \
-                   frappe-bench.target 2>/dev/null || true
-  when: erpnext_enabled | bool and reinstall | default(False) | bool
+# NOTE: Services are stopped by the pre-build block below (line ~459), which runs
+# on every install/reinstall.  No separate stop needed here.
 
 # DB drop is destructive — only triggered by explicit erpnext_force_drop_db flag,
 # NOT by a standard reinstall.  A normal reinstall preserves all data and just
@@ -237,6 +229,16 @@
   ignore_errors: yes
 
 
+- name: Update Python/Node dependencies after code pull (prevents ImportError on new packages)
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  shell: ~/.local/bin/bench setup requirements
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool and reinstall | default(False) | bool
+  ignore_errors: yes
 
 - name: Wipe compiled JS/CSS bundles on reinstall (forces clean bench build, avoids stale hashes)
   shell: |
@@ -350,7 +352,7 @@
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-  when: erpnext_enabled | bool and not (reinstall | default(False) | bool) or (erpnext_force_drop_db | default(False) | bool)
+  when: erpnext_enabled | bool and (not (reinstall | default(False) | bool) or (erpnext_force_drop_db | default(False) | bool))
 
 - name: Install extra apps in site (HR, CRM, etc.)
   become: yes
@@ -363,7 +365,7 @@
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   loop: "{{ erpnext_extra_apps }}"
-  when: erpnext_enabled | bool and not (reinstall | default(False) | bool) or (erpnext_force_drop_db | default(False) | bool)
+  when: erpnext_enabled | bool and (not (reinstall | default(False) | bool) or (erpnext_force_drop_db | default(False) | bool))
 
 - name: Run migrate + clear-cache after all apps installed
   become: yes

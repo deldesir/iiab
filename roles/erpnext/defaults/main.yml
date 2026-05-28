@@ -4,7 +4,7 @@
 erpnext_install: False
 erpnext_enabled: False
 erpnext_db_root_password: "" # Should ideally be {{ mysql_root_password }}
-erpnext_admin_password: "g@rantie2026"
+erpnext_admin_password: "CHANGEME"  # Override in /etc/iiab/local_vars.yml
 erpnext_version: "version-16"
 erpnext_site_name: "site.local"
 erpnext_user_name: "frappe"
