@@ -25,3 +25,13 @@ erpnext_extra_apps:
   - { name: "payments",   branch: "version-16", app_name: "payments" }
   - { name: "https://github.com/deldesir/webshop.git",  branch: "version-16", app_name: "webshop" }
   - { name: "https://github.com/deldesir/POSNext.git",  branch: "version-16", app_name: "pos_next" }
+
+# IIAB Storefront and Builder CLI repositories
+builder_cli_repo: "https://github.com/deldesir/builder-cli.git"
+builder_cli_dir: "/opt/iiab/builder-cli"
+builder_cli_branch: "main"
+
+storefront_repo: "https://github.com/deldesir/novadah-storefront.git"
+storefront_dir: "/opt/iiab/novadah-storefront"
+storefront_branch: "main"
+

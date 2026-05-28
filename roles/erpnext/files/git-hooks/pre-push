@@ -1,0 +1,56 @@
+#!/bin/bash
+# Pre-push hook to prevent pushing accidental PATs
+
+# 1. Double check local git config and remotes
+local_config=$(git config --local -l 2>/dev/null)
+if echo "$local_config" | grep -iE "github_pat|ghp_|gho_|ghu_|ghs_|ghr_" >/dev/null; then
+    echo -e "\033[0;31m[ERROR] Security Violation: Personal Access Token (PAT) detected in local .git/config!\033[0m"
+    echo -e "Push blocked. Please remove the PAT from your git configuration."
+    exit 1
+fi
+
+remotes=$(git remote -v 2>/dev/null)
+if echo "$remotes" | grep -iE "https?://[^:]+:[^@]+@github\.com" >/dev/null || echo "$remotes" | grep -iE "https?://(ghp|gho|ghu|ghs|ghr|github_pat)_[a-zA-Z0-9_]+@github\.com" >/dev/null; then
+    echo -e "\033[0;31m[ERROR] Security Violation: Embedded token or password detected in Git remote URL!\033[0m"
+    echo -e "Push blocked. Remote URLs must not contain passwords or PATs."
+    exit 1
+fi
+
+# 2. Check if we are about to push any PATs in the commit messages or commit diffs
+# Read stdin which git passes to pre-push in the format:
+# <local ref> <local sha> <remote ref> <remote sha>
+while read -r local_ref local_sha remote_ref remote_sha; do
+    # If the local SHA is all zeros, it's a delete operation; skip it
+    if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+        continue
+    fi
+
+    # Determine which commits are about to be pushed
+    if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+        # New branch being pushed; check all commits on local branch not on remotes
+        commits=$(git rev-list "$local_sha" --not --remotes 2>/dev/null)
+    else
+        # Existing branch update; check commits between remote_sha and local_sha
+        commits=$(git rev-list "$remote_sha..$local_sha" 2>/dev/null)
+    fi
+
+    for commit in $commits; do
+        # Check commit message
+        commit_msg=$(git log --format=%B -n 1 "$commit" 2>/dev/null)
+        if echo "$commit_msg" | grep -E -i "github_pat_[a-zA-Z0-9_]+|ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|ghu_[a-zA-Z0-9]{36}|ghs_[a-zA-Z0-9]{36}|ghr_[a-zA-Z0-9]{36}" >/dev/null; then
+            echo -e "\033[0;31m[ERROR] Security Violation: Commit message in $commit contains a GitHub PAT!\033[0m"
+            echo -e "Push blocked. Please rewrite the commit history to remove the token."
+            exit 1
+        fi
+
+        # Check commit content (added lines)
+        commit_diff=$(git show "$commit" 2>/dev/null)
+        if echo "$commit_diff" | grep -E "^\+" | grep -E -i "github_pat_[a-zA-Z0-9_]+|ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|ghu_[a-zA-Z0-9]{36}|ghs_[a-zA-Z0-9]{36}|ghr_[a-zA-Z0-9]{36}" >/dev/null; then
+            echo -e "\033[0;31m[ERROR] Security Violation: Commit $commit adds a GitHub PAT!\033[0m"
+            echo -e "Push blocked. Please rewrite the commit history to remove the token."
+            exit 1
+        fi
+    done
+done
+
+exit 0

@@ -1,0 +1,30 @@
+#!/bin/bash
+# Post-commit hook to secure git configurations and credentials
+
+# 1. Enforce strict permissions (600) on the repository config file
+# We resolve the actual git directory to support worktrees and submodules
+git_dir=$(git rev-parse --git-dir 2>/dev/null)
+if [ -n "$git_dir" ] && [ -f "$git_dir/config" ]; then
+    chmod 600 "$git_dir/config"
+fi
+
+# 2. Enforce strict permissions (600) on user-specific git-credentials if present
+if [ -f "$HOME/.git-credentials" ]; then
+    chmod 600 "$HOME/.git-credentials"
+fi
+
+# 3. If running as root, additionally ensure other users' .git-credentials are secured
+if [ "$USER" = "root" ]; then
+    for user_home in /home/*; do
+        if [ -d "$user_home" ]; then
+            if [ -f "$user_home/.git-credentials" ]; then
+                chmod 600 "$user_home/.git-credentials"
+                # Ensure the correct owner has it
+                owner=$(stat -c '%U:%G' "$user_home")
+                chown "$owner" "$user_home/.git-credentials"
+            fi
+        fi
+    done
+fi
+
+exit 0

@@ -48,6 +48,44 @@
     state: present
   when: erpnext_enabled | bool
 
+- name: Ensure git-hooks directory exists in /etc
+  file:
+    path: /etc/git-hooks
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: erpnext_enabled | bool
+
+- name: Deploy system-wide secure git hooks
+  copy:
+    src: "git-hooks/{{ item }}"
+    dest: "/etc/git-hooks/{{ item }}"
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - pre-commit
+    - post-commit
+    - pre-push
+    - README.md
+  when: erpnext_enabled | bool
+
+- name: Configure system-wide core.hooksPath
+  command: git config --system core.hooksPath /etc/git-hooks
+  when: erpnext_enabled | bool
+
+- name: Configure global git user identity for root and frappe users
+  command: "git config --global {{ item.key }} '{{ item.value }}'"
+  become: yes
+  become_user: "{{ item.user }}"
+  loop:
+    - { user: "root", key: "user.name", value: "Blondel Mondesir" }
+    - { user: "root", key: "user.email", value: "blondel.md@gmail.com" }
+    - { user: "{{ erpnext_user_name }}", key: "user.name", value: "Blondel Mondesir" }
+    - { user: "{{ erpnext_user_name }}", key: "user.email", value: "blondel.md@gmail.com" }
+  when: erpnext_enabled | bool
+
 - name: Install yarn globally via npm
   npm:
     name: yarn
@@ -208,14 +246,28 @@
     - 11000
   when: erpnext_enabled | bool
 
+- name: Ensure correct ownership of Frappe apps directory (prevents permission errors on code pull)
+  command: chown -R {{ erpnext_user_name }}:{{ erpnext_user_name }} /home/{{ erpnext_user_name }}/frappe-bench/apps
+  when: erpnext_enabled | bool
+
+
 - name: Pull latest code from fork for frappe/erpnext
   become: yes
   become_user: "{{ erpnext_user_name }}"
   shell: |
+    if git remote | grep -q "^origin$"; then
+        REMOTE="origin"
+    else
+        REMOTE=$(git config branch.$(git rev-parse --abbrev-ref HEAD).remote || echo "")
+        if [ -z "$REMOTE" ] || ! git remote | grep -q "^$REMOTE$"; then
+            REMOTE=$(git remote | head -n 1)
+        fi
+    fi
     BRANCH=$(git rev-parse --abbrev-ref HEAD)
-    # Shallow clones from a different remote need unshallowing to fetch new history
-    [ -f .git/shallow ] && git fetch --unshallow origin $BRANCH 2>/dev/null || git fetch origin $BRANCH
-    git reset --hard origin/$BRANCH
+    if [ -n "$REMOTE" ] && [ -n "$BRANCH" ]; then
+        [ -f .git/shallow ] && git fetch --unshallow $REMOTE $BRANCH 2>/dev/null || git fetch $REMOTE $BRANCH
+        git reset --hard $REMOTE/$BRANCH
+    fi
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item }}
   loop:
@@ -228,9 +280,19 @@
   become: yes
   become_user: "{{ erpnext_user_name }}"
   shell: |
+    if git remote | grep -q "^origin$"; then
+        REMOTE="origin"
+    else
+        REMOTE=$(git config branch.$(git rev-parse --abbrev-ref HEAD).remote || echo "")
+        if [ -z "$REMOTE" ] || ! git remote | grep -q "^$REMOTE$"; then
+            REMOTE=$(git remote | head -n 1)
+        fi
+    fi
     BRANCH=$(git rev-parse --abbrev-ref HEAD)
-    [ -f .git/shallow ] && git fetch --unshallow origin $BRANCH 2>/dev/null || git fetch origin $BRANCH
-    git reset --hard origin/$BRANCH
+    if [ -n "$REMOTE" ] && [ -n "$BRANCH" ]; then
+        [ -f .git/shallow ] && git fetch --unshallow $REMOTE $BRANCH 2>/dev/null || git fetch $REMOTE $BRANCH
+        git reset --hard $REMOTE/$BRANCH
+    fi
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item.app_name }}
   loop: "{{ erpnext_extra_apps }}"
@@ -246,6 +308,7 @@
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    CYPRESS_INSTALL_BINARY: "0"
   when: erpnext_enabled | bool
   ignore_errors: yes
 
@@ -281,6 +344,28 @@
     creates: /home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}/site_config.json
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+
+- name: Ensure site_config.json has the correct database password (prevents Access Denied if password changed in local_vars.yml)
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  shell: |
+    python3 -c "
+    import json
+    path = '/home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}/site_config.json'
+    try:
+        with open(path, 'r') as f:
+            data = json.load(f)
+        if data.get('db_password') != '{{ erpnext_db_password }}':
+            data['db_password'] = '{{ erpnext_db_password }}'
+            with open(path, 'w') as f:
+                json.dump(data, f, indent=1)
+            print('UPDATED PASSWORD')
+    except Exception as e:
+        print(f'ERROR: {e}')
+    "
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
   when: erpnext_enabled | bool
 
 - name: Ensure currentsite.txt exists (Frappe needs this to resolve the active site)

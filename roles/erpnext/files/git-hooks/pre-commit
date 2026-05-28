@@ -1,0 +1,51 @@
+#!/bin/bash
+# Pre-commit hook to prevent PAT leakage and enforce identity consistency
+
+# 1. Verify standard Git user identity
+git_name=$(git config user.name)
+git_email=$(git config user.email)
+
+if [ "$git_name" != "Blondel Mondesir" ] || [ "$git_email" != "blondel.md@gmail.com" ]; then
+    echo -e "\033[0;31m[ERROR] Security Violation: Non-standard Git Identity detected!\033[0m"
+    echo -e "Current identity: '$git_name' <$git_email>"
+    echo -e "Expected identity: 'Blondel Mondesir' <blondel.md@gmail.com>"
+    echo -e "\nTo correct your Git configuration globally, run:"
+    echo -e "  git config --global user.name 'Blondel Mondesir'"
+    echo -e "  git config --global user.email 'blondel.md@gmail.com'"
+    echo -e "\nCommit blocked to enforce identity guidelines."
+    exit 1
+fi
+
+# 2. Check if local git config has any embedded PATs or passwords
+local_config=$(git config --local -l 2>/dev/null)
+if echo "$local_config" | grep -iE "github_pat|ghp_|gho_|ghu_|ghs_|ghr_" >/dev/null; then
+    echo -e "\033[0;31m[ERROR] Security Violation: Personal Access Token (PAT) detected in local .git/config!\033[0m"
+    echo -e "Please remove the PAT from your git configuration."
+    echo -e "Use the credentials helper ('gh auth git-credential' or git credential-store) instead of embedding tokens in URLs."
+    exit 1
+fi
+
+# 3. Check if any remote URL contains an embedded password or PAT
+remotes=$(git remote -v 2>/dev/null)
+if echo "$remotes" | grep -iE "https?://[^:]+:[^@]+@github\.com" >/dev/null || echo "$remotes" | grep -iE "https?://(ghp|gho|ghu|ghs|ghr|github_pat)_[a-zA-Z0-9_]+@github\.com" >/dev/null; then
+    echo -e "\033[0;31m[ERROR] Security Violation: Embedded token or password detected in Git remote URL!\033[0m"
+    echo -e "Remote URLs must not contain passwords or PATs. Use a credential helper instead."
+    exit 1
+fi
+
+# 4. Check staged file changes for PATs
+# Only check text files to avoid binary scanning issues
+staged_files=$(git diff --cached --name-only --diff-filter=ACM)
+
+for file in $staged_files; do
+    if [ -f "$file" ]; then
+        # Check if the file contains a PAT pattern
+        if grep -E -i "github_pat_[a-zA-Z0-9_]+|ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|ghu_[a-zA-Z0-9]{36}|ghs_[a-zA-Z0-9]{36}|ghr_[a-zA-Z0-9]{36}" "$file" >/dev/null; then
+            echo -e "\033[0;31m[ERROR] Security Violation: Staged changes in '$file' contain a GitHub PAT!\033[0m"
+            echo -e "Commit blocked to prevent token leakage. Please remove the token."
+            exit 1
+        fi
+    fi
+done
+
+exit 0

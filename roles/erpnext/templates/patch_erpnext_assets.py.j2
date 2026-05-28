@@ -86,6 +86,9 @@ if __name__ == "__main__":
     else:
         print(f"Scanning {TARGET_DIR} for assets to patch...")
         for root, dirs, files in os.walk(TARGET_DIR, followlinks=True):
+            # Prune node_modules, bower_components, and hidden directories to speed up traversal
+            # and avoid modifying third-party library source files
+            dirs[:] = [d for d in dirs if d not in ('node_modules', 'bower_components') and not d.startswith('.')]
             for name in files:
                 # Remove stale compressed files to force Nginx to serve patched versions
                 if name.endswith(".gz") or name.endswith(".br"):
