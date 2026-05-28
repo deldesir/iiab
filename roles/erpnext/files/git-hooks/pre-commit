@@ -1,20 +1,24 @@
 #!/bin/bash
 # Pre-commit hook to prevent PAT leakage and enforce identity consistency
 
-# 1. Verify standard Git user identity
-git_name=$(git config user.name)
-git_email=$(git config user.email)
+# 1. Verify standard Git user identity (restricted to administrative OS accounts: root and frappe)
+current_user=$(whoami 2>/dev/null || echo "unknown")
+if [ "$current_user" = "root" ] || [ "$current_user" = "frappe" ]; then
+    git_name=$(git config user.name)
+    git_email=$(git config user.email)
 
-if [ "$git_name" != "Blondel Mondesir" ] || [ "$git_email" != "blondel.md@gmail.com" ]; then
-    echo -e "\033[0;31m[ERROR] Security Violation: Non-standard Git Identity detected!\033[0m"
-    echo -e "Current identity: '$git_name' <$git_email>"
-    echo -e "Expected identity: 'Blondel Mondesir' <blondel.md@gmail.com>"
-    echo -e "\nTo correct your Git configuration globally, run:"
-    echo -e "  git config --global user.name 'Blondel Mondesir'"
-    echo -e "  git config --global user.email 'blondel.md@gmail.com'"
-    echo -e "\nCommit blocked to enforce identity guidelines."
-    exit 1
+    if [ "$git_name" != "Blondel Mondesir" ] || [ "$git_email" != "blondel.md@gmail.com" ]; then
+        echo -e "\033[0;31m[ERROR] Security Violation: Non-standard Git Identity detected for '$current_user' user!\033[0m"
+        echo -e "Current identity: '$git_name' <$git_email>"
+        echo -e "Expected identity: 'Blondel Mondesir' <blondel.md@gmail.com>"
+        echo -e "\nTo correct your Git configuration globally, run:"
+        echo -e "  git config --global user.name 'Blondel Mondesir'"
+        echo -e "  git config --global user.email 'blondel.md@gmail.com'"
+        echo -e "\nCommit blocked to enforce identity guidelines for administration accounts."
+        exit 1
+    fi
 fi
+
 
 # 2. Check if local git config has any embedded PATs or passwords
 local_config=$(git config --local -l 2>/dev/null)
