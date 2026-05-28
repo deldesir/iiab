@@ -35,8 +35,3 @@ storefront_repo: "https://github.com/deldesir/novadah-storefront.git"
 storefront_dir: "/opt/iiab/novadah-storefront"
 storefront_branch: "main"
 
-# Standardized Git user identity variables (customizable via local_vars.yml)
-erpnext_git_name: "Blondel Mondesir"
-erpnext_git_email: "blondel.md@gmail.com"
-
-
