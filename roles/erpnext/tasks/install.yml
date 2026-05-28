@@ -140,6 +140,8 @@
   become: yes
   become_user: "{{ erpnext_user_name }}"
   command: ~/.local/bin/uv python install 3.14
+  args:
+    creates: /home/{{ erpnext_user_name }}/.local/share/uv/python
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   when:
@@ -428,6 +430,20 @@
 # Builder patches     → deldesir/builder (develop branch)
 # Historical patch files are archived in files/archive/
 
+# ── Determine whether a full build is needed ──────────────────────────────────
+# On a repeat runrole (no --reinstall), skip the expensive build+restart cycle
+# if assets are already built.  This avoids 15-45 min of downtime + session
+# destruction for a "just enforce enabled" re-run.
+- name: Check if JS assets are already built
+  stat:
+    path: /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/assets.json
+  register: _assets_json
+  when: erpnext_enabled | bool
+
+- name: Set _needs_build flag
+  set_fact:
+    _needs_build: "{{ reinstall | default(False) | bool or erpnext_force_rebuild | default(False) | bool or not (_assets_json.stat.exists | default(false)) }}"
+
 
 # ── Stop ALL services before build ─────────────────────────────────────────────
 # 1) Frees ~900 MB of RAM held by gunicorn workers + background jobs, which is
@@ -447,14 +463,14 @@
                    'frappe-bench-frappe-short-worker@*.service' \
                    'frappe-bench-frappe-long-worker@*.service' \
                    frappe-bench.target 2>/dev/null || true
-  when: erpnext_enabled | bool
+  when: erpnext_enabled | bool and _needs_build | bool
 
 - name: Flush Redis caches before build (clear stale boot data and asset references)
   command: redis-cli -p {{ item }} FLUSHDB
   loop:
     - 13000
     - 11000
-  when: erpnext_enabled | bool
+  when: erpnext_enabled | bool and _needs_build | bool
 
 # ── Build JS bundles with temporary swap ───────────────────────────────────────
 # CRM's Vite/Rollup build needs 4-6 GB during its "rendering chunks" phase.
@@ -549,7 +565,7 @@
           swapoff "$SWAPFILE" 2>/dev/null || true
           rm -f "$SWAPFILE"
         fi
-  when: erpnext_enabled | bool
+  when: erpnext_enabled | bool and _needs_build | bool
 
 # ── Start services with clean workers ──────────────────────────────────────────
 # Restart (not just start) every service explicitly to guarantee gunicorn
@@ -565,7 +581,18 @@
     systemctl restart 'frappe-bench-frappe-default-worker@*.service' \
                       'frappe-bench-frappe-short-worker@*.service' \
                       'frappe-bench-frappe-long-worker@*.service' 2>/dev/null || true
-  when: erpnext_enabled | bool
+  when: erpnext_enabled | bool and _needs_build | bool
+
+- name: Ensure Frappe services are running (no-build re-run)
+  systemd:
+    name: "{{ item }}"
+    state: started
+  loop:
+    - frappe-bench.target
+    - frappe-bench-frappe-web.service
+    - frappe-bench-node-socketio.service
+    - frappe-bench-frappe-schedule.service
+  when: erpnext_enabled | bool and not (_needs_build | bool)
 
 - name: Record (final) disk space used
   shell: df -B1 --output=used / | tail -1
