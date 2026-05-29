@@ -27,11 +27,13 @@ ai_gateway_user: "{{ iiab_admin_user }}"
 # App entrypoint (uvicorn factory)
 ai_gateway_app: "app.api.app:create_app"
 
-# LLM Integration (points to litellm proxy)
+# LLM Integration (native Gemini provider, or custom endpoint)
+# When HERMES_PROVIDER=gemini is set in local_vars, these are the model names.
+# When using LiteLLM proxy, set ai_gateway_openai_api_base to http://localhost:4000
 ai_gateway_openai_api_base: "http://localhost:4000"
 ai_gateway_openai_api_key: "{{ litellm_master_key | default('change-me') }}"
-ai_gateway_llm_model: "custom_ai"
-ai_gateway_llm_model_summarize: "custom_ai"
+ai_gateway_llm_model: "gemini-3.5-flash"
+ai_gateway_llm_model_summarize: "gemini-3.5-flash"
 ai_gateway_llm_temperature: "0.3"
 
 # Embeddings (#5 — nomic-embed-text-v1.5 is 2x better than MiniLM at same size)

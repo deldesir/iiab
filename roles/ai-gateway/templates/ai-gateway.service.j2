@@ -1,8 +1,7 @@
 [Unit]
 Description=AI Gateway Service
 Documentation=https://github.com/deldesir/gateway
-After=network.target litellm.service
-Wants=litellm.service
+After=network.target
 
 [Service]
 Type=simple
