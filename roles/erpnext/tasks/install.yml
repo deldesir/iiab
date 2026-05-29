@@ -396,11 +396,11 @@
     replace: '-t 300'
   when: erpnext_enabled | bool
 
-- name: Increase gunicorn workers to 4 (prevents deadlock when socket.io auth fetches back to gunicorn)
+- name: Set gunicorn workers to (2 * CPU cores) + 1 for optimal concurrency
   replace:
     path: /home/{{ erpnext_user_name }}/frappe-bench/config/systemd/frappe-bench-frappe-web.service
-    regexp: '-w 2'
-    replace: '-w 4'
+    regexp: '-w \d+'
+    replace: '-w {{ (2 * ansible_processor_vcpus) + 1 }}'
   when: erpnext_enabled | bool
 
 - name: Fix bench setup systemd bug (ExecStart=None in worker/scheduler services)
