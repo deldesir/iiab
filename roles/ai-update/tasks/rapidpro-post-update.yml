@@ -25,7 +25,7 @@
 - name: Sync RapidPro Python dependencies
   shell: |
     export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
-    uv sync --frozen
+    uv sync
   args:
     chdir: "{{ ai_update_rapidpro_dir }}"
   become: yes

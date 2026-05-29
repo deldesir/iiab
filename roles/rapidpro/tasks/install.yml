@@ -162,17 +162,25 @@
 - name: Create uv virtual environment
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    uv venv
+    uv venv --python $(uv python find)
   args:
     chdir: "{{ rapidpro_dir }}"
-    creates: "{{ rapidpro_dir }}/.venv"
+  become: yes
+  become_user: "{{ iiab_admin_user }}"
+
+- name: Regenerate lockfile after pyproject.toml patch
+  shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    uv lock --upgrade
+  args:
+    chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
 
 - name: Sync dependencies with uv
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    uv sync --frozen
+    uv sync
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
