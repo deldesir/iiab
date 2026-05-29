@@ -54,7 +54,7 @@ ai_update_mailroom_dir: /opt/iiab/mailroom
 ai_update_mailroom_repo: "https://github.com/deldesir/mailroom.git"
 ai_update_mailroom_version: main
 
-# ── Go services ─────────────────────────────────────────────────────
+# ── Go services — download-first, build-from-source fallback ───────
 ai_update_go_bin: /usr/local/go/bin/go
 
 ai_update_arch_dict:
@@ -63,12 +63,16 @@ ai_update_arch_dict:
 
 ai_update_go_arch: "{{ ai_update_arch_dict.get(ansible_facts.machine, 'unsupported') }}"
 
-# Courier + Mailroom are BUILT from fork source (upstream requires DynamoDB)
+# Pre-built release URLs (tried first — fast, seconds)
+ai_update_go_courier_url: "https://github.com/deldesir/courier/releases/latest/download/courier-linux-{{ ai_update_go_arch }}"
+ai_update_go_mailroom_url: "https://github.com/deldesir/mailroom/releases/latest/download/mailroom-linux-{{ ai_update_go_arch }}"
+ai_update_go_wuzapi_url: "https://github.com/deldesir/wuzapi/releases/latest/download/wuzapi-linux-{{ ai_update_go_arch }}"
+
+# Binary destinations
 ai_update_go_courier_dest: /usr/local/bin/courier
 ai_update_go_mailroom_dest: /usr/local/bin/mailroom
 
-# WuzAPI can use release downloads (no AWS dependency)
-ai_update_go_wuzapi_url: "https://github.com/deldesir/wuzapi/releases/latest/download/wuzapi-linux-{{ ai_update_go_arch }}"
+
 
 # ── WuzAPI static assets ───────────────────────────────────────────
 ai_update_wuzapi_src_repo: "https://github.com/deldesir/wuzapi.git"

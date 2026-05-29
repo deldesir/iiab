@@ -115,19 +115,33 @@
       register: mailroom_git_result
 
     # ═══════════════════════════════════════════════════════════════
-    # STAGE 2: Go binaries — build from fork source + download
+    # STAGE 2: Go binaries — download release, build only if needed
     # ═══════════════════════════════════════════════════════════════
-    # Courier and mailroom MUST be built from the fork source because
-    # the upstream nyaruka releases require AWS DynamoDB + S3.
-    # WuzAPI has no such dependency and can use release downloads.
+    # Strategy: try pre-built release binaries first (seconds).
+    # Fall back to local Go compilation only when the download fails
+    # (e.g. fork has commits newer than the latest GitHub release).
 
-    - name: "Build courier from fork source"
+    # ── 2a. Courier ──────────────────────────────────────────────
+    - name: "Download pre-built courier binary"
+      get_url:
+        url: "{{ ai_update_go_courier_url }}"
+        dest: "{{ ai_update_go_courier_dest }}"
+        mode: '0755'
+        force: yes
+      become: yes
+      when:
+        - "'courier' not in ai_update_skip"
+        - courier_git_result.changed | default(false)
+      register: courier_download_result
+      ignore_errors: yes
+
+    - name: "Build courier from source (fallback)"
       shell: >
         {{ ai_update_go_bin }} build -ldflags="-s -w"
         -o {{ ai_update_go_courier_dest }}
         ./cmd/courier
       args:
-        chdir: /opt/iiab/courier
+        chdir: "{{ ai_update_courier_dir }}"
       environment:
         CGO_ENABLED: "0"
         GOOS: linux
@@ -136,15 +150,36 @@
       when:
         - "'courier' not in ai_update_skip"
         - courier_git_result.changed | default(false)
+        - courier_download_result is failed
       register: courier_build_result
 
-    - name: "Build mailroom from fork source"
+    - name: "⚙️  courier: {{ 'downloaded release' if (courier_download_result is succeeded) else 'built from source' }}"
+      debug:
+        msg: "courier binary updated"
+      when: courier_git_result.changed | default(false)
+      changed_when: true
+
+    # ── 2b. Mailroom ─────────────────────────────────────────────
+    - name: "Download pre-built mailroom binary"
+      get_url:
+        url: "{{ ai_update_go_mailroom_url }}"
+        dest: "{{ ai_update_go_mailroom_dest }}"
+        mode: '0755'
+        force: yes
+      become: yes
+      when:
+        - "'mailroom' not in ai_update_skip"
+        - mailroom_git_result.changed | default(false)
+      register: mailroom_download_result
+      ignore_errors: yes
+
+    - name: "Build mailroom from source (fallback)"
       shell: >
         {{ ai_update_go_bin }} build -ldflags="-s -w"
         -o {{ ai_update_go_mailroom_dest }}
         ./cmd/mailroom
       args:
-        chdir: /opt/iiab/mailroom
+        chdir: "{{ ai_update_mailroom_dir }}"
       environment:
         CGO_ENABLED: "0"
         GOOS: linux
@@ -153,8 +188,16 @@
       when:
         - "'mailroom' not in ai_update_skip"
         - mailroom_git_result.changed | default(false)
+        - mailroom_download_result is failed
       register: mailroom_build_result
 
+    - name: "⚙️  mailroom: {{ 'downloaded release' if (mailroom_download_result is succeeded) else 'built from source' }}"
+      debug:
+        msg: "mailroom binary updated"
+      when: mailroom_git_result.changed | default(false)
+      changed_when: true
+
+    # ── 2c. WuzAPI ───────────────────────────────────────────────
     - name: "Download latest WuzAPI binary"
       get_url:
         url: "{{ ai_update_go_wuzapi_url }}"
@@ -323,14 +366,14 @@
         name: rapidpro-courier
         state: restarted
       become: yes
-      when: courier_build_result.changed | default(false)
+      when: courier_git_result.changed | default(false)
 
     - name: Restart mailroom
       systemd:
         name: rapidpro-mailroom
         state: restarted
       become: yes
-      when: mailroom_build_result.changed | default(false)
+      when: mailroom_git_result.changed | default(false)
 
     - name: Restart wuzapi
       systemd:
