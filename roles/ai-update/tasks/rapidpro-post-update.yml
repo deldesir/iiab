@@ -6,10 +6,15 @@
 # when the user modifies local_vars.yml — not on upstream code updates.
 # If settings need updating, the user runs: ./runrole rapidpro
 
-- name: Backup RapidPro database before migration
-  shell: pg_dump -Fc temba -f /var/backups/temba-pre-update-$(date +%Y%m%d%H%M).dump
+- name: Ensure PostgreSQL is running before RapidPro update
+  systemd:
+    name: postgresql-iiab
+    state: started
   become: yes
-  become_user: postgres
+
+- name: Backup RapidPro database before migration
+  shell: sudo -u postgres pg_dump -Fc temba > /var/backups/temba-pre-update-$(date +%Y%m%d%H%M).dump
+  become: yes
   ignore_errors: yes
 
 - name: Fix RapidPro ownership after git pull
