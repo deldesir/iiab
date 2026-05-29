@@ -162,7 +162,7 @@
 - name: Create uv virtual environment
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    uv venv --python $(uv python find)
+    uv venv --clear
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
