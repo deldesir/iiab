@@ -13,6 +13,28 @@
     siyuan_version: "{{ siyuan_latest_release.json.tag_name | regex_replace('^v', '') }}"
   when: siyuan_version == 'latest'
 
+# Migrate workspace from old location (/opt/iiab/siyuan-server/workspace)
+# to /library/siyuan if notebooks exist at the old path
+- name: Check for legacy workspace at old location
+  stat:
+    path: "{{ siyuan_dir }}/workspace/data"
+  register: old_workspace
+
+- name: Check if new workspace already has data
+  stat:
+    path: "{{ siyuan_workspace }}/data"
+  register: new_workspace
+
+- name: Migrate legacy workspace to {{ siyuan_workspace }}
+  shell: |
+    mkdir -p {{ siyuan_workspace }}
+    cp -a {{ siyuan_dir }}/workspace/* {{ siyuan_workspace }}/
+    mv {{ siyuan_dir }}/workspace {{ siyuan_dir }}/workspace.migrated
+  become: yes
+  when:
+    - old_workspace.stat.exists | default(false)
+    - not (new_workspace.stat.exists | default(false))
+
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1

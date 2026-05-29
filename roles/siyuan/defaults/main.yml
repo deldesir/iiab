@@ -19,8 +19,8 @@ siyuan_access_auth_code: ""
 # Set in /etc/iiab/local_vars.yml; written to workspace/conf/conf.json at install time
 siyuan_api_token: ""
 
-# Workspace (where notebooks live)
-siyuan_workspace: "{{ siyuan_dir }}/workspace"
+# Workspace (where notebooks live) — under /library/ to survive reinstalls
+siyuan_workspace: /library/siyuan
 
 # Architecture mapping for release tarballs
 siyuan_arch_dict:

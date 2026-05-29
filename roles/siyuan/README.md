@@ -26,5 +26,5 @@ siyuan_access_auth_code: "my-secret-code"   # recommended on shared networks
 | `siyuan_dir` | `/opt/iiab/siyuan-server` | Install directory |
 | `siyuan_port` | `6806` | HTTP port |
 | `siyuan_access_auth_code` | *(empty)* | Auth code (empty = no auth) |
-| `siyuan_workspace` | `{{ siyuan_dir }}/workspace` | Data directory |
+| `siyuan_workspace` | `/library/siyuan` | Data directory (survives reinstalls) |
 | `siyuan_user` | `{{ iiab_admin_user }}` | System user |
