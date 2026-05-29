@@ -134,20 +134,30 @@
     mode: '0755'
   become: yes
 
-- name: "Allow Python version in pyproject.toml"
+- name: "Widen Python version constraint in pyproject.toml"
   replace:
     path: "{{ rapidpro_dir }}/pyproject.toml"
-    regexp: 'requires-python = ">=3\.12,<3\.\d+"'
-    replace: 'requires-python = ">=3.12,<3.{{ (python_version.split(''.'')[1] | int) + 1 }}"'
+    regexp: 'requires-python = ">=3\.\d+(\.\d+)?,<3\.\d+"'
+    replace: 'requires-python = ">=3.12"'
   become: yes
+  ignore_errors: yes
 
-- name: Install uv
+- name: Install or update uv
   shell: |
     curl -LsSf https://astral.sh/uv/install.sh | sh
-  args:
-    creates: "/home/{{ iiab_admin_user }}/.local/bin/uv"
   become: yes
   become_user: "{{ iiab_admin_user }}"
+  changed_when: false
+
+- name: Install required Python version via uv
+  shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    uv python install
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+  become_user: "{{ iiab_admin_user }}"
+  changed_when: false
 
 - name: Create uv virtual environment
   shell: |
