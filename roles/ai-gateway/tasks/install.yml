@@ -176,6 +176,28 @@
   become: yes
   notify: restart ai-gateway
 
+- name: Install MemPalace compaction systemd service
+  template:
+    src: ai-gateway-compact.service.j2
+    dest: /etc/systemd/system/ai-gateway-compact.service
+    mode: '0644'
+  become: yes
+
+- name: Install MemPalace compaction systemd timer
+  template:
+    src: ai-gateway-compact.timer.j2
+    dest: /etc/systemd/system/ai-gateway-compact.timer
+    mode: '0644'
+  become: yes
+
+- name: Ensure MemPalace compaction timer is enabled and running
+  systemd:
+    name: ai-gateway-compact.timer
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes
+
 # RECORD AI Gateway AS INSTALLED
 
 - name: Record (final) disk space used

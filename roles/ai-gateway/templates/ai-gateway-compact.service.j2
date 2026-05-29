@@ -1,0 +1,17 @@
+[Unit]
+Description=Nightly MemPalace Compaction for AI Gateway
+Documentation=https://github.com/deldesir/mempalace
+After=network.target
+
+[Service]
+Type=oneshot
+User={{ ai_gateway_user }}
+WorkingDirectory={{ ai_gateway_dir }}
+EnvironmentFile={{ ai_gateway_dir }}/.env
+Environment="MEMPALACE_PALACE_PATH={{ mempalace_palace_path | default(ai_gateway_dir ~ '/data/palace') }}"
+ExecStart={{ ai_gateway_dir }}/.venv/bin/mempalace compress
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
