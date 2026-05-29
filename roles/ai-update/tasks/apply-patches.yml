@@ -81,11 +81,14 @@
 # RapidPro patches
 # ═══════════════════════════════════════════════════════════════════
 
-# Patch 4: Allow current system Python version
-- name: "rapidpro: allow current Python version"
+# Patch 4: Widen Python requirement to accept any 3.12+
+# Reason: Upstream frequently bumps the minimum patch version (e.g. >=3.14.5).
+# We keep uv updated and install the required version, but --frozen may fail
+# if pyproject.toml has a narrow window our uv doesn't yet know about.
+- name: "rapidpro: widen Python version constraint"
   replace:
     path: /opt/iiab/rapidpro/pyproject.toml
-    regexp: 'requires-python = ">=3\.12,<3\.\d+"'
-    replace: 'requires-python = ">=3.12,<3.{{ (python_version.split(''.'')[1] | int) + 1 }}"'
+    regexp: 'requires-python = ">=3\.\d+(\.\d+)?,<3\.\d+"'
+    replace: 'requires-python = ">=3.12"'
   become: yes
   ignore_errors: yes
