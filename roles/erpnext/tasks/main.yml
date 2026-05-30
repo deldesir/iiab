@@ -26,6 +26,11 @@
       when:
         - erpnext_enabled | bool
 
+    - name: Run IIAB database fixtures
+      include_tasks: db-fixtures.yml
+      when:
+        - erpnext_enabled | bool
+
     - name: Add 'erpnext' variable values to {{ iiab_ini_file }}
       ini_file:
         path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini

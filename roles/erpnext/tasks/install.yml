@@ -400,7 +400,7 @@
   replace:
     path: /home/{{ erpnext_user_name }}/frappe-bench/config/systemd/frappe-bench-frappe-web.service
     regexp: '-w \d+'
-    replace: '-w {{ (2 * ansible_processor_vcpus) + 1 }}'
+    replace: '-w {{ (2 * (ansible_processor_vcpus | default(2) | int)) + 1 }}'
   when: erpnext_enabled | bool
 
 - name: Fix bench setup systemd bug (ExecStart=None in worker/scheduler services)
@@ -443,7 +443,7 @@
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-  when: erpnext_enabled | bool and (not (reinstall | default(False) | bool) or (erpnext_force_drop_db | default(False) | bool))
+  when: erpnext_enabled | bool
 
 - name: Install extra apps in site (HR, CRM, etc.)
   become: yes
@@ -456,7 +456,7 @@
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   loop: "{{ erpnext_extra_apps }}"
-  when: erpnext_enabled | bool and (not (reinstall | default(False) | bool) or (erpnext_force_drop_db | default(False) | bool))
+  when: erpnext_enabled | bool
 
 - name: Run migrate + clear-cache after all apps installed
   become: yes

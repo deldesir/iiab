@@ -5,7 +5,7 @@ erpnext_install: False
 erpnext_enabled: False
 erpnext_db_root_password: "" # Should ideally be {{ mysql_root_password }}
 erpnext_admin_password: "CHANGEME"  # Override in /etc/iiab/local_vars.yml
-erpnext_version: "version-16"
+erpnext_version: "develop"
 erpnext_site_name: "site.local"
 erpnext_user_name: "frappe"
 erpnext_db_name: "_site_local"
@@ -19,12 +19,12 @@ erpnext_host_name: "{% if iiab_ssl_enabled | default(False) %}https://{{ iiab_ss
 # Extra Frappe apps to install alongside ERPNext (HR, CRM, etc.)
 # Each entry needs: name (pip/git name), branch, and app_name (bench install-app name).
 erpnext_extra_apps:
-  - { name: "https://github.com/deldesir/hrms.git",    branch: "version-16", app_name: "hrms" }
-  - { name: "https://github.com/deldesir/crm.git",     branch: "version-16", app_name: "crm" }
-  - { name: "https://github.com/deldesir/builder.git",  branch: "version-16", app_name: "builder" }
-  - { name: "payments",   branch: "version-16", app_name: "payments" }
-  - { name: "https://github.com/deldesir/webshop.git",  branch: "version-16", app_name: "webshop" }
-  - { name: "https://github.com/deldesir/POSNext.git",  branch: "version-16", app_name: "pos_next" }
+  - { name: "https://github.com/deldesir/hrms.git",    branch: "develop", app_name: "hrms" }
+  - { name: "https://github.com/deldesir/crm.git",     branch: "develop", app_name: "crm" }
+  - { name: "https://github.com/deldesir/builder.git",  branch: "develop", app_name: "builder" }
+  - { name: "payments",   branch: "develop", app_name: "payments" }
+  - { name: "https://github.com/deldesir/webshop.git",  branch: "develop", app_name: "webshop" }
+  - { name: "https://github.com/deldesir/POSNext.git",  branch: "develop", app_name: "pos_next" }
 
 # IIAB Storefront and Builder CLI repositories
 builder_cli_repo: "https://github.com/deldesir/builder-cli.git"

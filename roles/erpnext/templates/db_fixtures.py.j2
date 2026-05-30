@@ -1,0 +1,139 @@
+import frappe
+
+def run():
+    print("Starting IIAB database fixtures setup...")
+
+    # 1. Update POSNext Workspace
+    if frappe.db.exists("Workspace", "POSNext"):
+        frappe.db.set_value("Workspace", "POSNext", "app", "pos_next")
+        print("✓ Updated POSNext Workspace 'app' field to 'pos_next'")
+    else:
+        try:
+            ws = frappe.get_doc({
+                "doctype": "Workspace",
+                "name": "POSNext",
+                "label": "POSNext",
+                "title": "POSNext",
+                "module": "POS Next",
+                "app": "pos_next",
+                "icon": "message",
+                "indicator_color": "green",
+                "public": 1,
+                "is_hidden": 0,
+                "parent_page": "",
+                "content": '[{"id":"cDBfxZcI12","type":"header","data":{"text":"<span class=\\"h4\\"><b>Your Shortcuts</b></span>","col":12}},{"id":"EuDVjJUKSQ","type":"shortcut","data":{"shortcut_name":"Start POS","col":3}},{"id":"uXQ4aBaRfk","type":"shortcut","data":{"shortcut_name":"Item","col":3}},{"id":"jEFYB2fX3t","type":"shortcut","data":{"shortcut_name":"Pos Settings","col":3}},{"id":"RoWvjX8Ocp","type":"shortcut","data":{"shortcut_name":"Pos Profile","col":3}},{"id":"p4KrSYzInK","type":"shortcut","data":{"shortcut_name":"Pos Opening Shift","col":3}},{"id":"VO-VLNdx_2","type":"shortcut","data":{"shortcut_name":"Pos Closing Shift","col":3}},{"id":"OYrA05uyCG","type":"shortcut","data":{"shortcut_name":"Pos Offer","col":3}},{"id":"FUd4_fFBgH","type":"shortcut","data":{"shortcut_name":"Pos Coupon","col":3}},{"id":"spacer1","type":"spacer","data":{"col":12}},{"id":"header2","type":"header","data":{"text":"<span class=\\"h4\\"><b>Reports &amp; Configuration</b></span>","col":12}},{"id":"reports_card","type":"card","data":{"card_name":"Reports","col":4}},{"id":"pos_card","type":"card","data":{"card_name":"POS","col":4}},{"id":"config_card","type":"card","data":{"card_name":"Configuration","col":4}},{"id":"shift_card","type":"card","data":{"card_name":"Shift Management","col":4}},{"id":"offers_card","type":"card","data":{"card_name":"Offers & Coupons","col":4}},{"id":"items_card","type":"card","data":{"card_name":"Items","col":4}}]'
+            })
+            ws.insert(ignore_permissions=True)
+            print("✓ Created POSNext Workspace")
+        except Exception as e:
+            print(f"Error creating POSNext Workspace: {e}")
+
+    # 2. Update/Insert Webshop Workspace
+    if frappe.db.exists("Workspace", "Webshop"):
+        frappe.db.delete("Workspace", "Webshop")
+        print("✓ Removed old Webshop Workspace to enforce correct roles child table")
+
+    try:
+        # 1. Insert with parent_page="" to pass validation checks
+        ws = frappe.get_doc({
+            "doctype": "Workspace",
+            "name": "Webshop",
+            "label": "Webshop",
+            "title": "Webshop",
+            "module": "Webshop",
+            "app": "Webshop",  # Capital W to match novadah exactly
+            "icon": "getting-started",
+            "indicator_color": "green",
+            "public": 1,
+            "is_hidden": 0,
+            "parent_page": "",  # Empty during insert
+            "content": '[{"id":"_-b0CpVZje","type":"shortcut","data":{"shortcut_name":"Open <strong>Frappe Builder</strong>","col":4}}]',
+            "roles": [
+                {"role": "System Manager"},
+                {"role": "Website Manager"}
+            ]
+        })
+        ws.insert(ignore_permissions=True)
+        
+        # 2. Force parent_page="Webshop" directly via database bypass update to match novadah exactly
+        frappe.db.set_value("Workspace", "Webshop", "parent_page", "Webshop")
+        print("✓ Created Webshop Workspace with exact parent_page and roles settings")
+    except Exception as e:
+        print(f"Error creating Webshop Workspace: {e}")
+
+    # 3. Create missing Workspace Sidebar and Sidebar Items for Webshop
+    if frappe.db.exists("Workspace Sidebar", "Webshop"):
+        frappe.db.delete("Workspace Sidebar", "Webshop")
+        print("✓ Removed old Webshop Workspace Sidebar to enforce correct sidebar items")
+
+    try:
+        sb = frappe.get_doc({
+            "doctype": "Workspace Sidebar",
+            "name": "Webshop",
+            "title": "Webshop",
+            "header_icon": "shopping-cart",
+            "module": "Webshop",
+            "standard": 1,
+            "app": "webshop",
+            "items": [
+                {"label": "Items", "type": "Link", "link_type": "DocType", "link_to": "Website Item", "icon": "package-2", "idx": 1},
+                {"label": "Collections", "type": "Link", "link_type": "DocType", "link_to": "Website Collection", "icon": "list", "idx": 2},
+                {"label": "Categories", "type": "Link", "link_type": "DocType", "link_to": "Website Category", "icon": "list-tree", "idx": 3},
+                {"label": "Pending Carts", "type": "Link", "link_type": "DocType", "link_to": "Quotation", "icon": "shopping-cart", "idx": 4, "filters": '[["Quotation","order_type","=","Shopping Cart"],["Quotation","status","=","Draft"]]'},
+                {"label": "Orders", "type": "Link", "link_type": "DocType", "link_to": "Sales Order", "icon": "truck", "idx": 5, "filters": '[["Sales Order","order_type","=","Shopping Cart"]]'},
+                {"label": "Reviews", "type": "Link", "link_type": "DocType", "link_to": "Item Review", "icon": "star", "idx": 6},
+                {"label": "Settings", "type": "Link", "link_type": "DocType", "link_to": "Webshop Settings", "icon": "settings-2", "idx": 7}
+            ]
+        })
+        sb.insert(ignore_permissions=True)
+        print("✓ Created Webshop Workspace Sidebar with all 7 sidebar items")
+    except Exception as e:
+        print(f"Error creating Webshop Workspace Sidebar: {e}")
+
+    # 4. Desktop Icons (re-create to keep in sync and prevent user deletion regressions)
+    for label in ["POSNext", "Webshop"]:
+        if frappe.db.exists("Desktop Icon", {"label": label}):
+            frappe.db.delete("Desktop Icon", {"label": label})
+            print(f"✓ Removed old Desktop Icon for {label}")
+
+    # Insert POSNext Desktop Icon
+    try:
+        di_pos = frappe.get_doc({
+            "doctype": "Desktop Icon",
+            "label": "POSNext",
+            "app": "pos_next",
+            "icon": "message",
+            "icon_type": "Link",
+            "link_type": "Workspace Sidebar",
+            "link_to": "POSNext",
+            "standard": 1,
+            "hidden": 0,
+            "bg_color": "gray"
+        })
+        di_pos.insert(ignore_permissions=True)
+        print("✓ Created POSNext Desktop Icon")
+    except Exception as e:
+        print(f"Error creating POSNext Desktop Icon: {e}")
+
+    # Insert Webshop Desktop Icon
+    try:
+        di_web = frappe.get_doc({
+            "doctype": "Desktop Icon",
+            "label": "Webshop",
+            "app": "webshop",
+            "logo_url": "/assets/webshop/images/webshop_logo.png",
+            "icon_type": "Link",
+            "link_type": "Workspace Sidebar",
+            "link_to": "Webshop",
+            "standard": 1,
+            "hidden": 0,
+            "bg_color": "gray"
+        })
+        di_web.insert(ignore_permissions=True)
+        print("✓ Created Webshop Desktop Icon")
+    except Exception as e:
+        print(f"Error creating Webshop Desktop Icon: {e}")
+
+    # Save and commit database transaction
+    frappe.db.commit()
+    print("✓ Committed all IIAB database fixtures successfully.")

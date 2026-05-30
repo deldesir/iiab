@@ -1,0 +1,24 @@
+---
+# Idempotent Database Fixtures for IIAB
+# Automatically ensures that POSNext and Webshop Workspaces and Desktop Icons exist
+
+- name: Deploy IIAB database fixtures script
+  template:
+    src: db_fixtures.py.j2
+    dest: /home/{{ erpnext_user_name }}/frappe-bench/db_fixtures.py
+    owner: "{{ erpnext_user_name }}"
+    group: "{{ erpnext_user_name }}"
+    mode: '0755'
+  when: erpnext_enabled | bool
+
+- name: Run IIAB database fixtures script (idempotent icon and workspace enforcement)
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  shell: |
+    ~/.local/bin/bench --site {{ erpnext_site_name }} execute "exec('import sys; sys.path.insert(0, \"/home/{{ erpnext_user_name }}/frappe-bench\"); import db_fixtures; db_fixtures.run()')"
+    ~/.local/bin/bench --site {{ erpnext_site_name }} clear-cache
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
