@@ -174,12 +174,12 @@
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   when:
     - erpnext_enabled | bool
-    - erpnext_version == 'version-16'
+    - erpnext_version == 'develop'
 
 - name: Init frappe bench
   become: yes
   become_user: "{{ erpnext_user_name }}"
-  command: ~/.local/bin/bench init frappe-bench --frappe-path https://github.com/deldesir/frappe.git --frappe-branch {{ erpnext_version }} {% if erpnext_version == 'version-16' %}--python 3.14{% endif %}
+  command: ~/.local/bin/bench init frappe-bench --frappe-path https://github.com/deldesir/frappe.git --frappe-branch {{ erpnext_version }} {% if erpnext_version == 'develop' %}--python 3.14{% endif %}
   args:
     chdir: /home/{{ erpnext_user_name }}
     creates: /home/{{ erpnext_user_name }}/frappe-bench
