@@ -213,21 +213,33 @@
 # NOTE: Services are stopped by the pre-build block below (line ~459), which runs
 # on every install/reinstall.  No separate stop needed here.
 
+- name: Check if site config exists
+  stat:
+    path: /home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}/site_config.json
+  register: site_config
+
 # DB drop is destructive — only triggered by explicit erpnext_force_drop_db flag,
-# NOT by a standard reinstall.  A normal reinstall preserves all data and just
-# refreshes code + rebuilds + migrates.
-- name: Drop ERPNext DB (ONLY when erpnext_force_drop_db is set)
+# OR if the database is orphaned (when site_config.json is completely missing after a folder purge).
+- name: Drop ERPNext DB (ONLY when erpnext_force_drop_db is set or database is orphaned)
   mysql_db:
     name: "{{ erpnext_db_name }}"
     state: absent
     login_unix_socket: /run/mysqld/mysqld.sock
-  when: erpnext_enabled | bool and erpnext_force_drop_db | default(False) | bool
+  when: >
+    erpnext_enabled | bool and (
+    (erpnext_force_drop_db | default(False) | bool) or
+    (not site_config.stat.exists)
+    )
 
-- name: Drop ERPNext Site Directory (ONLY when erpnext_force_drop_db is set)
+- name: Drop ERPNext Site Directory (ONLY when erpnext_force_drop_db is set or site config is missing)
   file:
     path: /home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}
     state: absent
-  when: erpnext_enabled | bool and erpnext_force_drop_db | default(False) | bool
+  when: >
+    erpnext_enabled | bool and (
+    (erpnext_force_drop_db | default(False) | bool) or
+    (not site_config.stat.exists)
+    )
 
 - name: Flush Redis cache + queue (eliminates stale assets_json, doctype_meta, boot data)
   command: redis-cli -p {{ item }} FLUSHDB
