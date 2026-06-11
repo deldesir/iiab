@@ -63,36 +63,36 @@ See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](ht
   maps_satellite_zoom: none
   ```
 
-*Full Quality Regions will still download satellite data, though it will not be visible in the UI.*
+*FYI [Full Quality Regions](#full-quality-regions) will still download and display satellite data.*  <!-- though it will not be visible in the UI. -->
 
-## How do I install 3D terrain?
+## How do I install 3D Terrain?
 
-To add 3D (three-dimensional) terrain files, you can set this optional setting.  You may find that when looking at mountains, high quality satellite imagery may compensate for low quality terrain, and vice versa.
+To add 3D (three-dimensional) terrain files, you can set this optional setting.
 
 PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-install) is installed!
 
 1. If you want **~980 MB** terrain maps (up to zoom 7), include:
+
    ```
    maps_terrain_zoom: 7
    ```
 
 ![Terrain Zoom 7](README-assets/terrain/terrain-z07.png)
 
-2. If you want **~6.4 GB** terrain maps (up to zoom 8), include:
+2. If you want **~6.4 GB** terrain maps ([up to zoom 8](README-assets/terrain/terrain-z08.png)), include:
+
    ```
    maps_terrain_zoom: 8
    ```
 
-![Terrain Zoom 8](README-assets/terrain/terrain-z08.png)
+3. If you want **~29 GB** terrain maps ([up to zoom 9](README-assets/terrain/terrain-z09.png)), include:
 
-3. If you want **~29 GB** terrain maps (up to zoom 9), include:
    ```
    maps_terrain_zoom: 9
    ```
 
-![Terrain Zoom 9](README-assets/terrain/terrain-z09.png)
-
 4. If you want **~106 GB** terrain maps (up to zoom 10), include:
+
    ```
    maps_terrain_zoom: 10
    ```
@@ -100,6 +100,14 @@ PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-i
 ![Terrain Full Zoom](README-assets/terrain/terrain-z10.png)
 
 See `maps_dot_black_terrain_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
+
+### How do I view 3D Terrain?
+
+After 3D terrain is installed, enable it by clicking the "mountains" square button, in the top-right.
+
+Then tilt the map by holding down the **Ctrl** key on your keyboard while dragging your mouse (or drag with two fingers, if on a mobile device!)
+
+GURU TIP: You may find that when looking at mountains, high-quality satellite imagery may compensate for low-quality terrain, and vice versa.
 
 ## How do I install Map Search?
 
@@ -109,7 +117,7 @@ PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-i
 
 This option is good for all devices.  Fast and simple, but limited features.
 
-Allows users to search for any city or town with population 1000 or higher (**~35MB**).
+Allows users to search for any of 165,623 cities and towns with population 1000 or higher (**~35MB**).
 
    ```
    maps_search_engine: static
@@ -141,11 +149,20 @@ As of April 2026, it includes only administrative (i.e. political) regions and n
 
 ## Full Quality Regions
 
-You can download rectangular "Full Quality Regions" (FQRs) to supplement your lower-resolution world map.  The goal is to provide your community with the latest high-res vector, satellite and terrain data for the regions they care about most.
+You can download rectangular "Full Quality Regions" (FQRs) to supplement your lower-resolution world map.  The goal is to provide your community with the latest high-res vector, satellite and 3D terrain data for the regions they care about most.
 
 DETAILS: IIAB's downloadable regions (FQRs) include OpenStreetMap vector data up to [zoom level](https://wiki.openstreetmap.org/wiki/Zoom_levels) 14 (overzoomable to about zoom level 18), satellite photo data up to zoom level 13, and 3D terrain up to zoom level 10.  (As of April 2026, [Map Search data](#how-do-i-install-map-search) is not yet affected, no matter how many FQR regions you download!)
 
 *NOTE: The satellite data is licensed "NonCommercial" under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).*
+
+### How big will these files be?
+
+| | 100&nbsp;km&nbsp;×&nbsp;100&nbsp;km URBAN [example](https://opencagedata.com/tools/bounds-finder#76.6942553,28.1845497,77.7196694,29.0845497) | 100&nbsp;km&nbsp;×&nbsp;100&nbsp;km MOUNTAINS [example](https://opencagedata.com/tools/bounds-finder#84.4154371,28.0376883,85.4394215,28.9376883) | 1000&nbsp;km&nbsp;×&nbsp;1000&nbsp;km ISLANDS [example](https://opencagedata.com/tools/bounds-finder#-76.8383789,16.2146745,-67.2163479,25.2146745) | 1000&nbsp;km&nbsp;×&nbsp;1000&nbsp;km RURAL [example](https://opencagedata.com/tools/bounds-finder#101.5270099,62.4567592,124.5198784,71.4567592) |
+| ---: | :---: | :---: | :---: | :---: |
+| OSM Vector Data (MB)                                 | 39  | 13  | 119 | 91   |
+| Satellite&nbsp;Photos, Depth&nbsp;Sounding&nbsp;(MB) | 19  | 16  | 207 | 2369 |
+| 3D Terrain (MB)                                      | 1.5 | 2.8 | 126 | 381  |
+| **FQR TOTAL (MB)**                                   | 58  | 32  | 451 | 2840 |
 
 ### Prerequisites
 
@@ -164,7 +181,7 @@ DETAILS: IIAB's downloadable regions (FQRs) include OpenStreetMap vector data up
    sudo ./runrole --reinstall maps
    ```
 
-### Downloading Regions
+### How do I download a Full Quality Region?
 
 Open your IIAB Maps, e.g. by browsing to http://box/maps or http://10.10.10.10/maps
 
@@ -172,9 +189,9 @@ Look for these buttons in the top-left of your map. Click the top one to enter "
 
 ![Download Button](README-assets/fqr-downloader-selected.png)
 
-(the button will turn orange and your mouse pointer should change).
+(The button will turn orange and your mouse pointer should change.  GURU TIP: Because of [180th meridian issues](https://github.com/iiab/iiab/pull/4418), selecting this will automatically turn off "globe" [spherical] view.  You can turn it back on [by clicking the "globe" button in the top-right] once you've started your download below.)
 
-Draw a rectangle that represents the region you want to download.  To draw, click one corner of the rectangle and then the opposite corner.  **(Make sure to only click, do not drag!)**
+Now draw a rectangle that represents the region you want to download.  To draw, click one corner of the rectangle and then the opposite corner.  **(Make sure to only click, do not drag!)**
 
 Once you have a rectangle, you'll immediately see a pop-up in the middle of it:
 
@@ -182,19 +199,21 @@ Once you have a rectangle, you'll immediately see a pop-up in the middle of it:
 
 Follow the instructions on the pop-up to download your region.
 
-### Viewing Regions
+### How do I view Full Quality Regions?
 
-You can test out your downloaded Full Quality Region by clicking on the new rectangle on the map.  You should be able to see everything at full quality (terrain up to zoom level 10).
+Look for rectangles on your map, and zoom in there!
 
-### Deleting Regions
+If a downloaded rectangle region contains mountains, also take a look at its [3D terrain](#how-do-i-view-3D-terrain).
 
-Look for these buttons in the top-left of your map. Click the bottom one to enter "delete" mode:
+### How do I delete a Full Quality Region?
+
+Look for these buttons in the top-left of your map.  Click the bottom one to enter "delete" mode:
 
 ![Delete Button](README-assets/fqr-deleter-selected.png)
 
-(the button will turn orange and your mouse pointer should change).
+(The button will turn orange and your mouse pointer should change.)
 
-You can then click on a region you want to delete. It will bring up a pop-up with instructions on how to delete the region.
+You can then click on a region you want to delete.  It will bring up a pop-up with instructions on how to delete the region.
 
 ### Overlapping Regions
 
@@ -261,8 +280,7 @@ sudo ./runrole maps --reinstall
 
 ## Further options & detail:
 
-* https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml
-* [PR #4120](https://github.com/iiab/iiab/pull/4120)
+* [Key map variables](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) based on [PR #4120](https://github.com/iiab/iiab/pull/4120) from Oct/Nov 2025
 * Map data files as of 2026-04-14: https://iiab.switnet.org/maps/2/
 * IIAB integration thanks to [Dan Krol](https://github.com/orblivion)
 
@@ -284,11 +302,23 @@ What I hope to be working on in the next few months
     * Sorting non-cities (natural feature, etc) vs cities.  Cannot rely on population anymore.
     * Even if this becomes "big", we should keep a small database around as an option.
 
-**May 2026**:
+~**May 2026**:~
 
 * Split search by region and include as part of "Full Quality Region" downloads
     * (assuming the database is big enough to merit splitting)
 * UI improvements (Out-of-Box Experience, Navigating regions, Buttons, Searching while viewing a region)
+
+**June 2026**:
+
+- TBA
+
+**July 2026**:
+
+- TBA
+
+**August 2026**:
+
+- TBA
 
 ## Extra attributions:
 
