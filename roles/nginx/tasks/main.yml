@@ -31,6 +31,19 @@
   when: nginx_installed is undefined
 
 
+# Check if SSL cert files exist on disk BEFORE templating server.conf.
+# On first install, the SSL role hasn't run yet so certs won't exist.
+# This prevents nginx from crashing due to missing cert files.
+- name: Check if SSL certificate exists on disk
+  stat:
+    path: "{{ iiab_ssl_cert_path }}"
+  register: ssl_cert_stat
+  when: iiab_ssl_enabled | default(false)
+
+- name: Set iiab_ssl_certs_exist fact based on cert file presence
+  set_fact:
+    iiab_ssl_certs_exist: "{{ (ssl_cert_stat.stat.exists | default(false)) if (iiab_ssl_enabled | default(false)) else false }}"
+
 - name: Always re-template server.conf and nginx.conf to pick up config changes (e.g. SSL domain, TLS settings)
   template:
     src: "{{ item.src }}"

@@ -148,7 +148,12 @@ location = /contact { return 301 /erp/contact; }
 
 location = /login  { return 307 /erp/login; }
 location = /logout { return 307 /erp/logout; }
+location = /update-password { return 307 /erp/update-password$is_args$args; }
 location = /website_script.js { return 302 /erp/website_script.js; }
+
+# Private-file and backup download bounce-backs
+location ^~ /backups/ { return 307 /erp$request_uri; }
+location ^~ /private/files/ { return 307 /erp$request_uri; }
 
 # ── Frappe API endpoints ────────────────────────────────────────────────────────
 location ^~ /api/method/ {
