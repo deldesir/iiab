@@ -192,7 +192,7 @@
 # Now that certs exist, re-template server.conf so SSL directives are emitted
 - name: Re-template server.conf now that SSL certs exist
   template:
-    src: server.conf.j2
+    src: "{{ iiab_dir }}/roles/nginx/templates/server.conf.j2"
     dest: /etc/nginx/server.conf
   vars:
     iiab_ssl_certs_exist: true
