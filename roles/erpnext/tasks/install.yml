@@ -428,7 +428,7 @@
 - name: Increase gunicorn worker timeout to 300s (setup_wizard.setup_complete needs >120s)
   replace:
     path: /home/{{ erpnext_user_name }}/frappe-bench/config/systemd/frappe-bench-frappe-web.service
-    regexp: '-t 120'
+    regexp: '-t \d+'
     replace: '-t 300'
   when: erpnext_enabled | bool
 
@@ -469,6 +469,20 @@
   when: erpnext_enabled | bool
 
 
+# Check which apps are already installed in the site to avoid
+# "App already installed" errors on crash-and-resume re-runs.
+- name: Get list of apps already installed in site
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  shell: ~/.local/bin/bench --site {{ erpnext_site_name }} list-apps 2>/dev/null | grep -v '^$' || true
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  register: _installed_apps
+  changed_when: false
+  when: erpnext_enabled | bool
+
 - name: Install ERPNext App in Site
   become: yes
   become_user: "{{ erpnext_user_name }}"
@@ -479,7 +493,9 @@
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-  when: erpnext_enabled | bool
+  when:
+    - erpnext_enabled | bool
+    - "'erpnext' not in (_installed_apps.stdout | default(''))"
 
 - name: Install extra apps in site (HR, CRM, etc.)
   become: yes
@@ -492,7 +508,9 @@
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   loop: "{{ erpnext_extra_apps }}"
-  when: erpnext_enabled | bool
+  when:
+    - erpnext_enabled | bool
+    - "item.app_name not in (_installed_apps.stdout | default(''))"
 
 - name: Run migrate + clear-cache after all apps installed
   become: yes
@@ -595,6 +613,7 @@
   loop:
     - 13000
     - 11000
+  ignore_errors: yes
   when: erpnext_enabled | bool and _needs_build | bool
 
 # ── Build JS bundles with temporary swap ───────────────────────────────────────
