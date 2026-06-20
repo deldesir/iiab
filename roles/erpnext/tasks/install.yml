@@ -180,10 +180,14 @@
 # Clean up partial bench directory from a previously failed init.
 # Without this, the 'creates:' guard skips re-init and the install
 # is stuck with a broken bench forever.
-- name: Check if frappe-bench exists but is incomplete (missing apps/frappe)
-  stat:
-    path: /home/{{ erpnext_user_name }}/frappe-bench/apps/frappe/setup.py
-  register: bench_frappe_app
+- name: Check if frappe-bench exists but is incomplete (missing frappe app or venv)
+  shell: |
+    test -d /home/{{ erpnext_user_name }}/frappe-bench || exit 0
+    test -f /home/{{ erpnext_user_name }}/frappe-bench/apps/frappe/pyproject.toml && \
+    test -f /home/{{ erpnext_user_name }}/frappe-bench/env/bin/python && \
+    echo "COMPLETE" || echo "INCOMPLETE"
+  register: bench_completeness
+  changed_when: false
   when: erpnext_enabled | bool
 
 - name: Remove incomplete frappe-bench directory from a previous failed init
@@ -192,8 +196,8 @@
     state: absent
   when:
     - erpnext_enabled | bool
-    - bench_frappe_app.stat is defined
-    - not bench_frappe_app.stat.exists
+    - bench_completeness.stdout is defined
+    - bench_completeness.stdout == "INCOMPLETE"
 
 - name: Init frappe bench
   become: yes
