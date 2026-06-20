@@ -449,6 +449,7 @@ asterisk_chan_dongle: False
 # ERPNext — Full-featured ERP system (accounting, HR, inventory, manufacturing)
 erpnext_install: True
 erpnext_enabled: True
+erpnext_admin_password: "CHANGEME"    # ERPNext Administrator login password
 
 # Bagisto — E-commerce platform
 bagisto_install: True
