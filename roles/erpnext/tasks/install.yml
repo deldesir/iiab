@@ -269,6 +269,7 @@
   loop:
     - 13000
     - 11000
+  ignore_errors: yes
   when: erpnext_enabled | bool
 
 - name: Ensure correct ownership of Frappe apps directory (prevents permission errors on code pull)
