@@ -22,14 +22,19 @@
     group: "{{ iiab_admin_user }}"
   become: yes
 
-- name: Install Wuzapi Binary from Release
-  get_url:
-    # OPTIONAL STATIC TAG (Option B): Uncomment below and comment 'latest' above to use auto-manipulator script.
-    # url: "https://github.com/deldesir/wuzapi/releases/download/v1.0.8/wuzapi-linux-{{ wuzapi_go_arch }}"
-    url: "https://github.com/deldesir/wuzapi/releases/latest/download/wuzapi-linux-{{ wuzapi_go_arch }}"
-    dest: "{{ wuzapi_dir }}/wuzapi"
-    mode: '0755'
-    force: yes
+# Prefer the gzipped release asset (much smaller download); fall back to raw.
+- name: Install Wuzapi Binary from Release (gzip-preferred, raw fallback)
+  shell: |
+    set -e
+    url="https://github.com/deldesir/wuzapi/releases/latest/download/wuzapi-linux-{{ wuzapi_go_arch }}"
+    if curl -fsSL "${url}.gz" -o /tmp/iiab-wuzapi.gz; then
+      gunzip -c /tmp/iiab-wuzapi.gz > "{{ wuzapi_dir }}/wuzapi"; rm -f /tmp/iiab-wuzapi.gz
+    else
+      curl -fsSL "$url" -o "{{ wuzapi_dir }}/wuzapi"
+    fi
+    chmod 0755 "{{ wuzapi_dir }}/wuzapi"
+  args:
+    executable: /bin/bash
   become: yes
 
 - name: Clone Wuzapi repository (for static assets)

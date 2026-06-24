@@ -28,10 +28,11 @@
 #
 # Options:
 #   --release            Actually publish (merge, push main+tag, gh release).
-#   --compress MODE      Release-asset compression: none (default) | gzip | upx.
-#                          none: raw stripped binary  (ai-update works as-is)
-#                          gzip: <bin>.gz             (smallest DOWNLOAD, no RAM
-#                                cost; REQUIRES the matching ai-update change)
+#   --compress MODE      Release-asset compression: gzip (default) | none | upx.
+#                          gzip: keeps raw <bin> AND adds <bin>.gz — ai-update
+#                                prefers the .gz (smallest download, no RAM cost);
+#                                raw is kept so older ai-update still works
+#                          none: raw stripped binary only
 #                          upx : in-place packed bin  (smallest on disk; RAM +
 #                                startup + AV cost — opt-in, not recommended)
 #   --stash              git stash a dirty fork tree, merge, then stash pop.
@@ -82,7 +83,7 @@ declare -A HAS_SEMVER_UPSTREAM=(
 RELEASE=0
 STASH=0
 FORCE=0
-COMPRESS="none"
+COMPRESS="gzip"
 TARGETS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -217,7 +218,7 @@ build_and_package() {
         "$GO_BIN" build -trimpath -mod=readonly -ldflags="-s -w" -o "$out" "$pkg" )
     ok "$repo/$arch stripped: $(human_size "$out")"
     case "$COMPRESS" in
-      gzip) gzip -9 -f "$out"; ok "$repo/$arch gzip:     $(human_size "$out.gz")" ;;
+      gzip) gzip -9 -kf "$out"; ok "$repo/$arch gzip:     $(human_size "$out.gz") (raw kept)" ;;
       upx)  upx --best --lzma -q "$out" >/dev/null; ok "$repo/$arch upx:      $(human_size "$out")" ;;
     esac
   done
