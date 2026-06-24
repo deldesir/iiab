@@ -27,9 +27,20 @@ ai_gateway_user: "{{ iiab_admin_user }}"
 # App entrypoint (uvicorn factory)
 ai_gateway_app: "app.api.app:create_app"
 
-# LLM Integration (native Gemini provider, or custom endpoint)
-# When HERMES_PROVIDER=gemini is set in local_vars, these are the model names.
-# When using LiteLLM proxy, set ai_gateway_openai_api_base to http://localhost:4000
+# LLM Integration — native Gemini provider (LiteLLM proxy is retired).
+#
+# Default path: the gateway runs Hermes with provider "gemini"
+# (GeminiNativeClient → Google AI Studio), which needs only a Gemini API key.
+# Set GEMINI_API_KEY once in local_vars (see ai_gateway_gemini_api_key below)
+# and the engine auto-selects the native provider — no proxy on :4000.
+#
+# Custom-endpoint / legacy path: leave ai_gateway_gemini_api_key empty and set
+# ai_gateway_hermes_provider="" — the engine then falls back to the
+# OpenAI-compatible client at ai_gateway_openai_api_base.
+ai_gateway_hermes_provider: "{{ 'gemini' if (ai_gateway_gemini_api_key | default('')) else '' }}"
+# Pulls the existing key from local_vars' litellm_env block so the secret is
+# defined in exactly one place. Override directly if you keep it elsewhere.
+ai_gateway_gemini_api_key: "{{ (litellm_env.GEMINI_API_KEY | default('')) if (litellm_env is defined) else '' }}"
 ai_gateway_openai_api_base: "http://localhost:4000"
 ai_gateway_openai_api_key: "{{ litellm_master_key | default('change-me') }}"
 ai_gateway_llm_model: "gemini-3.5-flash"
