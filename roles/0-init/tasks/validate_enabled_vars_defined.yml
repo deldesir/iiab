@@ -307,6 +307,12 @@
     fail_msg: "VARIABLE MUST BE DEFINED: 'rivebot_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
 
+- name: Assert that var email_bridge_enabled is defined
+  assert:
+    that: email_bridge_enabled is defined
+    fail_msg: "VARIABLE MUST BE DEFINED: 'email_bridge_enabled' NEEDS A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
 - name: Assert that var siyuan_enabled is defined
   assert:
     that: siyuan_enabled is defined

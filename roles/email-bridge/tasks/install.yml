@@ -1,4 +1,8 @@
 ---
+- name: Record (initial) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df1
+
 - name: Install email-bridge system dependencies
   apt:
     name:
@@ -74,6 +78,17 @@
     mode: '0644'
   become: yes
   notify: restart email-bridge
+
+- name: Record (final) disk space used
+  shell: df -B1 --output=used / | tail -1
+  register: df2
+
+- name: Add 'email_bridge_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
+  ini_file:
+    path: "{{ iiab_ini_file }}"
+    section: email-bridge
+    option: email_bridge_disk_usage
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'email_bridge_installed: True'"
   set_fact:

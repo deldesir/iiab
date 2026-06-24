@@ -307,6 +307,12 @@
     fail_msg: "VARIABLE MUST BE BOOLEAN: 'rivebot_enabled' now has type '{{ rivebot_enabled | type_debug }}' and value '{{ rivebot_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
 
+- name: Assert that var email_bridge_enabled is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: email_bridge_enabled | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'email_bridge_enabled' now has type '{{ email_bridge_enabled | type_debug }}' and value '{{ email_bridge_enabled }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
 - name: Assert that var siyuan_enabled is type boolean (NOT type string, which can invert logic!)
   assert:
     that: siyuan_enabled | type_debug == 'bool'

@@ -316,6 +316,12 @@
     fail_msg: "VARIABLE MUST BE BOOLEAN: 'rivebot_install' now has type '{{ lookup('vars', 'rivebot_install') | type_debug }}' and value '{{ lookup('vars', 'rivebot_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: yes
 
+- name: Assert that var email_bridge_install is type boolean (NOT type string, which can invert logic!)
+  assert:
+    that: email_bridge_install | type_debug == 'bool'
+    fail_msg: "VARIABLE MUST BE BOOLEAN: 'email_bridge_install' now has type '{{ lookup('vars', 'email_bridge_install') | type_debug }}' and value '{{ lookup('vars', 'email_bridge_install') }}' -- PLEASE SET A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: yes
+
 - name: Assert that var siyuan_install is type boolean (NOT type string, which can invert logic!)
   assert:
     that: siyuan_install | type_debug == 'bool'

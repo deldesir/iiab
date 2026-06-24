@@ -327,6 +327,12 @@
     fail_msg: "DISALLOWED: 'rivebot_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'rivebot_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
     quiet: yes
 
+- name: "DISALLOW 'email_bridge_install: False' WHEN email_bridge_installed is defined"
+  assert:
+    that: email_bridge_install or email_bridge_installed is undefined
+    fail_msg: "DISALLOWED: 'email_bridge_install: False' (e.g. in /etc/iiab/local_vars.yml) WHEN 'email_bridge_installed' is defined (e.g. in /etc/iiab/iiab_state.yml) -- IIAB DOES NOT SUPPORT UNINSTALLS -- please verify those 2 files especially, and other places variables are defined?"
+    quiet: yes
+
 - name: "DISALLOW 'siyuan_install: False' WHEN siyuan_installed is defined"
   assert:
     that: siyuan_install or siyuan_installed is undefined
