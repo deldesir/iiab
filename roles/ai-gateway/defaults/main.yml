@@ -39,6 +39,9 @@ ai_gateway_llm_temperature: "0.3"
 # Embeddings (#5 — nomic-embed-text-v1.5 is 2x better than MiniLM at same size)
 ai_gateway_embedding_provider: "local"
 ai_gateway_embedding_model: "nomic-ai/nomic-embed-text-v1.5"
+# MemPalace embedding model: 'minilm' (light, English-only) or 'embeddinggemma'
+# (multilingual, ~300 MB — memory-heavy; test footprint before using on 4 GB).
+ai_gateway_mempalace_embedding_model: "minilm"
 
 # RapidPro Integration
 ai_gateway_rapidpro_host: "http://localhost:8080"
