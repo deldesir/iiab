@@ -250,7 +250,12 @@ process_repo() {
     target_ref="$sha"; target_desc="${UPSTREAM_URL[$repo]%.git}@${ver}"
     log "$repo: latest upstream release is $ver"
   else
-    target_ref="upstream/main"; target_desc="${UPSTREAM_URL[$repo]%.git}@main"
+    # Untagged upstream (wuzapi/asternic ships no releases): track main and pin
+    # the exact upstream commit in the description, so the fork's own semver
+    # release records WHICH upstream state it was built from.
+    target_ref="upstream/main"
+    local usha; usha="$(git -C "$dir" rev-parse --short upstream/main 2>/dev/null)"
+    target_desc="${UPSTREAM_URL[$repo]%.git}@main${usha:+ (${usha})}"
   fi
 
   guard_or_stash "$dir" "$repo"
