@@ -1,0 +1,8 @@
+---
+- name: restart email-bridge
+  systemd:
+    name: email-bridge
+    state: restarted
+    daemon_reload: yes
+  become: yes
+  when: email_bridge_enabled | default(true)

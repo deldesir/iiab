@@ -1,0 +1,17 @@
+---
+- name: Enable & (re)start 'email-bridge' systemd service, if email_bridge_enabled
+  systemd:
+    name: email-bridge
+    daemon_reload: yes
+    enabled: yes
+    state: restarted
+  become: yes
+  when: email_bridge_enabled
+
+- name: Disable & Stop 'email-bridge' systemd service, if not email_bridge_enabled
+  systemd:
+    name: email-bridge
+    enabled: no
+    state: stopped
+  become: yes
+  when: not email_bridge_enabled

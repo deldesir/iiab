@@ -527,6 +527,11 @@ rivebot_install: False
 rivebot_enabled: False
 rivebot_port: 8087
 
+# Email Bridge: Email <-> RapidPro External channel (SMTP send + IMAP poll)
+email_bridge_install: False
+email_bridge_enabled: False
+email_bridge_port: 8096
+
 # SiYuan: Note-taking and knowledge authoring server
 siyuan_install: False
 siyuan_enabled: False

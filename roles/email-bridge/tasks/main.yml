@@ -1,0 +1,40 @@
+---
+- name: Assert that "email_bridge_install is sameas true" (boolean not string etc)
+  assert:
+    that: email_bridge_install is sameas true
+    fail_msg: "email_bridge_install must be True (boolean) to run this role"
+    quiet: yes
+
+- name: Assert that "email_bridge_enabled | type_debug == 'bool'" (boolean not string etc)
+  assert:
+    that: email_bridge_enabled | type_debug == 'bool'
+    fail_msg: "email_bridge_enabled must be a boolean"
+    quiet: yes
+
+- block:
+    - name: Install email-bridge if 'email_bridge_installed' not defined, e.g. in {{ iiab_state_file }}
+      include_tasks: install.yml
+      when: email_bridge_installed is undefined
+
+    - name: Add 'email_bridge' variable values to {{ iiab_ini_file }}
+      ini_file:
+        path: "{{ iiab_ini_file }}"
+        section: email-bridge
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      with_items:
+        - option: name
+          value: email-bridge
+        - option: description
+          value: '"Email <-> RapidPro External-channel bridge (SMTP + IMAP)."'
+        - option: port
+          value: "{{ email_bridge_port }}"
+
+    - name: Enable/disable + (re)start the service per email_bridge_enabled
+      include_tasks: enable-or-disable.yml
+
+  rescue:
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error | default(false) }})'
+      fail:
+        msg: "email-bridge role failed — see the error above."
+      when: not (skip_role_on_error | default(false))

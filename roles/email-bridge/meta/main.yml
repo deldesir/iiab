@@ -1,0 +1,9 @@
+---
+galaxy_info:
+  role_name: email-bridge
+  description: "Email <-> RapidPro bridge — SMTP send + IMAP poll, speaking courier's External (EX) channel contract (scheme=mailto). The email analog of wuzapi."
+  author: deldesir
+  license: AGPL-3.0
+  min_ansible_version: "2.10"
+
+dependencies: []

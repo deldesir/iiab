@@ -1,0 +1,19 @@
+[Unit]
+Description=Email Bridge (RapidPro External channel: SMTP send + IMAP poll)
+After=network.target
+
+[Service]
+Type=simple
+User={{ email_bridge_user }}
+WorkingDirectory={{ email_bridge_home }}
+EnvironmentFile={{ email_bridge_home }}/.env
+
+# Kill any orphan holding the port (prevents crash loops)
+ExecStartPre=-/usr/bin/fuser -k {{ email_bridge_port }}/tcp
+
+ExecStart={{ email_bridge_uv_bin }} run uvicorn email_bridge:app --host 127.0.0.1 --port {{ email_bridge_port }} --log-level info
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

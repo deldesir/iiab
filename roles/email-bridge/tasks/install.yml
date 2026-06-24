@@ -1,0 +1,86 @@
+---
+- name: Install email-bridge system dependencies
+  apt:
+    name:
+      - curl
+    state: present
+  become: yes
+
+- name: Ensure uv is installed
+  shell: which uv || curl -LsSf https://astral.sh/uv/install.sh | sh
+  args:
+    creates: "{{ email_bridge_uv_bin }}"
+  become: yes
+
+- name: Create email-bridge home directory
+  file:
+    path: "{{ email_bridge_home }}"
+    state: directory
+    owner: "{{ email_bridge_user }}"
+    group: "{{ email_bridge_user }}"
+    mode: '0755'
+  become: yes
+
+- name: Deploy email-bridge application files
+  copy:
+    src: "{{ item }}"
+    dest: "{{ email_bridge_home }}/{{ item }}"
+    owner: "{{ email_bridge_user }}"
+    group: "{{ email_bridge_user }}"
+    mode: '0644'
+  loop:
+    - email_bridge.py
+    - pyproject.toml
+  become: yes
+  notify: restart email-bridge
+
+- name: Add email-bridge directory to git safe directories (uv quirk)
+  command: git config --global --add safe.directory {{ email_bridge_home }}
+  changed_when: false
+  ignore_errors: yes
+  become: yes
+
+- name: Sync email-bridge Python dependencies (uv sync)
+  command: "{{ email_bridge_uv_bin }} sync"
+  args:
+    chdir: "{{ email_bridge_home }}"
+  become: yes
+  environment:
+    PATH: "/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+- name: Fix ownership after uv sync
+  file:
+    path: "{{ email_bridge_home }}"
+    state: directory
+    owner: "{{ email_bridge_user }}"
+    group: "{{ email_bridge_user }}"
+    recurse: yes
+  become: yes
+
+- name: Deploy email-bridge environment file
+  template:
+    src: email-bridge.env.j2
+    dest: "{{ email_bridge_home }}/.env"
+    owner: "{{ email_bridge_user }}"
+    group: "{{ email_bridge_user }}"
+    mode: '0600'
+  become: yes
+  notify: restart email-bridge
+
+- name: Install email-bridge systemd service
+  template:
+    src: email-bridge.service.j2
+    dest: /etc/systemd/system/email-bridge.service
+    mode: '0644'
+  become: yes
+  notify: restart email-bridge
+
+- name: "Set 'email_bridge_installed: True'"
+  set_fact:
+    email_bridge_installed: True
+
+- name: "Add 'email_bridge_installed: True' to {{ iiab_state_file }}"
+  lineinfile:
+    path: "{{ iiab_state_file }}"
+    regexp: '^email_bridge_installed'
+    line: 'email_bridge_installed: True'
