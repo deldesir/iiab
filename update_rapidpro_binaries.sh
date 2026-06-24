@@ -186,13 +186,14 @@ latest_upstream_semver() {
     | sort -V | tail -1
 }
 
-# Compute the fork's next release tag for a nyaruka-tracking repo.
+# The fork release tag mirrors the upstream semver as-is (no -iiabN suffix).
+# Each upstream version maps to ONE fork release; an IIAB rebuild of the same
+# upstream version reuses the tag — the tag is force-moved to the rebuild
+# commit and the release assets are clobbered in place (see release()).
+# Trade-off (chosen deliberately): releases are mutable, so the tag alone does
+# not identify the exact build — devices always pull the latest patched build.
 nyaruka_tag() {
-  local dir="$1" repo="$2" base="$3" n=1 cand="$3"
-  tag_taken() { git -C "$dir" rev-parse -q --verify "refs/tags/$1" >/dev/null 2>&1 \
-                || { [[ $RELEASE -eq 1 ]] && gh release view "$1" -R "$GH_USER/$repo" >/dev/null 2>&1; }; }
-  while tag_taken "$cand"; do cand="${base}-iiab${n}"; n=$((n+1)); done
-  echo "$cand"
+  echo "$3"
 }
 
 # Bump the fork's own semver (wuzapi).
@@ -303,14 +304,18 @@ process_repo() {
     tag="$(wuzapi_next_tag "$dir")"
   fi
 
-  log "$repo: pushing main and tag $tag"
+  log "$repo: pushing main and (re)tag $tag"
   git -C "$dir" push origin HEAD
-  git -C "$dir" tag -a "$tag" -m "$repo $tag (synced with $target_desc)"
-  git -C "$dir" push origin "$tag"
+  # Reuse the base tag: force-move it to the current build commit so the tag
+  # always points at the commit whose assets are published under it.
+  git -C "$dir" tag -f -a "$tag" -m "$repo $tag (synced with $target_desc)"
+  git -C "$dir" push -f origin "$tag"
 
   local notes="Automated fork sync with ${target_desc}. Fork customizations preserved via merge."
   if gh release view "$tag" -R "$GH_USER/$repo" >/dev/null 2>&1; then
+    # Reused tag: replace assets in place and keep this the latest release.
     [[ -n "$pkg" ]] && gh release upload "$tag" "$DIST/$repo"/* --clobber -R "$GH_USER/$repo"
+    gh release edit "$tag" --latest -R "$GH_USER/$repo" >/dev/null
   else
     if [[ -n "$pkg" ]]; then
       gh release create "$tag" "$DIST/$repo"/* --title "$tag" --notes "$notes" --latest -R "$GH_USER/$repo"
