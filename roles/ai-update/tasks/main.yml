@@ -124,18 +124,8 @@
     # ── 2a. Courier (gzip-preferred download, raw fallback, source build last) ──
     # Prefer the gzipped release asset (much smaller download); fall back to the
     # raw binary if no .gz exists, then to a local source build if both fail.
-    - name: "Install courier binary (prefer gzipped release asset)"
-      shell: |
-        set -e
-        url="{{ ai_update_go_courier_url }}"; dest="{{ ai_update_go_courier_dest }}"
-        if curl -fsSL "${url}.gz" -o /tmp/iiab-courier.gz; then
-          gunzip -c /tmp/iiab-courier.gz > "$dest"; rm -f /tmp/iiab-courier.gz
-        else
-          curl -fsSL "$url" -o "$dest"
-        fi
-        chmod 0755 "$dest"
-      args:
-        executable: /bin/bash
+    - name: "Install courier binary (gz-preferred, checksum-verified)"
+      command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ ai_update_go_courier_url }}" "{{ ai_update_go_courier_dest }}"
       become: yes
       when:
         - "'courier' not in ai_update_skip"
@@ -169,18 +159,8 @@
       changed_when: true
 
     # ── 2b. Mailroom (gzip-preferred download, raw fallback, source build last) ──
-    - name: "Install mailroom binary (prefer gzipped release asset)"
-      shell: |
-        set -e
-        url="{{ ai_update_go_mailroom_url }}"; dest="{{ ai_update_go_mailroom_dest }}"
-        if curl -fsSL "${url}.gz" -o /tmp/iiab-mailroom.gz; then
-          gunzip -c /tmp/iiab-mailroom.gz > "$dest"; rm -f /tmp/iiab-mailroom.gz
-        else
-          curl -fsSL "$url" -o "$dest"
-        fi
-        chmod 0755 "$dest"
-      args:
-        executable: /bin/bash
+    - name: "Install mailroom binary (gz-preferred, checksum-verified)"
+      command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ ai_update_go_mailroom_url }}" "{{ ai_update_go_mailroom_dest }}"
       become: yes
       when:
         - "'mailroom' not in ai_update_skip"
@@ -214,18 +194,8 @@
       changed_when: true
 
     # ── 2c. WuzAPI (gzip-preferred download, raw fallback) ───────
-    - name: "Install WuzAPI binary (prefer gzipped release asset)"
-      shell: |
-        set -e
-        url="{{ ai_update_go_wuzapi_url }}"; dest=/opt/iiab/wuzapi/wuzapi
-        if curl -fsSL "${url}.gz" -o /tmp/iiab-wuzapi.gz; then
-          gunzip -c /tmp/iiab-wuzapi.gz > "$dest"; rm -f /tmp/iiab-wuzapi.gz
-        else
-          curl -fsSL "$url" -o "$dest"
-        fi
-        chmod 0755 "$dest"
-      args:
-        executable: /bin/bash
+    - name: "Install WuzAPI binary (gz-preferred, checksum-verified)"
+      command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ ai_update_go_wuzapi_url }}" /opt/iiab/wuzapi/wuzapi
       become: yes
       when: "'wuzapi' not in ai_update_skip"
       register: wuzapi_binary_result

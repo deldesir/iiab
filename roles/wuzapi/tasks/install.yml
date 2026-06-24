@@ -22,19 +22,9 @@
     group: "{{ iiab_admin_user }}"
   become: yes
 
-# Prefer the gzipped release asset (much smaller download); fall back to raw.
-- name: Install Wuzapi Binary from Release (gzip-preferred, raw fallback)
-  shell: |
-    set -e
-    url="https://github.com/deldesir/wuzapi/releases/latest/download/wuzapi-linux-{{ wuzapi_go_arch }}"
-    if curl -fsSL "${url}.gz" -o /tmp/iiab-wuzapi.gz; then
-      gunzip -c /tmp/iiab-wuzapi.gz > "{{ wuzapi_dir }}/wuzapi"; rm -f /tmp/iiab-wuzapi.gz
-    else
-      curl -fsSL "$url" -o "{{ wuzapi_dir }}/wuzapi"
-    fi
-    chmod 0755 "{{ wuzapi_dir }}/wuzapi"
-  args:
-    executable: /bin/bash
+# Download via the shared helper: prefer gzipped asset, verify SHA256SUMS, raw fallback.
+- name: Install Wuzapi Binary from Release (gz-preferred, checksum-verified)
+  command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "https://github.com/deldesir/wuzapi/releases/latest/download/wuzapi-linux-{{ wuzapi_go_arch }}" "{{ wuzapi_dir }}/wuzapi"
   become: yes
 
 - name: Clone Wuzapi repository (for static assets)

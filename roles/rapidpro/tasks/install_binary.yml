@@ -1,32 +1,12 @@
 ---
 # Universal Binary Installation (VM & Android/Proot)
 
-# Prefer the gzipped release asset (much smaller download); fall back to the raw
-# binary if no .gz exists. Mirrors the ai-update role's install logic.
-- name: Install Mailroom Binary from Release (gzip-preferred, raw fallback)
-  shell: |
-    set -e
-    url="https://github.com/deldesir/mailroom/releases/latest/download/mailroom-linux-{{ rapidpro_go_arch }}"
-    if curl -fsSL "${url}.gz" -o /tmp/iiab-mailroom.gz; then
-      gunzip -c /tmp/iiab-mailroom.gz > /usr/local/bin/mailroom; rm -f /tmp/iiab-mailroom.gz
-    else
-      curl -fsSL "$url" -o /usr/local/bin/mailroom
-    fi
-    chmod 0755 /usr/local/bin/mailroom
-  args:
-    executable: /bin/bash
+# Download via the shared helper: prefer the gzipped asset, verify against
+# SHA256SUMS, fall back to raw. Same code path as the ai-update role.
+- name: Install Mailroom Binary from Release (gz-preferred, checksum-verified)
+  command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "https://github.com/deldesir/mailroom/releases/latest/download/mailroom-linux-{{ rapidpro_go_arch }}" /usr/local/bin/mailroom
   become: yes
 
-- name: Install Courier Binary from Release (gzip-preferred, raw fallback)
-  shell: |
-    set -e
-    url="https://github.com/deldesir/courier/releases/latest/download/courier-linux-{{ rapidpro_go_arch }}"
-    if curl -fsSL "${url}.gz" -o /tmp/iiab-courier.gz; then
-      gunzip -c /tmp/iiab-courier.gz > /usr/local/bin/courier; rm -f /tmp/iiab-courier.gz
-    else
-      curl -fsSL "$url" -o /usr/local/bin/courier
-    fi
-    chmod 0755 /usr/local/bin/courier
-  args:
-    executable: /bin/bash
+- name: Install Courier Binary from Release (gz-preferred, checksum-verified)
+  command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "https://github.com/deldesir/courier/releases/latest/download/courier-linux-{{ rapidpro_go_arch }}" /usr/local/bin/courier
   become: yes

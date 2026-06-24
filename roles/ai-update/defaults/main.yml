@@ -15,13 +15,19 @@ ai_update_gateway_components:
     dest: /opt/iiab/ai-gateway
     version: main
 
+  # deldesir fork is the integration point (carries IIAB customizations + tested
+  # upstream-feature syncs). Do NOT point this at nousresearch/hermes-agent —
+  # that lineage has diverged ~2742 commits and a force-pull would clobber the fork.
   - name: hermes-agent
-    repo: "https://github.com/nousresearch/hermes-agent.git"
+    repo: "https://github.com/deldesir/hermes-agent.git"
     dest: /opt/iiab/hermes-agent
     version: main
 
+  # deldesir fork is the integration point. Upstream MemPalace/mempalace is synced
+  # INTO this fork deliberately (feature-aware — e.g. the embeddinggemma default is
+  # too heavy for 4 GB targets), not force-pulled here.
   - name: mempalace
-    repo: "https://github.com/mempalace/mempalace.git"
+    repo: "https://github.com/deldesir/mempalace.git"
     dest: /opt/iiab/mempalace
     version: develop
 
