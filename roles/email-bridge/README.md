@@ -18,7 +18,7 @@ email → email-bridge → courier (External "EX" channel, scheme=mailto)
   `mailto:` URN. No public ingress needed (outbound IMAP/SMTP only).
 
 It is a normal IIAB role: `./runrole email-bridge` (gated on
-`email_bridge_install` / `email_bridge_enabled`). Service on `:8092`.
+`email_bridge_install` / `email_bridge_enabled`). Service on `:8096`.
 
 ## Go-live runbook
 
@@ -45,7 +45,7 @@ or via `scripts/create_email_channel.py`. Use exactly:
 |---|---|
 | URN scheme | `mailto` (Email Address) |
 | Address / number | `bot@example.com` (the bot's email = `{{from}}`) |
-| Send URL | `http://localhost:8092/send` |
+| Send URL | `http://localhost:8096/send` |
 | Method | `POST` |
 | Content type | URL Encoded |
 | Body | `id={{id}}&text={{text}}&to={{to}}&from={{from}}` |
@@ -70,7 +70,7 @@ addresses to `AUTHORIZED_USERS` (e.g. `...,alice@example.com:Alice`).
 
 **5. Test:** email the bot from an authorized address → you get a reply.
 `#health` now includes the transport services; the bridge's own health is at
-`http://localhost:8092/health`.
+`http://localhost:8096/health`.
 
 ## Notes
 - The ai-gateway already handles `mailto:` URNs (parser is scheme-aware; auth +

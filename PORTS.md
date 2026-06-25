@@ -30,8 +30,8 @@ services); `—` = not explicitly dropped (LAN-served, e.g. via Nginx/HTTP).
 | 8086 | `ai_gateway_port` | DROP |
 | 8087 | `rivebot_port` | DROP |
 | 8089 | `sugarizer_port` | — |
-| 8092 | `email_bridge_port` | DROP |
-| 8095 | `wuzapi_port` | — |
+| 8095 | `wuzapi_port` | DROP |
+| 8096 | `email_bridge_port` | DROP |
 | 9090 | `captiveportal_port` | — |
 | 9091 | `transmission_http_port` | — |
 | 12080 | `azuracast_http_port` | — |
@@ -42,4 +42,4 @@ services); `—` = not explicitly dropped (LAN-served, e.g. via Nginx/HTTP).
 | 51413 | `transmission_peer_port` | — |
 | 61734 | `gitea_port` | — |
 
-_30 role-configured ports; 6 firewalled from WAN._
+_30 role-configured ports; 7 firewalled from WAN._

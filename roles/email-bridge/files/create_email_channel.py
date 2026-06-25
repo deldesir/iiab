@@ -23,7 +23,7 @@ from temba.contacts.models import URN
 from temba.orgs.models import Org
 
 BOT_ADDR = os.environ["EMAIL_BOT_ADDR"]  # the bot's email = channel address = {{from}}
-SEND_URL = os.environ.get("EMAIL_SEND_URL", "http://localhost:8092/send")
+SEND_URL = os.environ.get("EMAIL_SEND_URL", "http://localhost:8096/send")
 SEND_AUTH = os.environ.get("EMAIL_SEND_AUTH", "")
 MAX_LENGTH = int(os.environ.get("EMAIL_MAX_LENGTH", "8000"))
 

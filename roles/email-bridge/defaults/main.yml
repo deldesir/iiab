@@ -8,7 +8,7 @@ email_bridge_user: "{{ iiab_admin_user }}"
 email_bridge_uv_bin: /root/.local/bin/uv
 
 # Service
-email_bridge_port: 8092
+email_bridge_port: 8096
 
 # ── SMTP (outgoing) — set the real values in /etc/iiab/local_vars.yml ────────
 email_bridge_smtp_host: ""
