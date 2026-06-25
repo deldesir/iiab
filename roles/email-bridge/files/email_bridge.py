@@ -58,6 +58,11 @@ IMAP_USER = os.getenv("EMAIL_IMAP_USER", "") or SMTP_USER
 IMAP_PASS = os.getenv("EMAIL_IMAP_PASS", "") or SMTP_PASS
 IMAP_FOLDER = os.getenv("EMAIL_IMAP_FOLDER", "INBOX")
 POLL_INTERVAL = int(os.getenv("EMAIL_POLL_INTERVAL", "20"))
+# Where the last-processed IMAP UID is persisted (resume across restarts; on the
+# very first run we baseline at the mailbox's UIDNEXT so an existing backlog is
+# NEVER ingested). Cap how many new messages we handle per cycle as a flood guard.
+UID_STATE = os.getenv("EMAIL_UID_STATE", os.path.join(os.path.dirname(os.path.abspath(__file__)), ".last_uid"))
+MAX_PER_CYCLE = int(os.getenv("EMAIL_MAX_PER_CYCLE", "25"))
 
 # Full courier receive URL, e.g. http://localhost:8080/c/ex/<channel-uuid>/receive
 COURIER_RECEIVE_URL = os.getenv("EMAIL_COURIER_RECEIVE_URL", "")
@@ -161,47 +166,89 @@ async def _post_to_courier(from_addr: str, text: str) -> None:
             log.info("delivered inbound from %s to courier (%d chars)", from_addr, len(text))
 
 
-def _fetch_unseen() -> list[tuple[str, str]]:
-    """Return [(from_addr, text)] for unseen messages, marking them seen."""
-    results: list[tuple[str, str]] = []
-    ctx = ssl.create_default_context()
-    box = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, ssl_context=ctx)
+def _imap_connect() -> imaplib.IMAP4_SSL:
+    box = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, ssl_context=ssl.create_default_context())
+    box.login(IMAP_USER, IMAP_PASS)
+    return box
+
+
+def _save_uid(uid: int) -> None:
     try:
-        box.login(IMAP_USER, IMAP_PASS)
-        box.select(IMAP_FOLDER)
-        typ, data = box.search(None, "UNSEEN")
-        if typ != "OK":
-            return results
-        for num in data[0].split():
-            typ, msg_data = box.fetch(num, "(RFC822)")
-            if typ != "OK" or not msg_data or not msg_data[0]:
-                continue
-            msg = email.message_from_bytes(msg_data[0][1])
-            from_addr = parseaddr(str(make_header(decode_header(msg.get("From", "")))))[1]
-            if not from_addr:
-                box.store(num, "+FLAGS", "\\Seen")
-                continue
-            text = _strip_quoted(_plain_text(msg))[:MAX_BODY]
-            if text:
-                results.append((from_addr, text))
-            box.store(num, "+FLAGS", "\\Seen")  # don't reprocess
+        with open(UID_STATE, "w") as f:
+            f.write(str(uid))
+    except OSError as e:
+        log.warning("could not persist last UID to %s: %s", UID_STATE, e)
+
+
+def _initial_baseline() -> int:
+    """Last-processed UID to resume from. Resume from the persisted value if any;
+    otherwise (first run) baseline at the folder's current UIDNEXT-1 so the
+    existing backlog is skipped entirely — only mail arriving AFTER now is ever
+    ingested. This is what keeps a real/personal mailbox from being flooded."""
+    try:
+        return int(open(UID_STATE).read().strip())
+    except (OSError, ValueError):
+        pass
+    box = _imap_connect()
+    try:
+        typ, data = box.status(IMAP_FOLDER, "(UIDNEXT)")
+        m = re.search(rb"UIDNEXT (\d+)", data[0]) if typ == "OK" and data and data[0] else None
+        baseline = (int(m.group(1)) - 1) if m else 0
     finally:
         try:
             box.logout()
         except Exception:
             pass
-    return results
+    _save_uid(baseline)
+    log.info("first run: baselining at UID %d — existing backlog will NOT be ingested", baseline)
+    return baseline
+
+
+def _fetch_new(last_uid: int) -> tuple[list[tuple[str, str]], int]:
+    """Return ([(from_addr, text)], new_last_uid) for unseen messages with
+    UID > last_uid, marking them seen. Capped at MAX_PER_CYCLE per cycle."""
+    results: list[tuple[str, str]] = []
+    box = _imap_connect()
+    try:
+        box.select(IMAP_FOLDER)
+        typ, data = box.uid("SEARCH", "UID", f"{last_uid + 1}:*", "UNSEEN")
+        if typ != "OK" or not data or not data[0]:
+            return results, last_uid
+        # IMAP "n:*" always returns the highest UID even when it's < n — so filter.
+        uids = sorted(int(u) for u in data[0].split() if int(u) > last_uid)[:MAX_PER_CYCLE]
+        for uid in uids:
+            typ, msg_data = box.uid("FETCH", str(uid), "(RFC822)")
+            if typ == "OK" and msg_data and msg_data[0]:
+                msg = email.message_from_bytes(msg_data[0][1])
+                from_addr = parseaddr(str(make_header(decode_header(msg.get("From", "")))))[1]
+                if from_addr:
+                    text = _strip_quoted(_plain_text(msg))[:MAX_BODY]
+                    if text:
+                        results.append((from_addr, text))
+            box.uid("STORE", str(uid), "+FLAGS", "\\Seen")  # don't reprocess
+            last_uid = max(last_uid, uid)
+    finally:
+        try:
+            box.logout()
+        except Exception:
+            pass
+    return results, last_uid
 
 
 async def _poll_loop() -> None:
     if not (IMAP_HOST and COURIER_RECEIVE_URL):
         log.warning("IMAP polling disabled (EMAIL_IMAP_HOST / EMAIL_COURIER_RECEIVE_URL unset)")
         return
-    log.info("IMAP poll loop started (%s every %ds → %s)", IMAP_FOLDER, POLL_INTERVAL, COURIER_RECEIVE_URL)
+    last_uid = await asyncio.to_thread(_initial_baseline)
+    log.info("IMAP poll loop started (%s every %ds, UID>%d → %s)", IMAP_FOLDER, POLL_INTERVAL, last_uid, COURIER_RECEIVE_URL)
     while True:
         try:
-            for from_addr, text in await asyncio.to_thread(_fetch_unseen):
+            msgs, new_uid = await asyncio.to_thread(_fetch_new, last_uid)
+            for from_addr, text in msgs:
                 await _post_to_courier(from_addr, text)
+            if new_uid != last_uid:
+                last_uid = new_uid
+                await asyncio.to_thread(_save_uid, last_uid)
         except Exception as e:
             log.error("poll cycle error: %s", e)
         await asyncio.sleep(POLL_INTERVAL)
