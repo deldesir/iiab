@@ -12,6 +12,9 @@ Environment='COURIER_VALKEY=valkey://localhost:6379/0'
 Environment='COURIER_SPOOL_DIR={{ rapidpro_dir }}/spool/courier'
 Environment='COURIER_DOMAIN={{ rapidpro_domain }}'
 Environment='COURIER_MEDIA_BASE_URL=/rp/media'
+# Bind the public webhook server to loopback (clients are local: wuzapi +
+# email-bridge POST to 127.0.0.1). Internal server stays on localhost:8081.
+Environment='COURIER_PUBLIC_ADDRESS={{ rapidpro_public_bind_address }}'
 
 {% if rapidpro_aws_enabled %}
 # AWS Configuration (S3 + DynamoDB)

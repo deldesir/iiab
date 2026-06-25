@@ -12,6 +12,9 @@ Environment='MAILROOM_VALKEY=valkey://localhost:6379/0'
 Environment='MAILROOM_SESSION_STORAGE=db'
 Environment='MAILROOM_SPOOL_DIR={{ rapidpro_dir }}/spool/mailroom'
 Environment='MAILROOM_ELASTIC='
+# Bind the public web server to loopback. RapidPro uses the separate INTERNAL
+# server (MAILROOM_URL=127.0.0.1:8091); no external caller needs :8090 here.
+Environment='MAILROOM_PUBLIC_ADDRESS={{ rapidpro_public_bind_address }}'
 
 {% if rapidpro_aws_enabled %}
 # AWS Configuration (S3 + DynamoDB)

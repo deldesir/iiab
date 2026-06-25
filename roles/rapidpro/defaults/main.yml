@@ -18,6 +18,18 @@ rapidpro_hostname: "{{ iiab_hostname }}"
 rapidpro_http_protocol: "http"
 
 rapidpro_url: /rp
+
+# Bind the courier/mailroom PUBLIC web servers (channel-webhook receivers:
+# courier :8080, mailroom :8090) to loopback only. Every client is local —
+# wuzapi and the email-bridge POST to 127.0.0.1, and RapidPro talks to mailroom's
+# separate INTERNAL server on 127.0.0.1:8091 — so loopback keeps these services
+# off the LAN/WAN. Defense-in-depth: the IIAB firewall already drops the WAN at
+# ports_externally_visible<3, and this additionally protects hotspot LANs
+# (lan != none), where the all-interfaces default would otherwise be reachable.
+# Set to "" (all interfaces) ONLY if you add an EXTERNAL webhook channel that
+# must reach courier on the box's IP.
+rapidpro_public_bind_address: "127.0.0.1"
+
 rapidpro_drop_db_on_reinstall: false
 rapidpro_force_drop_db: false
 
