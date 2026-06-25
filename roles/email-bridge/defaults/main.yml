@@ -6,23 +6,40 @@ email_bridge_enabled: False
 email_bridge_home: /opt/iiab/email-bridge
 email_bridge_user: "{{ iiab_admin_user }}"
 email_bridge_uv_bin: /root/.local/bin/uv
+email_bridge_rapidpro_dir: /opt/iiab/rapidpro    # used to auto-create the channel
 
 # Service
 email_bridge_port: 8096
 
-# ── SMTP (outgoing) — set the real values in /etc/iiab/local_vars.yml ────────
-email_bridge_smtp_host: ""
-email_bridge_smtp_port: 587
+# ─────────────────────────────────────────────────────────────────────────────
+# MINIMAL CONFIG — in /etc/iiab/local_vars.yml a user normally sets ONLY these 4:
+#
+#   email_bridge_install: True
+#   email_bridge_enabled: True
+#   email_bridge_smtp_user: bot@example.com      # the mailbox = the bot's address
+#   email_bridge_smtp_pass: "<app-password>"
+#
+# Everything below is DERIVED from those: SMTP/IMAP hosts from the address
+# domain, TLS from the port, the /send secret auto-generated, the RapidPro
+# channel auto-created. Override a line in local_vars only if your provider
+# is unusual.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── SMTP (outgoing) ──────────────────────────────────────────────────────────
 email_bridge_smtp_user: ""
 email_bridge_smtp_pass: ""
-email_bridge_smtp_starttls: True      # STARTTLS (port 587); set False + ssl True for 465
-email_bridge_smtp_ssl: False          # implicit TLS (port 465)
-email_bridge_from: "{{ email_bridge_smtp_user }}"   # the channel address (bot's email)
+email_bridge_smtp_port: 587            # 587 = STARTTLS, 465 = implicit TLS
+# Host + TLS are derived — no need to set them for common providers:
+email_bridge_mail_domain: "{{ email_bridge_smtp_user.split('@')[1] if '@' in email_bridge_smtp_user else '' }}"
+email_bridge_smtp_host: "{{ email_bridge_known_providers.get(email_bridge_mail_domain, {}).get('smtp', 'smtp.' ~ email_bridge_mail_domain) if email_bridge_mail_domain else '' }}"
+email_bridge_smtp_ssl: "{{ (email_bridge_smtp_port | int) == 465 }}"          # implicit TLS on 465
+email_bridge_smtp_starttls: "{{ (email_bridge_smtp_port | int) != 465 }}"     # STARTTLS otherwise
+email_bridge_from: "{{ email_bridge_smtp_user }}"      # the channel address (bot's email)
 email_bridge_from_name: "Assistant"
 email_bridge_subject: "Re: your message"
 
 # ── IMAP (incoming, polled) ─────────────────────────────────────────────────
-email_bridge_imap_host: ""
+email_bridge_imap_host: "{{ email_bridge_known_providers.get(email_bridge_mail_domain, {}).get('imap', 'imap.' ~ email_bridge_mail_domain) if email_bridge_mail_domain else '' }}"
 email_bridge_imap_port: 993
 email_bridge_imap_user: "{{ email_bridge_smtp_user }}"
 email_bridge_imap_pass: "{{ email_bridge_smtp_pass }}"
@@ -30,11 +47,31 @@ email_bridge_imap_folder: "INBOX"
 email_bridge_poll_interval: 20
 email_bridge_max_body: 8000
 
+# Known-provider host map (domain -> smtp/imap). Domains not listed here fall
+# back to smtp.<domain> / imap.<domain>, which is correct for most hosted mail
+# and cPanel/Plesk setups. Add an entry to extend.
+email_bridge_known_providers:
+  gmail.com:      { smtp: smtp.gmail.com,        imap: imap.gmail.com }
+  googlemail.com: { smtp: smtp.gmail.com,        imap: imap.gmail.com }
+  outlook.com:    { smtp: smtp-mail.outlook.com, imap: outlook.office365.com }
+  hotmail.com:    { smtp: smtp-mail.outlook.com, imap: outlook.office365.com }
+  live.com:       { smtp: smtp-mail.outlook.com, imap: outlook.office365.com }
+  office365.com:  { smtp: smtp.office365.com,     imap: outlook.office365.com }
+  yahoo.com:      { smtp: smtp.mail.yahoo.com,    imap: imap.mail.yahoo.com }
+  fastmail.com:   { smtp: smtp.fastmail.com,      imap: imap.fastmail.com }
+  icloud.com:     { smtp: smtp.mail.me.com,       imap: imap.mail.me.com }
+  zoho.com:       { smtp: smtp.zoho.com,          imap: imap.zoho.com }
+  gmx.com:        { smtp: mail.gmx.com,           imap: imap.gmx.com }
+  yandex.com:     { smtp: smtp.yandex.com,        imap: imap.yandex.com }
+
 # ── courier (RapidPro External channel) wiring ──────────────────────────────
-# The External channel's UUID (created via scripts/create_email_channel.py).
-# Until set, the bridge runs but inbound polling is disabled (no receive URL).
+# Auto-created by the role (idempotent get-or-create) when this is empty. Set a
+# value only to pin a specific existing channel.
 email_bridge_channel_uuid: ""
 email_bridge_courier_base: "http://localhost:8080"
-# Shared secret: set as the channel's send_authorization so only courier can POST /send.
-email_bridge_send_auth: "{{ email_bridge_send_auth_token | default('') }}"
+# Shared secret guarding the bridge's /send (courier presents it as the
+# Authorization header). Auto-generated once and stored 0600 at
+# /etc/iiab/email_bridge_send_auth.token; override to pin your own.
+email_bridge_send_auth_token: "{{ lookup('password', iiab_etc_path ~ '/email_bridge_send_auth.token chars=ascii_letters,digits length=40') }}"
+email_bridge_send_auth: "{{ email_bridge_send_auth_token }}"
 email_bridge_sent_token: "SENT"        # must equal the channel's mt_response_check

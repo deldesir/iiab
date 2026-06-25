@@ -1,24 +1,21 @@
-"""Create the RapidPro External (EX) channel for the email-bridge.
+"""Get-or-create the RapidPro External (EX) channel for the email-bridge.
 
-Mirrors temba's External ClaimView (Channel.add_config_external_channel). Run it
-in the RapidPro Django context, e.g.:
+Idempotent: if an active EX channel already exists on this address it is reused;
+otherwise it is created, mirroring temba's External ClaimView
+(Channel.add_config_external_channel). The role runs this for you, but you can
+also run it by hand in the RapidPro Django context:
 
     cd /opt/iiab/rapidpro && \
       EMAIL_BOT_ADDR=bot@example.com EMAIL_SEND_AUTH='<your-secret>' \
       ./.venv/bin/python manage.py shell \
-        -c "exec(open('/opt/iiab/iiab/roles/email-bridge/files/create_email_channel.py').read())"
+        -c "exec(open('/opt/iiab/email-bridge/create_email_channel.py').read())"
 
-It prints the new channel UUID — set it as `email_bridge_channel_uuid:` in
-/etc/iiab/local_vars.yml (and the same secret as `email_bridge_send_auth_token`),
-then run `./runrole email-bridge`.
-
-(The RapidPro web UI — Add Channel → External API — does the exact same thing;
-use whichever you prefer. Review this before running.)
+It prints a stable `UUID=<channel-uuid>` line (parsed by the role) plus a human
+summary. The RapidPro web UI — Add Channel → External API — does the same thing.
 """
 import os
 
 from temba.channels.models import Channel
-from temba.channels.types.external.type import ExternalType
 from temba.contacts.models import URN
 from temba.orgs.models import Org
 
@@ -32,28 +29,40 @@ if org is None:
     raise SystemExit("No active org found")
 user = org.created_by
 
-config = {
-    Channel.CONFIG_SEND_URL: SEND_URL,
-    ExternalType.CONFIG_SEND_METHOD: "POST",
-    ExternalType.CONFIG_CONTENT_TYPE: Channel.CONTENT_TYPE_URLENCODED,
-    ExternalType.CONFIG_MAX_LENGTH: MAX_LENGTH,
-    Channel.CONFIG_ENCODING: Channel.ENCODING_DEFAULT,
-    ExternalType.CONFIG_SEND_BODY: "id={{id}}&text={{text}}&to={{to}}&from={{from}}",
-    ExternalType.CONFIG_MT_RESPONSE_CHECK: "SENT",
-}
-if SEND_AUTH:
-    config[ExternalType.CONFIG_SEND_AUTHORIZATION] = SEND_AUTH
-
-role = Channel.ROLE_SEND + Channel.ROLE_RECEIVE
-channel = Channel.add_config_external_channel(
-    org, user, None, BOT_ADDR, "EX", config, role, [URN.EMAIL_SCHEME]
+# Idempotent: reuse an existing active EX channel on this address if present.
+channel = (
+    Channel.objects.filter(
+        org=org, is_active=True, channel_type="EX", address=BOT_ADDR
+    )
+    .order_by("id")
+    .first()
 )
 
-print("EMAIL CHANNEL CREATED")
-print("  uuid:        ", channel.uuid)
+if channel is not None:
+    status = "EXISTS"
+else:
+    from temba.channels.types.external.type import ExternalType
+
+    config = {
+        Channel.CONFIG_SEND_URL: SEND_URL,
+        ExternalType.CONFIG_SEND_METHOD: "POST",
+        ExternalType.CONFIG_CONTENT_TYPE: Channel.CONTENT_TYPE_URLENCODED,
+        ExternalType.CONFIG_MAX_LENGTH: MAX_LENGTH,
+        Channel.CONFIG_ENCODING: Channel.ENCODING_DEFAULT,
+        ExternalType.CONFIG_SEND_BODY: "id={{id}}&text={{text}}&to={{to}}&from={{from}}",
+        ExternalType.CONFIG_MT_RESPONSE_CHECK: "SENT",
+    }
+    if SEND_AUTH:
+        config[ExternalType.CONFIG_SEND_AUTHORIZATION] = SEND_AUTH
+
+    role = Channel.ROLE_SEND + Channel.ROLE_RECEIVE
+    channel = Channel.add_config_external_channel(
+        org, user, None, BOT_ADDR, "EX", config, role, [URN.EMAIL_SCHEME]
+    )
+    status = "CREATED"
+
+# Machine-readable line first (the role greps for 'UUID='); keep it stable.
+print("UUID=%s" % channel.uuid)
+print("EMAIL CHANNEL %s" % status)
 print("  address:     ", BOT_ADDR, "(scheme=mailto)")
 print("  receive URL:  http://localhost:8080/c/ex/%s/receive" % channel.uuid)
-print()
-print("  -> set in /etc/iiab/local_vars.yml:")
-print("       email_bridge_channel_uuid: %s" % channel.uuid)
-print("     then: ./runrole email-bridge")

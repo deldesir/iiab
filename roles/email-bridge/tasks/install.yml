@@ -35,6 +35,7 @@
   loop:
     - email_bridge.py
     - pyproject.toml
+    - create_email_channel.py
   become: yes
   notify: restart email-bridge
 
@@ -61,6 +62,47 @@
     recurse: yes
   become: yes
 
+# ── Auto-provision the RapidPro External (mailto) channel ────────────────────
+# Best-effort: when no channel UUID is pinned and RapidPro + a bot address are
+# present, get-or-create the channel and capture its UUID for the .env. Soft —
+# if RapidPro isn't ready the bridge still installs and you can create it later
+# (manually or on the next run); inbound polling stays off until the UUID is set.
+- name: Check whether RapidPro is available for channel auto-provisioning
+  stat:
+    path: "{{ email_bridge_rapidpro_dir }}/.venv/bin/python"
+  register: email_bridge_rp_python
+  when: email_bridge_channel_uuid | length == 0
+
+- name: Get-or-create the RapidPro External (mailto) channel
+  command:
+    cmd: >-
+      {{ email_bridge_rapidpro_dir }}/.venv/bin/python manage.py shell
+      -c "exec(open('{{ email_bridge_home }}/create_email_channel.py').read())"
+    chdir: "{{ email_bridge_rapidpro_dir }}"
+  environment:
+    EMAIL_BOT_ADDR: "{{ email_bridge_from }}"
+    EMAIL_SEND_URL: "http://localhost:{{ email_bridge_port }}/send"
+    EMAIL_SEND_AUTH: "{{ email_bridge_send_auth }}"
+    EMAIL_MAX_LENGTH: "{{ email_bridge_max_body | string }}"
+  become: yes
+  become_user: "{{ email_bridge_user }}"
+  register: email_bridge_channel_out
+  changed_when: "'CHANNEL CREATED' in (email_bridge_channel_out.stdout | default(''))"
+  failed_when: false
+  when:
+    - email_bridge_channel_uuid | length == 0
+    - email_bridge_from | length > 0
+    - email_bridge_rp_python.stat.exists | default(false)
+
+- name: Capture the channel UUID for the .env
+  set_fact:
+    email_bridge_channel_uuid: "{{ email_bridge_channel_out.stdout | regex_findall('UUID=([0-9a-f-]+)') | first }}"
+  when:
+    - email_bridge_channel_uuid | length == 0
+    - email_bridge_channel_out is defined
+    - email_bridge_channel_out.stdout is defined
+    - "'UUID=' in email_bridge_channel_out.stdout"
+
 - name: Deploy email-bridge environment file
   template:
     src: email-bridge.env.j2
@@ -70,6 +112,13 @@
     mode: '0600'
   become: yes
   notify: restart email-bridge
+
+- name: Secure the auto-generated send-auth token file (0600)
+  file:
+    path: "{{ iiab_etc_path }}/email_bridge_send_auth.token"
+    mode: '0600'
+  become: yes
+  ignore_errors: yes
 
 - name: Install email-bridge systemd service
   template:

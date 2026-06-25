@@ -20,57 +20,53 @@ email → email-bridge → courier (External "EX" channel, scheme=mailto)
 It is a normal IIAB role: `./runrole email-bridge` (gated on
 `email_bridge_install` / `email_bridge_enabled`). Service on `:8096`.
 
-## Go-live runbook
+## Go-live (4 lines)
 
-**1. Put the mailbox creds in `/etc/iiab/local_vars.yml`** (never in chat):
+**1. In `/etc/iiab/local_vars.yml`** (never in chat) — usually just the mailbox:
 
 ```yaml
 email_bridge_install: True
 email_bridge_enabled: True
-email_bridge_smtp_host: smtp.example.com
-email_bridge_smtp_port: 587          # 587 STARTTLS, or 465 + ssl
-email_bridge_smtp_user: bot@example.com
+email_bridge_smtp_user: bot@example.com    # the mailbox = the bot's address
 email_bridge_smtp_pass: "<app-password>"
-email_bridge_from: bot@example.com   # the channel address
-email_bridge_imap_host: imap.example.com
-email_bridge_imap_port: 993
-# IMAP user/pass default to the SMTP ones if your mailbox shares them
-email_bridge_send_auth_token: "<a-long-random-secret>"   # = channel send_authorization
 ```
 
-**2. Create the RapidPro External (EX) channel** — Add Channel → *External API*,
-or via `scripts/create_email_channel.py`. Use exactly:
+**2. `./runrole email-bridge`** — and that's it. The role:
+- derives the **SMTP/IMAP hosts** from the address domain (provider map for
+  Gmail/Outlook/Yahoo/Fastmail/iCloud/Zoho/…, else `smtp./imap.<domain>`),
+- derives **TLS** from the port (465 → implicit SSL, else STARTTLS),
+- reuses the SMTP user/pass for **IMAP** and for the **From** address,
+- **auto-generates** the `/send` secret (stored `0600` at
+  `/etc/iiab/email_bridge_send_auth.token`),
+- **auto-creates** the RapidPro External (`mailto`) channel (idempotent
+  get-or-create) and wires its UUID into the bridge.
 
-| Field | Value |
-|---|---|
-| URN scheme | `mailto` (Email Address) |
-| Address / number | `bot@example.com` (the bot's email = `{{from}}`) |
-| Send URL | `http://localhost:8096/send` |
-| Method | `POST` |
-| Content type | URL Encoded |
-| Body | `id={{id}}&text={{text}}&to={{to}}&from={{from}}` |
-| Max length | `8000` |
-| MT response check | `SENT` |
-| Send authorization (header) | the same `email_bridge_send_auth_token` |
-
-Copy the new channel's **UUID**.
-
-**3. Finish wiring + run the role:**
-
-```yaml
-email_bridge_channel_uuid: "<the-channel-uuid>"
-```
-```bash
-./runrole email-bridge
-```
-
-**4. Point the channel at the AI** the same way the WhatsApp channel is wired
+**3. Point the channel at the AI** the same way the WhatsApp channel is wired
 (the flow / call-LLM action that hits `ai-gateway`). Add allowed senders'
 addresses to `AUTHORIZED_USERS` (e.g. `...,alice@example.com:Alice`).
 
-**5. Test:** email the bot from an authorized address → you get a reply.
-`#health` now includes the transport services; the bridge's own health is at
+**4. Test:** email the bot from an authorized address → you get a reply.
+`#health` includes the transport services; the bridge's own health is at
 `http://localhost:8096/health`.
+
+### Overrides (only if your provider is unusual)
+| Variable | Default | Set it when… |
+|---|---|---|
+| `email_bridge_smtp_host` / `_imap_host` | from the address domain | host ≠ `smtp./imap.<domain>` and not in the provider map |
+| `email_bridge_smtp_port` | `587` | provider needs `465` (TLS auto-flips to SSL) |
+| `email_bridge_from` | = `smtp_user` | send-as differs from the login |
+| `email_bridge_imap_user` / `_pass` | = SMTP creds | IMAP login differs |
+| `email_bridge_channel_uuid` | auto-created | pinning an existing channel |
+| `email_bridge_send_auth_token` | auto-generated | pinning your own secret |
+
+Add a provider to `email_bridge_known_providers` to extend the host map.
+
+If RapidPro isn't ready when the role runs, channel creation is skipped softly
+(the bridge still installs; inbound polling stays off until the UUID exists) —
+re-run the role later, or create it manually via the deployed
+`/opt/iiab/email-bridge/create_email_channel.py` (or UI → Add Channel →
+*External API*: scheme `mailto`, send URL `http://localhost:8096/send`, body
+`id={{id}}&text={{text}}&to={{to}}&from={{from}}`, MT response check `SENT`).
 
 ## Notes
 - The ai-gateway already handles `mailto:` URNs (parser is scheme-aware; auth +
