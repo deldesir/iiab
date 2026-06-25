@@ -140,6 +140,10 @@ $IPTABLES -A INPUT -p tcp --dport 8086 -j DROP
 $IPTABLES -A INPUT -p tcp --dport 4000 -j DROP
 # RiveBot (already on 127.0.0.1 but drop as safety net)
 $IPTABLES -A INPUT -p tcp --dport 8087 -j DROP
+# Email Bridge (already on 127.0.0.1 but drop as safety net)
+$IPTABLES -A INPUT -p tcp --dport 8096 -j DROP
+# WuzAPI (already on 127.0.0.1 but drop as safety net)
+$IPTABLES -A INPUT -p tcp --dport 8095 -j DROP
 # SiYuan note-taking kernel (proxied at /siyuan/)
 $IPTABLES -A INPUT -p tcp --dport 6806 -j DROP
 # Calibre-Web (proxied via Nginx)
