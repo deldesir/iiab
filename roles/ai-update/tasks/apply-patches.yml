@@ -58,33 +58,11 @@
 # ═══════════════════════════════════════════════════════════════════
 # MemPalace patches
 # ═══════════════════════════════════════════════════════════════════
-
-# Patch 3: 500-drawer per-wing storage cap
-# Reason: Prevent unbounded cognitive storage growth.
-# ANCHORED to tool_add_drawer: the same `col = _get_collection(create=True)` /
-# `_collection_error_or_no_palace()` block also appears in tool_diary_write, but
-# `wing` is the add-drawer parameter — injecting the wing-count cap there would
-# be wrong. We anchor on the line that immediately FOLLOWS the block only in
-# tool_add_drawer (`drawer_id = make_drawer_id_from_content(...)`), captured via
-# backrefs (\1, \2). Inserting the cap BETWEEN them also makes the patch
-# IDEMPOTENT — the regex no longer matches once the cap is present (verified:
-# 1 substitution on the upstream tree, 0 on re-run).
-# NOTE: upstream renamed _no_palace() -> _collection_error_or_no_palace() (v3.x);
-# this regex tracks the current name. Single-quoted YAML keeps \n / \1 literal
-# so the replace module's re.sub interprets them (newline / backreference).
-- name: "mempalace: 500-drawer per-wing cap (tool_add_drawer, idempotent)"
-  replace:
-    path: /opt/iiab/mempalace/mempalace/mcp_server.py
-    regexp: '(    col = _get_collection\(create=True\)\n    if not col:\n        return _collection_error_or_no_palace\(\)\n)\n(    drawer_id = make_drawer_id_from_content)'
-    replace: '\1\n    # IIAB: 500-drawer per-wing storage cap\n    try:\n        _wing_count = col.count(where={"wing": wing})\n        if _wing_count >= 500:\n            return {"success": False, "error": f"Wing ''{wing}'' has reached the 500-drawer limit"}\n    except Exception:\n        pass  # If count fails, allow the add to proceed\n\n\2'
-  become: yes
-  register: patch_drawer
-  ignore_errors: yes
-
-- name: "⚠️  500-drawer cap patch did not apply"
-  debug:
-    msg: "MemPalace 500-drawer cap patch FAILED — check mcp_server.py"
-  when: patch_drawer is failed
+# (Removed 2026-06-26) The 500-drawer per-wing cap was dropped: it was a
+# reject-on-full / no-eviction guard that, in practice, ran fail-open
+# (col.count(where=...) raised, so the add proceeded anyway). If a real
+# per-wing bound is wanted, implement it config-driven with compression/
+# pruning rather than a hard reject — see the ecosystem notes.
 
 # ═══════════════════════════════════════════════════════════════════
 # RapidPro patches
