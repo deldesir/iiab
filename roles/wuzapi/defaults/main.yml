@@ -4,6 +4,13 @@ wuzapi_enabled: True
 wuzapi_port: 8095
 wuzapi_dir: /opt/iiab/wuzapi
 wuzapi_admintoken: ""
+# Internal wuzapi secrets — auto-generated once and persisted (override in
+# local_vars to pin explicit values). The encryption key MUST be exactly 32
+# bytes (AES-256); the HMAC key must be >= 32 chars. Without these pinned,
+# wuzapi regenerates them on every restart and LOSES all encrypted WhatsApp
+# session data (forcing a re-pair).
+wuzapi_global_encryption_key: "{{ lookup('password', iiab_etc_path ~ '/wuzapi_global_encryption_key chars=ascii_letters,digits length=32') }}"
+wuzapi_global_hmac_key: "{{ lookup('password', iiab_etc_path ~ '/wuzapi_global_hmac_key chars=ascii_letters,digits length=48') }}"
 wuzapi_log_level: "INFO"
 wuzapi_debug: "false"
 

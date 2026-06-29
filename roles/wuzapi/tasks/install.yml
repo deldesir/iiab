@@ -59,6 +59,19 @@
     dest: /etc/systemd/system/wuzapi.service
   become: yes
 
+# /etc/iiab is world-traversable (0755), so the lookup('password')-generated
+# global key files must be locked down to root-only.
+- name: Secure the auto-generated wuzapi global key files (0600)
+  file:
+    path: "{{ item }}"
+    mode: '0600'
+    owner: root
+    group: root
+  loop:
+    - "{{ iiab_etc_path }}/wuzapi_global_encryption_key"
+    - "{{ iiab_etc_path }}/wuzapi_global_hmac_key"
+  become: yes
+
 - name: Symlink Wuzapi binary to path (Android)
   file:
     src: "{{ wuzapi_dir }}/wuzapi"
