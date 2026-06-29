@@ -14,6 +14,16 @@ location /organized-sources/ {
     add_header Cache-Control "no-cache";
 }
 
+# The PWA manifest must carry the correct MIME type for install prompts to
+# work. `.webmanifest` is absent from nginx's default mime.types, so without
+# this exact-match override it would be served as text/html. Exact (=) match
+# wins over the /organized/ prefix below.
+location = /organized/manifest.webmanifest {
+    alias {{ organized_app_dir }}/dist/manifest.webmanifest;
+    default_type application/manifest+json;
+    add_header Cache-Control "no-cache";
+}
+
 location /organized/ {
     alias {{ organized_app_dir }}/dist/;
     index index.html;
