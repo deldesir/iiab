@@ -79,24 +79,35 @@
     enabled: no
   when: not is_proot
 
-# Above parent service postgresql.service uses template postgresql@.service to
-# start/stop` child service e.g. postgresql@11-main.service on Debian 10, or
-# postgresql@13-main.service on Debian 11. So these 2 stanzas dont do anything:
+# The postgresql-{{ postgresql_version }} apt package auto-creates a stock "main"
+# cluster (on the root partition), and Debian's start.conf=auto makes it
+# auto-start on boot — racing postgresql-iiab (on /library/pgsql-iiab) for port
+# 5432. Whichever binds 5432 first wins; if the stock cluster wins, RapidPro
+# lands on the EMPTY cluster and the whole pipeline breaks (seen 2026-06-29).
+# IMPORTANT: 'systemctl disable postgresql@{{ postgresql_version }}-main' does
+# NOT prevent this — auto-start is governed by the cluster's start.conf, not the
+# unit's enable state (the old disable task here was a confirmed no-op). The real
+# fix: (1) default future/upgrade-created clusters to manual start, and (2) drop
+# the stock 'main' cluster outright — postgresql-iiab is the only cluster IIAB uses.
 
-# 'systemctl is-enabled postgresql@' shows 'indirect' before + after
-#- name: Disable stock 'postgresql@' (template) if real Debian
-#  systemd:
-#    name: postgresql@
-#    #state: stopped    # Error if you attempt to stop template
-#    enabled: no        # Doesn't do anything
-#  when: is_debian and not is_raspbian
+- name: "PostgreSQL: default apt-created clusters to manual start (prevents the port-5432 boot race with postgresql-iiab)"
+  lineinfile:
+    path: /etc/postgresql-common/createcluster.conf
+    regexp: '^#?\s*start_conf\s*='
+    line: "start_conf = 'manual'"
+  when: is_debian and not is_proot
 
-- name: Disable & Stop stock 'postgresql@{{ postgresql_version }}-main.service' (child service)
-  systemd:
-    name: "postgresql@{{ postgresql_version }}-main.service"
-    state: stopped
-    enabled: no
-  ignore_errors: yes
+- name: "PostgreSQL: detect the stock '{{ postgresql_version }}/main' cluster"
+  stat:
+    path: "/etc/postgresql/{{ postgresql_version }}/main"
+  register: pg_stock_main
+  when: is_debian and not is_proot
+
+- name: "PostgreSQL: drop the stock '{{ postgresql_version }}/main' cluster (IIAB uses postgresql-iiab on /library)"
+  command: "pg_dropcluster --stop {{ postgresql_version }} main"
+  when:
+    - is_debian and not is_proot
+    - pg_stock_main.stat.exists | default(false)
 
 
 # RECORD PostgreSQL AS INSTALLED
