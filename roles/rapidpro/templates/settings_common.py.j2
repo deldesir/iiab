@@ -23,6 +23,12 @@ OUTGOING_REQUEST_HEADERS = {"User-agent": "RapidPro"}
 # secure secret key and never commit it to version control.
 SECRET_KEY = "{{ rapidpro_secret_key }}"
 
+# Shared secret for the websockets/realtime (Centrifugo) API, required since rapidpro
+# v26.3.x (a Django system check errors if it is empty). This box does not run the
+# realtime server, so it defaults to the secret key just to satisfy the check; set
+# rapidpro_websockets_auth_secret in local_vars to match a real Centrifugo server.
+WEBSOCKETS_AUTH_SECRET = "{{ rapidpro_websockets_auth_secret | default(rapidpro_secret_key, true) }}"
+
 # XOR mask values used to obfuscate IDs (e.g., contact IDs) in anonymous workspaces
 # Provides a simple way to hide sequential IDs without full encryption
 ID_OBFUSCATION_KEY = (0xA3B1C, 0xD2E3F, 0x1A2B3, 0xC0FFEE)
