@@ -26,6 +26,7 @@
     version: "{{ organized_app_version }}"
     depth: 1
     force: yes
+  register: organized_app_src
 
 - name: Install organized-app npm dependencies
   command: npm ci --prefer-offline
@@ -41,11 +42,15 @@
     mode: '0644'
   register: organized_build_env
 
-- name: Force a frontend rebuild when the build env changed
+- name: Force a frontend rebuild when the source or build env changed
+  # `npm run build` below is guarded by `creates: dist/index.html`, so it only
+  # runs when dist is absent. Removing dist here whenever the cloned app source
+  # OR the injected build env changed makes the build idempotent: a new fork
+  # commit (or env edit) is always rebuilt, while an unchanged run is a no-op.
   file:
     path: "{{ organized_app_dir }}/dist"
     state: absent
-  when: organized_build_env is changed
+  when: organized_app_src is changed or organized_build_env is changed
 
 - name: Build organized-app frontend (Vite)
   command: npm run build
