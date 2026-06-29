@@ -34,6 +34,19 @@
   environment:
     NODE_OPTIONS: "--max-old-space-size=2048"
 
+- name: Inject offline build-time env for organized-app (Vite .env.production.local)
+  template:
+    src: organized.env.production.local.j2
+    dest: "{{ organized_app_dir }}/.env.production.local"
+    mode: '0644'
+  register: organized_build_env
+
+- name: Force a frontend rebuild when the build env changed
+  file:
+    path: "{{ organized_app_dir }}/dist"
+    state: absent
+  when: organized_build_env is changed
+
 - name: Build organized-app frontend (Vite)
   command: npm run build
   args:
@@ -165,6 +178,41 @@
   become_user: "{{ organized_user }}"
   environment:
     DJANGO_SECRET_KEY: "{{ django_secret_key.stdout | default(organized_secret_key | default('temp-key-for-migrations')) }}"
+
+# --- Offline source-materials mirror ---
+
+- name: Create source-materials mirror directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ organized_user }}"
+    group: "{{ organized_user }}"
+    mode: '0755'
+  loop:
+    - "{{ organized_sources_dir }}"
+    - "{{ organized_sources_dir }}/api"
+    - "{{ organized_sources_dir }}/input"
+  become: yes
+
+- name: Install source-materials generator + fetcher scripts
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: '0755'
+  loop:
+    - { src: organized-sources-generate.js, dest: "{{ organized_sources_generator }}" }
+    - { src: organized-sources-fetch.js, dest: "{{ organized_sources_fetcher }}" }
+  become: yes
+
+- name: Install source-materials mirror systemd units
+  template:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item | basename | regex_replace('\\.j2$', '') }}"
+    mode: '0644'
+  loop:
+    - organized-sources.service.j2
+    - organized-sources.timer.j2
+  become: yes
 
 # --- Systemd services ---
 

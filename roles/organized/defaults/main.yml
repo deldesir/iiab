@@ -14,3 +14,25 @@ organized_user: organized
 organized_db_name: organized
 organized_db_user: organized
 organized_db_pass: "{{ lookup('password', '/etc/iiab/.organized_db_pass chars=ascii_letters,digits length=24') }}"
+
+# --- Offline source-materials mirror (self-hosted, fully offline) ---
+# Admin drops publication files under {{ organized_sources_dir }}/input/<JWLANG>/
+# (e.g. .../input/E/mwb_E_202601.epub). The generator parses them with
+# meeting-schedules-parser and serves what the app's auto-import expects at
+# /organized-sources/api/<JWLANG>. No cloud, no jw.org access required at run time.
+organized_sources_dir: /library/www/html/organized-sources
+organized_sources_generator: /opt/iiab/organized-sources-generate.js
+organized_sources_fetcher: /opt/iiab/organized-sources-fetch.js
+organized_sources_refresh: "daily"
+
+# JW language codes to auto-fetch from jw.org's public pub-media API when the
+# box is online (best-effort; unavailable issues/languages are skipped). The
+# offline parse step is folder-driven and works for any languages dropped in
+# manually. Override in local_vars, e.g. ['E', 'HT', 'F'].
+organized_source_languages: ['E']
+
+# Build-time frontend config, injected via Vite .env.production.local so the
+# offline build is correct regardless of what the cloned app repo ships.
+# Point auto-import at the local mirror; leave announcements disabled (no SaaS).
+organized_source_materials_api: "/organized-sources"
+organized_notifications_api: ""
