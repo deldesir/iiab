@@ -33,6 +33,32 @@
   become: yes
   when: not organized_enabled
 
+- name: Enable & start 'organized-sources' mirror timer
+  systemd:
+    name: organized-sources.timer
+    daemon_reload: yes
+    enabled: yes
+    state: started
+  become: yes
+  when: organized_enabled
+
+- name: Generate the source-materials mirror now (best effort)
+  systemd:
+    name: organized-sources.service
+    state: started
+  become: yes
+  when: organized_enabled
+  ignore_errors: yes
+
+- name: Disable & stop 'organized-sources' mirror timer
+  systemd:
+    name: organized-sources.timer
+    enabled: no
+    state: stopped
+  become: yes
+  when: not organized_enabled
+  ignore_errors: yes
+
 - name: Install Nginx config, if enabled
   template:
     src: organized.conf.j2

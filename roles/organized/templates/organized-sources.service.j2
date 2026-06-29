@@ -1,0 +1,19 @@
+[Unit]
+Description=Organized source-materials mirror generator
+Documentation=https://github.com/sws2apps/meeting-schedules-parser
+After=network.target
+
+[Service]
+Type=oneshot
+User={{ organized_user }}
+Group={{ organized_user }}
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=INPUT_DIR={{ organized_sources_dir }}/input
+Environment=OUTPUT_DIR={{ organized_sources_dir }}/api
+Environment=PARSER_MODULE={{ organized_app_dir }}/node_modules/meeting-schedules-parser/dist/node/index.cjs
+Environment=ORGANIZED_SOURCE_LANGUAGES={{ organized_source_languages | join(',') }}
+# Refresh EPUBs from jw.org when online; the leading '-' makes failure
+# non-fatal, so the mirror still regenerates from cache when offline.
+ExecStart=-/usr/bin/env node {{ organized_sources_fetcher }}
+ExecStart=/usr/bin/env node {{ organized_sources_generator }}
+Nice=10

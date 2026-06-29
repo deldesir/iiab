@@ -7,6 +7,13 @@ location /organized/api/ {
     proxy_set_header X-Forwarded-Proto $scheme;
 }
 
+location /organized-sources/ {
+    alias {{ organized_sources_dir }}/;
+    default_type application/json;
+    try_files $uri =404;
+    add_header Cache-Control "no-cache";
+}
+
 location /organized/ {
     alias {{ organized_app_dir }}/dist/;
     index index.html;

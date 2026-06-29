@@ -1,0 +1,9 @@
+[Unit]
+Description=Periodically regenerate the Organized source-materials mirror
+
+[Timer]
+OnCalendar={{ organized_sources_refresh }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
