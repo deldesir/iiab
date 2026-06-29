@@ -15,6 +15,12 @@ Environment='COURIER_MEDIA_BASE_URL=/rp/media'
 # Bind the public webhook server to loopback (clients are local: wuzapi +
 # email-bridge POST to 127.0.0.1). Internal server stays on localhost:8081.
 Environment='COURIER_PUBLIC_ADDRESS={{ rapidpro_public_bind_address }}'
+# Allow loopback in courier's SSRF blocklist: External-channel sends (e.g. the
+# email-bridge) target 127.0.0.1, which courier's default DisallowedNetworks
+# rejects. This is the default list MINUS 127.0.0.0/8 and ::1 (other private
+# ranges stay blocked). Comma-separated (ezconf splits on commas, NOT spaces).
+# (Proper long-term fix: a per-handler unsafe client like the wuzapi handler.)
+Environment='COURIER_DISALLOWED_NETWORKS=fe80::/10,fc00::/7,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,169.254.0.0/16,0.0.0.0/8'
 
 {% if rapidpro_aws_enabled %}
 # AWS Configuration (S3 + DynamoDB)
