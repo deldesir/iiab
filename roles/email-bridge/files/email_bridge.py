@@ -71,6 +71,19 @@ SEND_AUTH = os.getenv("EMAIL_SEND_AUTH", "")
 MAX_BODY = int(os.getenv("EMAIL_MAX_BODY", "8000"))
 SENT_TOKEN = os.getenv("EMAIL_SENT_TOKEN", "SENT")  # must equal the channel's mt_response_check
 
+# Server-side sender scope: only forward mail FROM these addresses (comma-
+# separated, case-insensitive); empty = forward all. Scopes ingestion without
+# any Gmail-side filter, and never disturbs other mail in the watched mailbox
+# (e.g. the bot's own replies, or unrelated mail that landed under the label).
+ALLOWED_SENDERS = {
+    a.strip().lower() for a in os.getenv("EMAIL_ALLOWED_SENDERS", "").split(",") if a.strip()
+}
+
+
+def _sender_allowed(addr: str) -> bool:
+    return not ALLOWED_SENDERS or (addr or "").strip().lower() in ALLOWED_SENDERS
+
+
 app = FastAPI(title="email-bridge")
 
 
@@ -218,14 +231,20 @@ def _fetch_new(last_uid: int) -> tuple[list[tuple[str, str]], int]:
         uids = sorted(int(u) for u in data[0].split() if int(u) > last_uid)[:MAX_PER_CYCLE]
         for uid in uids:
             typ, msg_data = box.uid("FETCH", str(uid), "(RFC822)")
+            forwarded = False
             if typ == "OK" and msg_data and msg_data[0]:
                 msg = email.message_from_bytes(msg_data[0][1])
                 from_addr = parseaddr(str(make_header(decode_header(msg.get("From", "")))))[1]
-                if from_addr:
+                if from_addr and _sender_allowed(from_addr):
                     text = _strip_quoted(_plain_text(msg))[:MAX_BODY]
                     if text:
                         results.append((from_addr, text))
-            box.uid("STORE", str(uid), "+FLAGS", "\\Seen")  # don't reprocess
+                        forwarded = True
+            # Mark seen ONLY mail we actually handle; non-allowed senders' mail is
+            # left untouched (unread) so the shared mailbox isn't disturbed. UID
+            # still advances so we don't re-scan it next cycle.
+            if forwarded:
+                box.uid("STORE", str(uid), "+FLAGS", "\\Seen")
             last_uid = max(last_uid, uid)
     finally:
         try:

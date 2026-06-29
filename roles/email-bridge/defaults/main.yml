@@ -46,6 +46,12 @@ email_bridge_imap_pass: "{{ email_bridge_smtp_pass }}"
 email_bridge_imap_folder: "INBOX"
 email_bridge_poll_interval: 20
 email_bridge_max_body: 8000
+# Server-side sender scope: only forward inbound mail FROM these addresses
+# (comma-separated; empty = forward all). Defaults to the email addresses in
+# ai_gateway_authorized_users — one source of truth with the gateway's
+# AUTHORIZED_USERS — so the watched mailbox may be shared/personal without any
+# Gmail filter; other senders' mail is left untouched (unread). Override to pin.
+email_bridge_allowed_senders: "{{ (ai_gateway_authorized_users | default('')).split(',') | map('regex_search', '[^,:]+@[^,:]+') | select('string') | join(',') }}"
 
 # Known-provider host map (domain -> smtp/imap). Domains not listed here fall
 # back to smtp.<domain> / imap.<domain>, which is correct for most hosted mail
