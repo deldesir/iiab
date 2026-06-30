@@ -59,6 +59,39 @@
   when: not organized_enabled
   ignore_errors: yes
 
+- name: Provision the initial admin account (idempotent) when configured in local_vars
+  # The local build cannot self-register the first account. When the admin
+  # vars are set, create/keep a working admin login. Password is passed via the
+  # environment (ORGANIZED_ADMIN_PASSWORD), never on the command line, and
+  # no_log hides it from Ansible output.
+  command: >
+    {{ organized_dir }}/.venv/bin/python manage.py bootstrap_admin
+    --email {{ organized_admin_email | quote }}
+    --cong-name {{ organized_admin_cong_name | quote }}
+    --cong-number {{ organized_admin_cong_number | default('') | quote }}
+    --country-code {{ organized_admin_country_code | default('') | quote }}
+    --firstname {{ organized_admin_firstname | default('Admin') | quote }}
+    --lastname {{ organized_admin_lastname | default('') | quote }}
+    --admin
+  args:
+    chdir: "{{ organized_dir }}"
+  become: yes
+  become_user: "{{ organized_user }}"
+  environment:
+    DJANGO_SECRET_KEY: "{{ organized_secret_key | default('bootstrap-only-key') }}"
+    DB_NAME: "{{ organized_db_name }}"
+    DB_USER: "{{ organized_db_user }}"
+    DB_PASSWORD: "{{ organized_db_pass }}"
+    ORGANIZED_ADMIN_PASSWORD: "{{ organized_admin_password }}"
+  register: organized_bootstrap
+  changed_when: "'created' in organized_bootstrap.stdout"
+  no_log: true
+  when:
+    - organized_enabled
+    - organized_admin_email is defined
+    - organized_admin_password is defined
+    - organized_admin_cong_name is defined
+
 - name: Install Nginx config, if enabled
   template:
     src: organized.conf.j2

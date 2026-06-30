@@ -100,6 +100,13 @@
     mode: '0755'
   become: yes
 
+- name: Install logrotate config for organized logs
+  template:
+    src: organized.logrotate.j2
+    dest: /etc/logrotate.d/organized
+    mode: '0644'
+  become: yes
+
 - name: Set ownership of organized backend
   file:
     path: "{{ organized_dir }}"
@@ -154,15 +161,9 @@
     VIRTUAL_ENV: "{{ organized_dir }}/.venv"
     PATH: "{{ organized_dir }}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-- name: Create organized backend migrations
-  command: "{{ organized_dir }}/.venv/bin/python manage.py makemigrations api"
-  args:
-    chdir: "{{ organized_dir }}"
-  become: yes
-  become_user: "{{ organized_user }}"
-  environment:
-    DJANGO_SECRET_KEY: "{{ django_secret_key.stdout | default(organized_secret_key | default('temp-key-for-migrations')) }}"
-
+# Migrations are committed in the backend repo (api/migrations/), so we only
+# apply them here. Running `makemigrations` at deploy time is intentionally
+# omitted — it could generate divergent migrations if models ever drift.
 - name: Run organized backend migrations
   command: "{{ organized_dir }}/.venv/bin/python manage.py migrate"
   args:

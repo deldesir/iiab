@@ -58,6 +58,12 @@ In ``/etc/iiab/local_vars.yml``::
     # rotate it and log everyone out. Generate any 50-char random string.
     organized_secret_key: 'CHANGE-ME-to-a-long-random-string'
 
+    # Initial admin login (see "Creating the first account" below). The role
+    # provisions it idempotently on every run when these are set.
+    organized_admin_email: 'admin@example.com'
+    organized_admin_password: 'CHANGE-ME'
+    organized_admin_cong_name: 'My Congregation'
+
 Then run::
 
     cd /opt/iiab/iiab
@@ -77,10 +83,40 @@ Accessing the app
 * **HTTP / LAN** — ``http://box.lan/organized/`` works for browsing, but with
   no service worker (insecure context = no offline PWA caching).
 
-First-run steps inside the app: sign in (local auth — no Google/Firebase), then
-under settings enable **JW auto-import** and pick the source language. The
-mirror must have data for that language (the daily timer or a manual fetch —
-see below) for auto-import to populate schedules.
+First-run steps inside the app: sign in with the admin account (local auth — no
+Google/Firebase; see `Creating the first account`_), then under settings enable
+**JW auto-import** and pick the source language. The mirror must have data for
+that language (the daily timer or a manual fetch — see below) for auto-import to
+populate schedules.
+
+
+Creating the first account
+==========================
+
+The self-hosted build has **no Firebase to mint accounts**, and the app's API
+cannot self-register the first user (login needs an existing congregation
+profile; congregation-create needs an already-authenticated user). So the first
+admin must be provisioned out of band, via the backend's idempotent
+``bootstrap_admin`` management command.
+
+**Automatic (recommended).** Set ``organized_admin_email``,
+``organized_admin_password`` and ``organized_admin_cong_name`` in
+``local_vars.yml`` (see above). The role then creates — and keeps in sync — the
+admin login on every run. Optional: ``organized_admin_cong_number``,
+``organized_admin_country_code``, ``organized_admin_firstname``,
+``organized_admin_lastname``.
+
+**Manual.** Run the command once yourself::
+
+    cd /opt/iiab/organized-backend
+    sudo -u organized bash -c 'set -a; . /etc/iiab/organized.env; set +a; \
+      ORGANIZED_ADMIN_PASSWORD="your-password" \
+      .venv/bin/python manage.py bootstrap_admin \
+        --email admin@example.com --cong-name "My Congregation" --admin'
+
+The command creates a Django auth user (username = email), a Congregation, and
+an admin ``CongUser`` linking them. It is idempotent and re-syncs the password
+on each run. Add more members afterwards from inside the app (Admin → users).
 
 
 Key variables
