@@ -6,12 +6,12 @@ organized_enabled: False
 
 # Backend (organized-backend): standalone Django API that replaces the
 # sws2apps cloud + Firebase. Served by Gunicorn on organized_port, reverse
-# proxied by nginx at /organized/api/.
+# proxied by nginx at /oa/api/.
 organized_dir: /opt/iiab/organized-backend
 organized_repo: "https://github.com/deldesir/organized-backend.git"
 organized_version: "main"
 # Frontend (organized-app): React/Vite PWA, a fork of sws2apps/organized-app
-# built offline and served as static files by nginx at /organized/.
+# built offline and served as static files by nginx at /oa/.
 organized_app_dir: /opt/iiab/organized-app
 organized_app_repo: "https://github.com/deldesir/organized-app.git"
 organized_app_version: "main"
