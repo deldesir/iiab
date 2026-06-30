@@ -2,7 +2,10 @@
 siyuan_install: False
 siyuan_enabled: False
 
-# Version — set to 'latest' to automatically download the newest release, or pin a specific version
+# Version — 'latest' downloads the newest *published* release of any kind:
+# the newest pre-release (beta/rc) when it is more recent than the newest
+# stable, otherwise the newest stable. Pin a specific version (e.g. "3.6.5")
+# to opt out of pre-releases.
 siyuan_version: "latest"
 
 # Install location
@@ -12,11 +15,26 @@ siyuan_user: "{{ iiab_admin_user }}"
 # Service
 siyuan_port: 6806
 
-# Auth — set a code to protect the web UI (recommended on shared networks)
+# Auth — SiYuan's "Lock screen password" (renamed from "Access auth code" in v3.7.0;
+# the conf field / --accessAuthCode flag are unchanged). Protects the web UI and
+# remote sessions. NOTE: siyuan_api_token below grants full admin and BYPASSES this,
+# so the token is the credential that actually matters for API access.
 siyuan_access_auth_code: ""
 
-# API token — used by other services (rivebot, ai-gateway) to talk to SiYuan
-# Set in /etc/iiab/local_vars.yml; written to workspace/conf/conf.json at install time
+# API token (conf.json api.token) — grants FULL ADMIN and bypasses the lock-screen
+# password, so it is the credential that matters for the HTTP API.
+#
+# SiYuan OWNS this token by default: it generates a random one (view/regenerate in
+# Settings -> About -> API token), persisted in {{ siyuan_workspace }}/conf/conf.json.
+# Leave this EMPTY to keep SiYuan as the single source of truth (recommended when the
+# token is not shared with other services).
+#
+# Set a strong value here ONLY to have Ansible manage the token and propagate it to
+# consumers (rivebot, ai-gateway) — e.g.:
+#   python3 -c "import secrets; print(secrets.token_hex(24))"
+# When non-empty it is written to conf.json at install/reinstall time, overwriting
+# whatever SiYuan generated. (A hand-set value like "iiab-siyuan-token" is guessable
+# -- rotate it.)
 siyuan_api_token: ""
 
 # Workspace (where notebooks live) — under /library/ to survive reinstalls

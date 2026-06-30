@@ -134,21 +134,24 @@ $IPTABLES -A INPUT -p tcp --dport 5984 -j DROP
 $IPTABLES -A INPUT -p udp --dport 5984 -j DROP
 
 # Disable access to internal-only backend services (Nginx-proxied, loopback only)
+# Each port follows its iiab var (default_vars/local_vars) so a port change in
+# config can't silently leave the old port open. Tailscale BYPASSES these DROPs
+# (ts-input ACCEPTs tailscale0 above them) — tailnet access is set via Tailscale ACLs.
 # AI Gateway (uvicorn)
-$IPTABLES -A INPUT -p tcp --dport 8086 -j DROP
+$IPTABLES -A INPUT -p tcp --dport $(iiab_var_value ai_gateway_port) -j DROP
 # LiteLLM proxy
-$IPTABLES -A INPUT -p tcp --dport 4000 -j DROP
+$IPTABLES -A INPUT -p tcp --dport $(iiab_var_value litellm_port) -j DROP
 # RiveBot (already on 127.0.0.1 but drop as safety net)
-$IPTABLES -A INPUT -p tcp --dport 8087 -j DROP
+$IPTABLES -A INPUT -p tcp --dport $(iiab_var_value rivebot_port) -j DROP
 # WuzAPI — WhatsApp channel bridge (already on 127.0.0.1; safety net)
-$IPTABLES -A INPUT -p tcp --dport 8095 -j DROP
+$IPTABLES -A INPUT -p tcp --dport $(iiab_var_value wuzapi_port) -j DROP
 # Email Bridge — email channel bridge (already on 127.0.0.1; safety net)
-$IPTABLES -A INPUT -p tcp --dport 8096 -j DROP
-# SiYuan note-taking kernel (proxied at /siyuan/)
-$IPTABLES -A INPUT -p tcp --dport 6806 -j DROP
+$IPTABLES -A INPUT -p tcp --dport $(iiab_var_value email_bridge_port) -j DROP
+# SiYuan note-taking kernel (proxied at /sy/; native :6806 reachable via Tailscale only)
+$IPTABLES -A INPUT -p tcp --dport $(iiab_var_value siyuan_port) -j DROP
 # Calibre-Web (proxied via Nginx)
-$IPTABLES -A INPUT -p tcp --dport 8083 -j DROP
-# Frappe/ERPNext Socket.io realtime service (proxied via Nginx)
+$IPTABLES -A INPUT -p tcp --dport $(iiab_var_value calibreweb_port) -j DROP
+# Frappe/ERPNext Socket.io realtime service (proxied via Nginx; literal — no iiab var)
 $IPTABLES -A INPUT -p tcp --dport 9000 -j DROP
 
 # Allow established connections, and those not coming from the outside

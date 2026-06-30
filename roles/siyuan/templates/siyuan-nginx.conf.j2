@@ -1,8 +1,40 @@
-# SiYuan Nginx Reverse Proxy (subpath at /siyuan/)
+# SiYuan Nginx Reverse Proxy (subpath at /sy/)
 # Managed by Ansible — edit via /etc/iiab/local_vars.yml
+#
+# SECURITY: SiYuan holds personal notebooks AND its API token grants full admin
+# (the token is checked before, and bypasses, the "Lock screen password"). Every
+# location below is restricted to localhost + LAN + Tailscale and denies the
+# public internet — matching ai-gateway.conf / wuzapi.conf. Do NOT remove the
+# ACL unless you intend to expose personal data publicly.
+#
+# ROBUSTNESS: SiYuan has no native sub-path support, so we serve it at /sy/ and
+# rewrite root-absolute URLs. The non-obvious requirements:
+#   * `proxy_set_header Accept-Encoding "";` on HTML/JS responses — SiYuan gzips
+#     by default and sub_filter CANNOT rewrite compressed bytes (silent breakage).
+#   * The cookie is NOT rescoped. SiYuan sets `siyuan=...; Path=/`, and its
+#     WebSocket + dynamically-built /api calls hit the ROOT catch-alls — scoping
+#     the cookie to /sy/ would strip it there and the UI flashes "Unauthorized".
+#   * `proxy_redirect` rewrites Location headers back into /sy/, and a `sub_filter`
+#     re-prefixes auth.html's post-login `toPath` (else it escapes to / = IIAB /erp).
+#   * Root catch-alls (/api, /ws, /check-auth, assets) handle the URLs SiYuan's
+#     JS builds at runtime WITHOUT the /sy/ prefix (sub_filter can't reach those).
+# A dedicated server_name (e.g. sy.<domain>) would remove the catch-alls entirely;
+# this single-server/subpath form matches the rest of the IIAB stack.
+
+# Back-compat: redirect the old /siyuan/ path to /sy/
+location /siyuan/ { rewrite ^/siyuan/(.*)$ /sy/$1 permanent; }
+location = /siyuan { return 301 /sy/; }
 
 # Main entry point
-location /siyuan/ {
+location /sy/ {
+    # Security: allow localhost, LAN, Tailscale only; deny public internet
+    allow 127.0.0.1;
+    allow 192.168.0.0/16;
+    allow 10.0.0.0/8;
+    allow 172.16.0.0/12;
+    allow 100.64.0.0/10;
+    deny all;
+
     proxy_pass http://127.0.0.1:{{ siyuan_port }}/;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -14,54 +46,72 @@ location /siyuan/ {
     proxy_read_timeout 300s;
     client_max_body_size 512M;
 
-    # Rewrite SiYuan's internal paths in HTML/JS to include /siyuan/ prefix
+    # sub_filter only works on UNCOMPRESSED responses — force plaintext upstream
+    proxy_set_header Accept-Encoding "";
+    # Do NOT rescope the cookie: SiYuan sets it Path=/ and its WebSocket + dynamic
+    # /api calls hit the ROOT catch-alls; /sy/-scoping would 401 them ("Unauthorized").
+    proxy_redirect ~^/(.*)$ /sy/$1;
+
+    # Rewrite SiYuan's root-absolute paths in HTML/JS to the /sy/ prefix
     sub_filter_once off;
     sub_filter_types text/html application/javascript;
 
-    sub_filter '"/check-auth/' '"/siyuan/check-auth/';
-    sub_filter '"/api/' '"/siyuan/api/';
-    sub_filter '"/ws/' '"/siyuan/ws/';
-    sub_filter '"/ws?/' '"/siyuan/ws?/';
-    sub_filter '"/stage/' '"/siyuan/stage/';
-    sub_filter '"/assets/' '"/siyuan/assets/';
-    sub_filter '"/appearance/' '"/siyuan/appearance/';
-    sub_filter '"/snippets/' '"/siyuan/snippets/';
-    sub_filter '"/plugins/' '"/siyuan/plugins/';
-    sub_filter '"/widgets/' '"/siyuan/widgets/';
-    sub_filter '"/emojis/' '"/siyuan/emojis/';
-    sub_filter '"/export/' '"/siyuan/export/';
-    sub_filter '"/service-worker.js/' '"/siyuan/service-worker.js/';
-    sub_filter "'/check-auth/" "'/siyuan/check-auth/";
-    sub_filter "'/api/" "'/siyuan/api/";
-    sub_filter "'/ws/" "'/siyuan/ws/";
-    sub_filter "'/ws?/" "'/siyuan/ws?/";
-    sub_filter "'/stage/" "'/siyuan/stage/";
-    sub_filter "'/assets/" "'/siyuan/assets/";
-    sub_filter "'/appearance/" "'/siyuan/appearance/";
-    sub_filter "'/snippets/" "'/siyuan/snippets/";
-    sub_filter "'/plugins/" "'/siyuan/plugins/";
-    sub_filter "'/widgets/" "'/siyuan/widgets/";
-    sub_filter "'/emojis/" "'/siyuan/emojis/";
-    sub_filter "'/export/" "'/siyuan/export/";
-    sub_filter "'/service-worker.js/" "'/siyuan/service-worker.js/";
-    sub_filter "`/check-auth/" "`/siyuan/check-auth/";
-    sub_filter "`/api/" "`/siyuan/api/";
-    sub_filter "`/ws/" "`/siyuan/ws/";
-    sub_filter "`/ws?/" "`/siyuan/ws?/";
-    sub_filter "`/stage/" "`/siyuan/stage/";
-    sub_filter "`/assets/" "`/siyuan/assets/";
-    sub_filter "`/appearance/" "`/siyuan/appearance/";
-    sub_filter "`/snippets/" "`/siyuan/snippets/";
-    sub_filter "`/plugins/" "`/siyuan/plugins/";
-    sub_filter "`/widgets/" "`/siyuan/widgets/";
-    sub_filter "`/emojis/" "`/siyuan/emojis/";
-    sub_filter "`/export/" "`/siyuan/export/";
-    sub_filter "`/service-worker.js/" "`/siyuan/service-worker.js/";
+    # Post-login redirect fix: auth.html's `toPath = (to-param || "/")` escapes the
+    # sub-path and lands on / (IIAB /erp). Re-prefix it to /sy in-flight.
+    sub_filter 'url.searchParams.get("to") || "/"' '(function(){var t=url.searchParams.get("to")||"/";return t.indexOf("/sy/")===0?t:"/sy"+t})()';
+
+    sub_filter '"/check-auth/' '"/sy/check-auth/';
+    sub_filter '"/api/' '"/sy/api/';
+    sub_filter '"/ws/' '"/sy/ws/';
+    sub_filter '"/ws?/' '"/sy/ws?/';
+    sub_filter '"/stage/' '"/sy/stage/';
+    sub_filter '"/assets/' '"/sy/assets/';
+    sub_filter '"/appearance/' '"/sy/appearance/';
+    sub_filter '"/snippets/' '"/sy/snippets/';
+    sub_filter '"/plugins/' '"/sy/plugins/';
+    sub_filter '"/widgets/' '"/sy/widgets/';
+    sub_filter '"/emojis/' '"/sy/emojis/';
+    sub_filter '"/export/' '"/sy/export/';
+    sub_filter '"/service-worker.js/' '"/sy/service-worker.js/';
+    sub_filter "'/check-auth/" "'/sy/check-auth/";
+    sub_filter "'/api/" "'/sy/api/";
+    sub_filter "'/ws/" "'/sy/ws/";
+    sub_filter "'/ws?/" "'/sy/ws?/";
+    sub_filter "'/stage/" "'/sy/stage/";
+    sub_filter "'/assets/" "'/sy/assets/";
+    sub_filter "'/appearance/" "'/sy/appearance/";
+    sub_filter "'/snippets/" "'/sy/snippets/";
+    sub_filter "'/plugins/" "'/sy/plugins/";
+    sub_filter "'/widgets/" "'/sy/widgets/";
+    sub_filter "'/emojis/" "'/sy/emojis/";
+    sub_filter "'/export/" "'/sy/export/";
+    sub_filter "'/service-worker.js/" "'/sy/service-worker.js/";
+    sub_filter "`/check-auth/" "`/sy/check-auth/";
+    sub_filter "`/api/" "`/sy/api/";
+    sub_filter "`/ws/" "`/sy/ws/";
+    sub_filter "`/ws?/" "`/sy/ws?/";
+    sub_filter "`/stage/" "`/sy/stage/";
+    sub_filter "`/assets/" "`/sy/assets/";
+    sub_filter "`/appearance/" "`/sy/appearance/";
+    sub_filter "`/snippets/" "`/sy/snippets/";
+    sub_filter "`/plugins/" "`/sy/plugins/";
+    sub_filter "`/widgets/" "`/sy/widgets/";
+    sub_filter "`/emojis/" "`/sy/emojis/";
+    sub_filter "`/export/" "`/sy/export/";
+    sub_filter "`/service-worker.js/" "`/sy/service-worker.js/";
 }
 
 
-# SiYuan WebSocket — JS builds this URL dynamically without /siyuan/ prefix
+# SiYuan WebSocket — JS builds this URL dynamically without the /sy/ prefix
 location /ws {
+    # Security: allow localhost, LAN, Tailscale only; deny public internet
+    allow 127.0.0.1;
+    allow 192.168.0.0/16;
+    allow 10.0.0.0/8;
+    allow 172.16.0.0/12;
+    allow 100.64.0.0/10;
+    deny all;
+
     proxy_pass http://127.0.0.1:{{ siyuan_port }}/ws;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
@@ -71,15 +121,22 @@ location /ws {
     proxy_read_timeout 86400s;
 }
 
-# SiYuan check-auth page — JS redirects here without /siyuan/ prefix
-# After auth, JS redirects to the "to" param. Rewrite it to /siyuan/.
+# SiYuan check-auth (login) page — JS redirects here without the /sy/ prefix.
+# After auth, JS redirects to the "to" param; rewrite it back into /sy/.
 location /check-auth {
-    # Fix redirect target: ?to=/ or ?to=%2F → ?to=/siyuan/
+    # Security: allow localhost, LAN, Tailscale only; deny public internet
+    allow 127.0.0.1;
+    allow 192.168.0.0/16;
+    allow 10.0.0.0/8;
+    allow 172.16.0.0/12;
+    allow 100.64.0.0/10;
+    deny all;
+
     if ($arg_to = "/") {
-        return 302 $scheme://$host/check-auth?to=/siyuan/;
+        return 302 $scheme://$host/check-auth?to=/sy/;
     }
     if ($arg_to = "%2F") {
-        return 302 $scheme://$host/check-auth?to=/siyuan/;
+        return 302 $scheme://$host/check-auth?to=/sy/;
     }
 
     proxy_pass http://127.0.0.1:{{ siyuan_port }}/check-auth;
@@ -91,63 +148,83 @@ location /check-auth {
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
 
+    proxy_set_header Accept-Encoding "";
+
     sub_filter_once off;
     sub_filter_types text/html application/javascript;
+    sub_filter 'url.searchParams.get("to") || "/"' '(function(){var t=url.searchParams.get("to")||"/";return t.indexOf("/sy/")===0?t:"/sy"+t})()';
 
-    sub_filter '"/check-auth/' '"/siyuan/check-auth/';
-    sub_filter '"/api/' '"/siyuan/api/';
-    sub_filter '"/ws/' '"/siyuan/ws/';
-    sub_filter '"/ws?/' '"/siyuan/ws?/';
-    sub_filter '"/stage/' '"/siyuan/stage/';
-    sub_filter '"/assets/' '"/siyuan/assets/';
-    sub_filter '"/appearance/' '"/siyuan/appearance/';
-    sub_filter '"/snippets/' '"/siyuan/snippets/';
-    sub_filter '"/plugins/' '"/siyuan/plugins/';
-    sub_filter '"/widgets/' '"/siyuan/widgets/';
-    sub_filter '"/emojis/' '"/siyuan/emojis/';
-    sub_filter '"/export/' '"/siyuan/export/';
-    sub_filter '"/service-worker.js/' '"/siyuan/service-worker.js/';
-    sub_filter "'/check-auth/" "'/siyuan/check-auth/";
-    sub_filter "'/api/" "'/siyuan/api/";
-    sub_filter "'/ws/" "'/siyuan/ws/";
-    sub_filter "'/ws?/" "'/siyuan/ws?/";
-    sub_filter "'/stage/" "'/siyuan/stage/";
-    sub_filter "'/assets/" "'/siyuan/assets/";
-    sub_filter "'/appearance/" "'/siyuan/appearance/";
-    sub_filter "'/snippets/" "'/siyuan/snippets/";
-    sub_filter "'/plugins/" "'/siyuan/plugins/";
-    sub_filter "'/widgets/" "'/siyuan/widgets/";
-    sub_filter "'/emojis/" "'/siyuan/emojis/";
-    sub_filter "'/export/" "'/siyuan/export/";
-    sub_filter "'/service-worker.js/" "'/siyuan/service-worker.js/";
-    sub_filter "`/check-auth/" "`/siyuan/check-auth/";
-    sub_filter "`/api/" "`/siyuan/api/";
-    sub_filter "`/ws/" "`/siyuan/ws/";
-    sub_filter "`/ws?/" "`/siyuan/ws?/";
-    sub_filter "`/stage/" "`/siyuan/stage/";
-    sub_filter "`/assets/" "`/siyuan/assets/";
-    sub_filter "`/appearance/" "`/siyuan/appearance/";
-    sub_filter "`/snippets/" "`/siyuan/snippets/";
-    sub_filter "`/plugins/" "`/siyuan/plugins/";
-    sub_filter "`/widgets/" "`/siyuan/widgets/";
-    sub_filter "`/emojis/" "`/siyuan/emojis/";
-    sub_filter "`/export/" "`/siyuan/export/";
-    sub_filter "`/service-worker.js/" "`/siyuan/service-worker.js/";
+    sub_filter '"/check-auth/' '"/sy/check-auth/';
+    sub_filter '"/api/' '"/sy/api/';
+    sub_filter '"/ws/' '"/sy/ws/';
+    sub_filter '"/ws?/' '"/sy/ws?/';
+    sub_filter '"/stage/' '"/sy/stage/';
+    sub_filter '"/assets/' '"/sy/assets/';
+    sub_filter '"/appearance/' '"/sy/appearance/';
+    sub_filter '"/snippets/' '"/sy/snippets/';
+    sub_filter '"/plugins/' '"/sy/plugins/';
+    sub_filter '"/widgets/' '"/sy/widgets/';
+    sub_filter '"/emojis/' '"/sy/emojis/';
+    sub_filter '"/export/' '"/sy/export/';
+    sub_filter '"/service-worker.js/' '"/sy/service-worker.js/';
+    sub_filter "'/check-auth/" "'/sy/check-auth/";
+    sub_filter "'/api/" "'/sy/api/";
+    sub_filter "'/ws/" "'/sy/ws/";
+    sub_filter "'/ws?/" "'/sy/ws?/";
+    sub_filter "'/stage/" "'/sy/stage/";
+    sub_filter "'/assets/" "'/sy/assets/";
+    sub_filter "'/appearance/" "'/sy/appearance/";
+    sub_filter "'/snippets/" "'/sy/snippets/";
+    sub_filter "'/plugins/" "'/sy/plugins/";
+    sub_filter "'/widgets/" "'/sy/widgets/";
+    sub_filter "'/emojis/" "'/sy/emojis/";
+    sub_filter "'/export/" "'/sy/export/";
+    sub_filter "'/service-worker.js/" "'/sy/service-worker.js/";
+    sub_filter "`/check-auth/" "`/sy/check-auth/";
+    sub_filter "`/api/" "`/sy/api/";
+    sub_filter "`/ws/" "`/sy/ws/";
+    sub_filter "`/ws?/" "`/sy/ws?/";
+    sub_filter "`/stage/" "`/sy/stage/";
+    sub_filter "`/assets/" "`/sy/assets/";
+    sub_filter "`/appearance/" "`/sy/appearance/";
+    sub_filter "`/snippets/" "`/sy/snippets/";
+    sub_filter "`/plugins/" "`/sy/plugins/";
+    sub_filter "`/widgets/" "`/sy/widgets/";
+    sub_filter "`/emojis/" "`/sy/emojis/";
+    sub_filter "`/export/" "`/sy/export/";
+    sub_filter "`/service-worker.js/" "`/sy/service-worker.js/";
 }
 
 
-# SiYuan API catch-all — regex with negative lookahead
-# Catches ALL /api/* EXCEPT ERPNext (/api/method/, /api/resource/) and RapidPro (/api/v2/)
+# SiYuan API catch-all — regex with negative lookahead.
+# Catches ALL /api/* EXCEPT ERPNext (/api/method/, /api/resource/) and RapidPro (/api/v2/).
 location ~ ^/api/(?!method/|resource/|v2/) {
+    # Security: allow localhost, LAN, Tailscale only; deny public internet
+    allow 127.0.0.1;
+    allow 192.168.0.0/16;
+    allow 10.0.0.0/8;
+    allow 172.16.0.0/12;
+    allow 100.64.0.0/10;
+    deny all;
+
     proxy_pass http://127.0.0.1:{{ siyuan_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 512M;
 }
 
-# Catch-all for SiYuan asset/page paths that JS/CSS reference without /siyuan/ prefix
+# Catch-all for SiYuan asset/page paths that JS/CSS reference without the /sy/ prefix
 location ~ ^/(stage|desktop|mobile|appearance|assets|snippets|plugins|widgets|emojis|export|service-worker\.js)(/|$) {
+    # Security: allow localhost, LAN, Tailscale only; deny public internet
+    allow 127.0.0.1;
+    allow 192.168.0.0/16;
+    allow 10.0.0.0/8;
+    allow 172.16.0.0/12;
+    allow 100.64.0.0/10;
+    deny all;
+
     proxy_pass http://127.0.0.1:{{ siyuan_port }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;

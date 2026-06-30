@@ -1,16 +1,20 @@
 ---
-- name: Determine latest SiYuan release from GitHub
+# 'latest' resolves to the most recently *published* release of ANY kind,
+# i.e. the newest pre-release (beta/rc) when it is more recent than the
+# newest stable, otherwise the newest stable. We therefore list all releases
+# (the /releases/latest endpoint hides pre-releases) and pick by published_at.
+- name: Determine newest SiYuan release (including pre-releases) from GitHub
   uri:
-    url: https://api.github.com/repos/siyuan-note/siyuan/releases/latest
+    url: https://api.github.com/repos/siyuan-note/siyuan/releases?per_page=20
     return_content: yes
     headers:
       User-Agent: "IIAB"
-  register: siyuan_latest_release
+  register: siyuan_releases
   when: siyuan_version == 'latest'
 
-- name: Set siyuan_version to latest dynamically
+- name: Set siyuan_version to newest release (stable or pre-release, whichever is more recent)
   set_fact:
-    siyuan_version: "{{ siyuan_latest_release.json.tag_name | regex_replace('^v', '') }}"
+    siyuan_version: "{{ (siyuan_releases.json | rejectattr('draft') | sort(attribute='published_at') | list | last).tag_name | regex_replace('^v', '') }}"
   when: siyuan_version == 'latest'
 
 # Migrate workspace from old location (/opt/iiab/siyuan-server/workspace)

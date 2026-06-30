@@ -8,10 +8,20 @@ User={{ siyuan_user }}
 WorkingDirectory={{ siyuan_dir }}
 Environment=RUN_IN_CONTAINER=true
 Environment=SIYUAN_ACCESS_AUTH_CODE={{ siyuan_access_auth_code | default('iiab', true) }}
+{% if siyuan_version.split('.')[0] | int > 3 or (siyuan_version.split('.')[0] | int == 3 and siyuan_version.split('.')[1] | int >= 7) %}
+# SiYuan >= 3.7.0 moved the kernel to a cobra CLI: serving now requires the
+# explicit `serve` subcommand. accessAuthCode is read from the flag here.
+ExecStart={{ siyuan_dir }}/kernel/SiYuan-Kernel serve \
+  --workspace={{ siyuan_workspace }} \
+  --port={{ siyuan_port }} \
+  --mode=prod \
+  --accessAuthCode={{ siyuan_access_auth_code | default('iiab', true) }}
+{% else %}
 ExecStart={{ siyuan_dir }}/kernel/SiYuan-Kernel \
   --workspace={{ siyuan_workspace }} \
   --port={{ siyuan_port }} \
   --mode=prod
+{% endif %}
 Restart=always
 RestartSec=3
 
