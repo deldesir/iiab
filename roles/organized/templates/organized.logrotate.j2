@@ -1,0 +1,12 @@
+# Rotate Organized's Gunicorn/Celery logs so they don't grow unbounded.
+# copytruncate: the services hold these files open and don't reopen on signal,
+# so truncate in place rather than rename + HUP.
+/var/log/organized/*.log {
+    weekly
+    rotate 8
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+}

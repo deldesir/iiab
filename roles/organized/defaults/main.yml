@@ -29,6 +29,20 @@ organized_db_pass: "{{ lookup('password', '/etc/iiab/.organized_db_pass chars=as
 # (organized_secret_key: '...') to make re-runs non-disruptive.
 # organized_secret_key: ""
 
+# --- Initial admin provisioning (optional, idempotent) ---
+# The local build has no Firebase to mint the first account, and the app's
+# API cannot self-register the first user. Set these three (at minimum) in
+# local_vars.yml to have the role create/keep an admin login on every run via
+# the backend's `bootstrap_admin` management command. Unset → no account is
+# created (bootstrap manually — see README).
+# organized_admin_email: ""
+# organized_admin_password: ""
+# organized_admin_cong_name: ""
+# organized_admin_cong_number: ""      # optional
+# organized_admin_country_code: ""     # optional, e.g. HT
+# organized_admin_firstname: "Admin"   # optional
+# organized_admin_lastname: ""         # optional
+
 # --- Offline source-materials mirror (self-hosted, fully offline) ---
 # Admin drops publication files under {{ organized_sources_dir }}/input/<JWLANG>/
 # (e.g. .../input/E/mwb_E_202601.epub). The generator parses them with
