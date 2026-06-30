@@ -507,7 +507,7 @@ siyuan_install: True
 siyuan_enabled: True
 siyuan_access_auth_code: "CHANGEME"       # Generate: python3 -c "import secrets; print(secrets.token_hex(8))"
 
-# Organized — Headless task management backend
+# Organized — offline meeting scheduler for JW congregations (served at /oa/)
 organized_install: True
 organized_enabled: True
 

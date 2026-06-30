@@ -124,6 +124,23 @@ The command creates a Django auth user (username = email), a Congregation, and
 an admin ``CongUser`` linking them. It is idempotent and re-syncs the password
 on each run. Add more members afterwards from inside the app (Admin → users).
 
+**Re-run caveats.** Because bootstrap runs on every role run:
+
+* The password is overwritten from ``organized_admin_password`` each run, so a
+  password changed in the app is reverted. To let the app own the password,
+  remove ``organized_admin_password`` after first login (with it unset the
+  bootstrap is skipped entirely — it needs email + password + cong_name).
+* ``organized_admin_cong_name`` is the lookup key. Rename the congregation in
+  the app while bootstrap is still active and the next run won't find it and
+  creates a *second* congregation — keep them in sync, or drop the bootstrap
+  vars once set up.
+* ``cong_number`` / ``country_code`` / ``firstname`` / ``lastname`` are applied
+  only at creation; edit them in the app afterwards.
+
+Everything else — interface language, congregation details and meeting times,
+members and roles, the JW auto-import language, and the end-to-end master key +
+access code — is configured **in the app**, not in ``local_vars.yml``.
+
 
 Translating the app (Haitian Creole)
 ====================================
