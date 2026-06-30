@@ -58,9 +58,18 @@ organized_db_pass: "{{ lookup('password', '/etc/iiab/.organized_db_pass chars=as
 #     bootstrap vars once set up.
 #   * cong_number / country_code / firstname / lastname are SEED-ONLY (used only
 #     when the records are first created); edit them in the UI afterwards.
+#
+# Django superuser: the app "admin" above is a CONGREGATION ROLE (manages the
+# app); it is NOT a Django superuser (is_superuser, for the Django admin site).
+# You don't need a Django superuser to run the app. To also make the bootstrap
+# admin a Django superuser on a fresh install, set organized_admin_superuser:
+# True (passes --superuser to bootstrap_admin). It is GRANT-ONLY — setting it
+# back to False later does not demote the account. Without the bootstrap vars,
+# create one by hand: `manage.py createsuperuser`.
 # organized_admin_email: ""
 # organized_admin_password: ""
 # organized_admin_cong_name: ""
+# organized_admin_superuser: False     # also grant Django is_superuser/is_staff
 # organized_admin_cong_number: ""      # optional, seed-only
 # organized_admin_country_code: ""     # optional, seed-only, e.g. HT
 # organized_admin_firstname: "Admin"   # optional, seed-only

@@ -995,5 +995,7 @@ organized_enabled: False
 # organized_admin_email: ""             # login identity
 # organized_admin_password: ""          # RE-SYNCED every run (UI changes revert)
 # organized_admin_cong_name: ""         # bootstrap lookup key — keep in sync with the app
+# organized_admin_superuser: False      # also grant Django is_superuser (Django admin site);
+#                                        # app admin is a cong role, NOT this. Grant-only.
 # Everything else (interface language, meeting times, members & roles, JW
 # auto-import language, master key + access code, profile) is set in the app UI.
