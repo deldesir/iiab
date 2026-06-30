@@ -13,9 +13,16 @@
     name: git
     state: present
 
-- name: Clone or pull stravo1/builder-cli (builder-cli)
+- name: Ensure the site name resolves to localhost (builder push hits {{ erpnext_site_name }}:8000 directly)
+  lineinfile:
+    path: /etc/hosts
+    line: "127.0.0.1 {{ erpnext_site_name }}"
+    regexp: "[[:space:]]{{ erpnext_site_name | regex_escape }}$"
+    state: present
+
+- name: Clone or pull deldesir/builder-cli (builder-cli)
   git:
-    repo: "{{ builder_cli_repo | default('https://github.com/stravo1/builder-cli.git') }}"
+    repo: "{{ builder_cli_repo | default('https://github.com/deldesir/builder-cli.git') }}"
     dest: "{{ builder_cli_dir | default('/opt/iiab/builder-cli') }}"
     version: "{{ builder_cli_branch | default('main') }}"
     force: yes
@@ -46,7 +53,7 @@
   become: yes
   become_user: "{{ erpnext_user_name }}"
   shell: |
-    ~/.local/bin/bench --site {{ erpnext_site_name }} execute 'exec("import frappe\nfrom frappe.core.doctype.user.user import generate_keys\nuser = frappe.get_doc(\"User\", \"Administrator\")\nkey = user.api_key\ntry:\n    sec = user.get_password(\"api_secret\")\nexcept:\n    sec = None\nif not key or not sec:\n    sec = generate_keys(\"Administrator\")\n    frappe.db.commit()\n    user.reload()\n    key = user.api_key\nprint(f\"{key}:{sec}\")")'
+    ~/.local/bin/bench --site {{ erpnext_site_name }} execute 'exec("import frappe\nfrom frappe.core.doctype.user.user import generate_keys\nuser = frappe.get_doc(\"User\", \"Administrator\")\nkey = user.api_key\ntry:\n    sec = user.get_password(\"api_secret\")\nexcept:\n    sec = None\nif not key or not sec:\n    generate_keys(\"Administrator\")\n    frappe.db.commit()\n    user.reload()\n    key = user.api_key\n    sec = user.get_password(\"api_secret\")\nprint(f\"{key}:{sec}\")")'
   args:
     chdir: "/home/{{ erpnext_user_name }}/frappe-bench"
   environment:
@@ -71,11 +78,25 @@
       }
     mode: '0600'
 
-- name: Push storefront pages and components to local ERPNext database
-  shell: builder push
+- name: Push storefront to ERPNext and publish it live
+  # --force pushes every page/component unconditionally. A fresh `git clone`
+  # (force: yes above) has no .last_modified files, and without --force the CLI
+  # skips every item ("No .last_modified file found ... Skipping update"),
+  # pushing nothing. --publish then promotes the pushed draft_blocks to the live
+  # `blocks` field so the storefront actually renders Novadah's design.
+  shell: builder push --force --publish
   args:
     chdir: "{{ storefront_dir | default('/opt/iiab/novadah-storefront') }}"
   register: push_result
   until: push_result is succeeded
   retries: 3
   delay: 5
+
+- name: Clear ERPNext site cache so the published storefront renders immediately
+  become: yes
+  become_user: "{{ erpnext_user_name }}"
+  shell: ~/.local/bin/bench --site {{ erpnext_site_name }} clear-cache
+  args:
+    chdir: "/home/{{ erpnext_user_name }}/frappe-bench"
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
