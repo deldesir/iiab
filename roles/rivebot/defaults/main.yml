@@ -20,8 +20,10 @@ rivebot_gateway_url: "http://127.0.0.1:8086"
 rivebot_macro_timeout_s: "10"
 
 # SiYuan sync — Mode B (local filesystem watch)
-# Defaults to SiYuan's workspace data dir on the same machine
-rivebot_siyuan_data_dir: "/opt/iiab/siyuan-server/workspace/data"
+# Defaults to SiYuan's workspace data dir on the same machine.
+# SiYuan's workspace lives at /library/siyuan (was /opt/iiab/siyuan-server/workspace
+# in older installs — that path is now empty/legacy).
+rivebot_siyuan_data_dir: "/library/siyuan/data"
 
 # SiYuan sync — Mode C (remote HTTP poll)
 # Uses the shared siyuan_api_token from the siyuan role
