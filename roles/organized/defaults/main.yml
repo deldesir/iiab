@@ -4,6 +4,17 @@
 organized_install: False
 organized_enabled: False
 
+# What belongs here vs. in the app:
+#   local_vars.yml = deploy / infrastructure (install + enable, Django secret
+#     key, DB, port, the offline source-materials languages) PLUS the one-time
+#     first-account bootstrap below (the self-host build has no Firebase, so the
+#     first admin cannot self-register).
+#   In the APP UI (runtime, app-owned): interface language (e.g. Kreyòl Ayisyen),
+#     congregation details + meeting times, members & roles, the JW auto-import
+#     language, the end-to-end master key + access code, your profile + password,
+#     and display preferences. Never put the master key / access code in Ansible
+#     — those are your encryption secrets, set only in the app.
+
 # Backend (organized-backend): standalone Django API that replaces the
 # sws2apps cloud + Firebase. Served by Gunicorn on organized_port, reverse
 # proxied by nginx at /oa/api/.
@@ -30,18 +41,39 @@ organized_db_pass: "{{ lookup('password', '/etc/iiab/.organized_db_pass chars=as
 # organized_secret_key: ""
 
 # --- Initial admin provisioning (optional, idempotent) ---
-# The local build has no Firebase to mint the first account, and the app's
-# API cannot self-register the first user. Set these three (at minimum) in
-# local_vars.yml to have the role create/keep an admin login on every run via
-# the backend's `bootstrap_admin` management command. Unset → no account is
-# created (bootstrap manually — see README).
+# The local build has no Firebase to mint the first account, and the app's API
+# cannot self-register the first user. Set email + password + cong_name (at
+# minimum) in local_vars.yml to have the role create/keep an admin login on
+# every run via the backend's `bootstrap_admin` command. Leave any of the three
+# unset → bootstrap is skipped (create the admin manually — see README).
+#
+# Re-run behaviour (matters once you start using the app):
+#   * organized_admin_password is RE-SYNCED every run (set_password), so a
+#     password you change in the UI is reverted on the next run. To let the app
+#     own the password, drop organized_admin_password after first login — that
+#     skips bootstrap entirely (it needs all of email + password + cong_name).
+#   * organized_admin_cong_name is the bootstrap LOOKUP KEY. If you rename the
+#     congregation in the UI while bootstrap is still active, the next run won't
+#     find it and creates a SECOND congregation. Keep them in sync, or drop the
+#     bootstrap vars once set up.
+#   * cong_number / country_code / firstname / lastname are SEED-ONLY (used only
+#     when the records are first created); edit them in the UI afterwards.
+#
+# Django superuser: the app "admin" above is a CONGREGATION ROLE (manages the
+# app); it is NOT a Django superuser (is_superuser, for the Django admin site).
+# You don't need a Django superuser to run the app. To also make the bootstrap
+# admin a Django superuser on a fresh install, set organized_admin_superuser:
+# True (passes --superuser to bootstrap_admin). It is GRANT-ONLY — setting it
+# back to False later does not demote the account. Without the bootstrap vars,
+# create one by hand: `manage.py createsuperuser`.
 # organized_admin_email: ""
 # organized_admin_password: ""
 # organized_admin_cong_name: ""
-# organized_admin_cong_number: ""      # optional
-# organized_admin_country_code: ""     # optional, e.g. HT
-# organized_admin_firstname: "Admin"   # optional
-# organized_admin_lastname: ""         # optional
+# organized_admin_superuser: False     # also grant Django is_superuser/is_staff
+# organized_admin_cong_number: ""      # optional, seed-only
+# organized_admin_country_code: ""     # optional, seed-only, e.g. HT
+# organized_admin_firstname: "Admin"   # optional, seed-only
+# organized_admin_lastname: ""         # optional, seed-only
 
 # --- Offline source-materials mirror (self-hosted, fully offline) ---
 # Admin drops publication files under {{ organized_sources_dir }}/input/<JWLANG>/
@@ -53,10 +85,12 @@ organized_sources_generator: /opt/iiab/organized-sources-generate.js
 organized_sources_fetcher: /opt/iiab/organized-sources-fetch.js
 organized_sources_refresh: "daily"
 
-# JW language codes to auto-fetch from jw.org's public pub-media API when the
+# JW pub-media language codes the offline mirror fetches from jw.org when the
 # box is online (best-effort; unavailable issues/languages are skipped). The
 # offline parse step is folder-driven and works for any languages dropped in
-# manually. Override in local_vars, e.g. ['E', 'HT', 'F'].
+# manually. NOTE these are jw.org's pub-media codes, which are not always the
+# obvious ISO code — Haitian Creole is CR (HT 404s). Override in local_vars,
+# e.g. ['E', 'CR', 'F'] for English + Haitian Creole + French.
 organized_source_languages: ['E']
 
 # Build-time frontend config, injected via Vite .env.production.local so the

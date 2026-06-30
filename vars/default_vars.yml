@@ -979,5 +979,23 @@ is_debuntu: True    # 2025-09-16: OBSOLETE VARIABLE, BUT ADMIN CONSOLE STILL
 bagisto_headless_install: False
 bagisto_headless_enabled: False
 
+# Organized — offline meeting scheduler for JW congregations (schedules,
+# assignments, field-service reports). Self-hosted Django API + React PWA served
+# at /oa/, replacing the sws2apps cloud + Firebase. The first admin can't
+# self-register (no Firebase), so it is bootstrapped from local_vars.yml. Full
+# var list + re-run caveats: roles/organized/defaults/main.yml and
+# roles/organized/README.rst.
 organized_install: False
 organized_enabled: False
+# organized_port: 8088                  # Gunicorn backend (localhost only)
+# organized_secret_key: ""              # PIN this, else every run resets all logins
+# organized_source_languages: ['E']     # JW pub-media codes to mirror offline
+#                                        # (Haitian Creole is CR, NOT HT)
+# First-admin bootstrap (email + password + cong_name required to run it):
+# organized_admin_email: ""             # login identity
+# organized_admin_password: ""          # RE-SYNCED every run (UI changes revert)
+# organized_admin_cong_name: ""         # bootstrap lookup key — keep in sync with the app
+# organized_admin_superuser: False      # also grant Django is_superuser (Django admin site);
+#                                        # app admin is a cong role, NOT this. Grant-only.
+# Everything else (interface language, meeting times, members & roles, JW
+# auto-import language, master key + access code, profile) is set in the app UI.

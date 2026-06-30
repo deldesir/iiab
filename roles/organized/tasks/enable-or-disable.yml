@@ -73,6 +73,7 @@
     --firstname {{ organized_admin_firstname | default('Admin') | quote }}
     --lastname {{ organized_admin_lastname | default('') | quote }}
     --admin
+    {{ '--superuser' if organized_admin_superuser | default(False) | bool else '' }}
   args:
     chdir: "{{ organized_dir }}"
   become: yes
