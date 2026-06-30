@@ -24,6 +24,13 @@ location = /organized/manifest.webmanifest {
     add_header Cache-Control "no-cache";
 }
 
+# A bare /organized (no trailing slash) does not match the prefix location
+# below, so redirect it — same behaviour as the sibling /erp app. Preserve any
+# query string with $is_args$args.
+location = /organized {
+    return 301 /organized/$is_args$args;
+}
+
 location /organized/ {
     alias {{ organized_app_dir }}/dist/;
     index index.html;
