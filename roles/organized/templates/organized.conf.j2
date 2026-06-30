@@ -1,5 +1,8 @@
-# Organized App Nginx Configuration
-location /organized/api/ {
+# Organized App Nginx Configuration — served at /oa/
+# NOTE: /org/ is intentionally NOT used — it collides with RapidPro, whose
+# nginx regex proxies the root-level /org/ (and /flow/, /contact/, …) Django
+# namespaces. /oa/ ("organized app") is collision-free.
+location /oa/api/ {
     proxy_pass http://127.0.0.1:{{ organized_port }}/api/;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -7,6 +10,8 @@ location /organized/api/ {
     proxy_set_header X-Forwarded-Proto $scheme;
 }
 
+# Internal source-materials mirror (not user-facing; the app fetches it via
+# VITE_SOURCE_MATERIALS_API). Kept under its own path, independent of /oa/.
 location /organized-sources/ {
     alias {{ organized_sources_dir }}/;
     default_type application/json;
@@ -17,22 +22,33 @@ location /organized-sources/ {
 # The PWA manifest must carry the correct MIME type for install prompts to
 # work. `.webmanifest` is absent from nginx's default mime.types, so without
 # this exact-match override it would be served as text/html. Exact (=) match
-# wins over the /organized/ prefix below.
-location = /organized/manifest.webmanifest {
+# wins over the /oa/ prefix below.
+location = /oa/manifest.webmanifest {
     alias {{ organized_app_dir }}/dist/manifest.webmanifest;
     default_type application/manifest+json;
     add_header Cache-Control "no-cache";
 }
 
-# A bare /organized (no trailing slash) does not match the prefix location
-# below, so redirect it — same behaviour as the sibling /erp app. Preserve any
+# A bare /oa (no trailing slash) does not match the prefix location below,
+# so redirect it — same behaviour as the sibling /erp app. Preserve any
 # query string with $is_args$args.
-location = /organized {
-    return 301 /organized/$is_args$args;
+location = /oa {
+    return 301 /oa/$is_args$args;
 }
 
-location /organized/ {
+location /oa/ {
     alias {{ organized_app_dir }}/dist/;
     index index.html;
-    try_files $uri $uri/ /organized/index.html;
+    try_files $uri $uri/ /oa/index.html;
+}
+
+# Back-compat: the app was previously served at /organized/. Redirect old
+# links (browser bookmarks and the previously-installed PWA scope) to /oa/,
+# preserving the rest of the path and query; hash routes ride along on the
+# client. /organized-sources/ is matched by its own block above, not here.
+location = /organized {
+    return 301 /oa/$is_args$args;
+}
+location /organized/ {
+    rewrite ^/organized/(.*)$ /oa/$1 permanent;
 }
