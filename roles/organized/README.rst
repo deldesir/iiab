@@ -124,6 +124,39 @@ The command creates a Django auth user (username = email), a Congregation, and
 an admin ``CongUser`` linking them. It is idempotent and re-syncs the password
 on each run. Add more members afterwards from inside the app (Admin → users).
 
+**Re-run caveats.** Because bootstrap runs on every role run:
+
+* The password is overwritten from ``organized_admin_password`` each run, so a
+  password changed in the app is reverted. To let the app own the password,
+  remove ``organized_admin_password`` after first login (with it unset the
+  bootstrap is skipped entirely — it needs email + password + cong_name).
+* ``organized_admin_cong_name`` is the lookup key. Rename the congregation in
+  the app while bootstrap is still active and the next run won't find it and
+  creates a *second* congregation — keep them in sync, or drop the bootstrap
+  vars once set up.
+* ``cong_number`` / ``country_code`` / ``firstname`` / ``lastname`` are applied
+  only at creation; edit them in the app afterwards.
+
+**Django superuser (optional).** The admin above is a *congregation role* — it
+runs the app but is **not** a Django superuser (``is_superuser``, for the Django
+admin site at ``/admin``). You do **not** need one to use Organized. To also make
+the bootstrap admin a Django superuser on a fresh install, set
+``organized_admin_superuser: True`` in ``local_vars.yml`` — it passes
+``--superuser`` to ``bootstrap_admin``. It is **grant-only**: setting it back to
+``False`` later does not demote the account. Without the bootstrap vars, create
+one by hand on the box::
+
+    cd /opt/iiab/organized-backend
+    sudo -u organized bash -c 'set -a; . /etc/iiab/organized.env; set +a; \
+      .venv/bin/python manage.py createsuperuser'
+
+The Django admin site is localhost-only (nginx proxies only ``/oa/api/``), so
+it's reachable on the box itself, not over the public ``/oa/`` web path.
+
+Everything else — interface language, congregation details and meeting times,
+members and roles, the JW auto-import language, and the end-to-end master key +
+access code — is configured **in the app**, not in ``local_vars.yml``.
+
 
 Translating the app (Haitian Creole)
 ====================================
