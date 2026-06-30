@@ -10,7 +10,7 @@ assignments, field-service reports) — on your
 
 The role is **off by default** (IIAB stage 6). It is a two-part application
 plus a local source-materials mirror, all reverse-proxied by nginx under the
-``/organized/`` subpath.
+``/oa/`` subpath.
 
 
 Architecture
@@ -19,7 +19,7 @@ Architecture
 **Frontend — organized-app** (``/opt/iiab/organized-app``)
   A React/Vite Progressive Web App, a fork of ``sws2apps/organized-app``. The
   role builds it offline (``npm ci`` + ``npm run build``) and nginx serves the
-  static ``dist/`` at ``/organized/``. Built with Vite ``base: '/organized/'``
+  static ``dist/`` at ``/oa/``. Built with Vite ``base: '/oa/'``
   so assets, the router basename and the service worker all live under the
   subpath. It is an installable, offline-capable PWA over HTTPS.
 
@@ -27,7 +27,7 @@ Architecture
   A standalone Django REST API (Gunicorn on ``organized_port``, localhost only)
   that **replaces the upstream sws2apps cloud + Firebase**: local cookie/JWT
   auth, congregation/country data, persistence in PostgreSQL. Reached by the
-  frontend same-origin at ``/organized/api/`` via nginx. Background work
+  frontend same-origin at ``/oa/api/`` via nginx. Background work
   (notifications, etc.) runs on Celery with Redis/Valkey as broker.
 
 **Source-materials mirror** (``/library/www/html/organized-sources``, served at
@@ -76,12 +76,18 @@ build, migrations) rather than just re-applying services + nginx.
 Accessing the app
 =================
 
-* **HTTPS (recommended)** — ``https://<your-domain>/organized/`` where the
+* **HTTPS (recommended)** — ``https://<your-domain>/oa/`` where the
   domain matches IIAB's ``iiab_ssl_domain``. A trusted certificate is required
   for the PWA service worker to register (secure context), so this is the path
   that gives installability + offline caching.
-* **HTTP / LAN** — ``http://box.lan/organized/`` works for browsing, but with
+* **HTTP / LAN** — ``http://box.lan/oa/`` works for browsing, but with
   no service worker (insecure context = no offline PWA caching).
+
+The app lives at ``/oa/`` (short for *organized app*). ``/org/`` is deliberately
+**not** used: it collides with RapidPro, whose nginx regex proxies the
+root-level ``/org/`` (and ``/flow/``, ``/contact/``, …) Django namespaces.
+Requests to the old ``/organized/`` path 301-redirect to ``/oa/``, so existing
+bookmarks and a previously-installed PWA keep working.
 
 First-run steps inside the app: sign in with the admin account (local auth — no
 Google/Firebase; see `Creating the first account`_), then under settings enable
@@ -117,6 +123,57 @@ admin login on every run. Optional: ``organized_admin_cong_number``,
 The command creates a Django auth user (username = email), a Congregation, and
 an admin ``CongUser`` linking them. It is idempotent and re-syncs the password
 on each run. Add more members afterwards from inside the app (Admin → users).
+
+
+Translating the app (Haitian Creole)
+====================================
+
+Two different "languages" are in play, set independently:
+
+* **Meeting-materials language** — which JW publications the mirror fetches and
+  the app auto-imports. Set via ``organized_source_languages`` (Haitian Creole =
+  ``CR``). See `Source-materials mirror`_.
+* **Interface language** — the UI strings (menus, buttons, labels). Covered
+  here.
+
+The interface uses `i18next`. English (``src/locales/en/``) is the source of
+truth; every other language is a folder of the *same* JSON files under
+``src/locales/<locale>/`` with the *same* keys (``tr_…``) and translated values.
+The selectable languages live in ``src/constants/index.ts`` (``LANGUAGE_LIST``).
+
+**Haitian Creole is already registered and selectable** — locale ``ht-HT``,
+shown in-app as *Kreyòl Ayisyen* (Settings → language). Its string files
+currently hold the English text as placeholders, so all the wiring is done and
+**completing the translation is just editing those values**:
+
+1. In the ``deldesir/organized-app`` fork, translate the 13 JSON files in
+   ``src/locales/ht-HT/``. Translate each *value*; **keep the keys** and any
+   ``<a>…</a>`` / ``{{placeholder}}`` markup unchanged. Files, largest first:
+   ``congregation.json``, ``meetings.json``, ``general.json``, ``ministry.json``,
+   ``songs.json``, ``onboarding.json``, ``forms-templates.json``,
+   ``dashboard.json``, ``profile.json``, ``errors.json``, ``public_talks.json``,
+   ``activities.json``, ``release_notes.json``. Diff against ``src/locales/en/``
+   to catch any keys added upstream (missing keys fall back to English).
+2. Rebuild and redeploy so the strings ship in ``dist/``::
+
+       cd /opt/iiab/iiab
+       ./runrole --reinstall organized
+
+   (or, for a quick local rebuild, ``npm run build`` in
+   ``/opt/iiab/organized-app`` — nginx serves ``dist/`` directly).
+3. In the app, switch to *Kreyòl Ayisyen* and verify.
+
+**Optional — Crowdin.** Upstream translates on
+`Crowdin <https://crowdin.com/project/organized>`_, which opens PRs syncing
+English → other locales. You can mirror that workflow, but for a self-hosted
+fork, editing ``ht-HT/*.json`` directly (above) is simplest.
+
+**Adding a different language** has the same shape: in
+``src/constants/index.ts`` import its ``date-fns`` locale and add a
+``LANGUAGE_LIST`` entry (``code`` — a unique short id, ``locale``, ``name`` in
+the native script, ``threeLettersCode``, ``browserLangCode``, ``fnsLocale``);
+create ``src/locales/<locale>/`` with all 13 JSON files (copy ``en/`` and
+translate); then rebuild. Add ``direction: 'rtl'`` for right-to-left scripts.
 
 
 Key variables
@@ -185,9 +242,9 @@ on the system ``/usr/bin/python3``.
 Notes for maintainers
 =====================
 
-* **Subpath everything.** Because the app is mounted at ``/organized/``, the
+* **Subpath everything.** Because the app is mounted at ``/oa/``, the
   Vite ``base``, the PWA ``manifest.webmanifest`` (scope/start_url/icons), and
-  the service-worker registration path must all carry the ``/organized/``
+  the service-worker registration path must all carry the ``/oa/``
   prefix. ``.webmanifest`` is also served with an explicit
   ``application/manifest+json`` MIME type (nginx default is wrong for PWA install).
 * **ALLOWED_HOSTS.** The backend's ``DJANGO_ALLOWED_HOSTS`` includes
