@@ -1,6 +1,6 @@
 # System-Wide Git Hooks & Security Guidelines
 
-This directory contains system-wide Git hooks that enforce security best practices across all users (including `root`, `frappe`, `iiab-admin`) and all repositories on `garantie.boutique`.
+This directory contains system-wide Git hooks that enforce security best practices across all users (including `root`, `frappe`, `iiab-admin`) and all repositories on this IIAB box.
 
 ## Standard Operating Security Rules (Rules 1-6)
 

@@ -33,5 +33,5 @@ rivebot_siyuan_notebook_id: ""        # e.g. 20260321012908-iej1pzy
 rivebot_siyuan_poll_interval_s: "30"  # How often to poll (seconds)
 
 # RapidPro integration
-rivebot_rapidpro_api_url: "https://garantie.boutique/api/v2"
+rivebot_rapidpro_api_url: "{% if iiab_ssl_enabled | default(False) %}https://{{ iiab_ssl_domain }}{% else %}http://box.lan{% endif %}/api/v2"
 rivebot_rapidpro_api_token: "{{ rapidpro_auth_token | default('') }}"

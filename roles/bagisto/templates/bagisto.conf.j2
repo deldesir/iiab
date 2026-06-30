@@ -1,5 +1,5 @@
 # Nginx configuration for Bagisto inside IIAB
-# bagisto_app_url = {{ bagisto_app_url }}  (full URL, e.g. https://garantie.boutique/live)
+# bagisto_app_url = {{ bagisto_app_url }}  (full URL, e.g. https://example.org/live)
 # bagisto_subpath = the URI-only portion used in location blocks (e.g. /live)
 {% set bagisto_subpath = bagisto_app_url | regex_replace('^https?://[^/]+', '') | regex_replace('/$', '') %}
 {% if bagisto_subpath == '' %}{% set bagisto_subpath = '/live' %}{% endif %}
