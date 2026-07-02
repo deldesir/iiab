@@ -1,0 +1,17 @@
+[Unit]
+Description=Morning talk-prep nudge (actionable items → WhatsApp)
+Documentation=https://github.com/deldesir/gateway
+After=network.target siyuan.service
+
+[Service]
+Type=oneshot
+User=iiab-admin
+WorkingDirectory={{ ai_gateway_dir }}
+EnvironmentFile={{ ai_gateway_dir }}/.env
+Environment="MEMPALACE_PALACE_PATH={{ ai_gateway_dir }}/data/palace"
+ExecStart={{ ai_gateway_dir }}/.venv/bin/python -m app.jobs.talk_nudge
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

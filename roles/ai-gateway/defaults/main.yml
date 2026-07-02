@@ -76,7 +76,16 @@ ai_gateway_siyuan_public_url: "{{ ai_gateway_siyuan_url }}"
 ai_gateway_siyuan_notebook_id: ""
 
 # jwlinker DB path — empty uses platform default (~/.local/share/jwlinker/jw_library.db)
+# Shared corpus convention: /library/jwlinker/jw_library.db (see jwlinker-refresh)
 ai_gateway_jwlinker_db_path: ""
+
+# Knowledge-graph location pin (MEMPALACE_KG_PATH) — one canonical file so a
+# service, a cron job, and an interactive shell never open different graphs.
+mempalace_kg_path: "{{ ai_gateway_dir }}/.mempalace/knowledge_graph.sqlite3"
+
+# Webhook endpoints injected into the gateway env
+ai_gateway_webhook_url: "http://127.0.0.1:8086"
+ai_gateway_rapidpro_webhook_host: "http://localhost"
 
 # PostgreSQL URI for persona/channel/admin data (shares RapidPro's temba DB)
 # The konex_* tables are auto-created on first boot via init_db().

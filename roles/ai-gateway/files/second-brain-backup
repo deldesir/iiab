@@ -1,0 +1,44 @@
+#!/bin/bash
+# Nightly backup of the cognitive pipeline's stateful stores.
+# SQLite files are copied with `.backup` (consistent even mid-write);
+# the SiYuan workspace data dir is tarred. 7-day rotation.
+set -euo pipefail
+
+DEST=/library/backups/second-brain
+STAMP=$(date +%F)
+KEEP_DAYS=7
+
+mkdir -p "$DEST/$STAMP"
+
+backup_sqlite() {
+  local src="$1" name="$2"
+  if [ -f "$src" ]; then
+    sqlite3 "$src" ".backup '$DEST/$STAMP/$name'"
+    echo "sqlite ok: $name"
+  else
+    echo "MISSING: $src" >&2
+  fi
+}
+
+backup_sqlite /opt/iiab/ai-gateway/talkmaster.db                          talkmaster.db
+backup_sqlite /opt/iiab/ai-gateway/.mempalace/knowledge_graph.sqlite3     knowledge_graph.sqlite3
+backup_sqlite /opt/iiab/ai-gateway/checkpoints.sqlite                     checkpoints.sqlite
+backup_sqlite /library/jwlinker/jw_library.db                             jw_library.db
+
+# SiYuan workspace (notes + conf; excludes temp/history caches)
+tar -czf "$DEST/$STAMP/siyuan-workspace.tar.gz" \
+    --exclude='temp' --exclude='history' \
+    -C /library siyuan 2>/dev/null
+echo "siyuan workspace ok"
+
+# MemPalace palace (ChromaDB) — the verbatim memory itself
+tar -czf "$DEST/$STAMP/mempalace-palace.tar.gz" \
+    -C /opt/iiab/ai-gateway/data palace 2>/dev/null
+echo "palace ok"
+
+# Gateway persona/config env (secrets — kept 0600 via dir perms)
+cp -a /opt/iiab/ai-gateway/.env "$DEST/$STAMP/ai-gateway.env"
+
+chmod 700 "$DEST"
+find "$DEST" -mindepth 1 -maxdepth 1 -type d -mtime +"$KEEP_DAYS" -exec rm -rf {} +
+echo "backup complete: $DEST/$STAMP ($(du -sh "$DEST/$STAMP" | cut -f1))"

@@ -99,6 +99,15 @@
     state: directory
   become: yes
 
+- name: Install SiYuan secrets env file (auth code out of the unit file)
+  template:
+    src: siyuan.env.j2
+    dest: "{{ siyuan_dir }}/.env"
+    owner: "{{ siyuan_user }}"
+    group: "{{ siyuan_user }}"
+    mode: '0600'
+  become: yes
+
 - name: Install SiYuan systemd service
   template:
     src: siyuan.service.j2

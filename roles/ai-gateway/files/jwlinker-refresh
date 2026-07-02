@@ -1,0 +1,31 @@
+#!/bin/bash
+# Refresh the shared jwlinker corpus.
+#
+# Usage:
+#   jwlinker-refresh                      # sync master DB → /library/jwlinker
+#   jwlinker-refresh file1.jwpub [...]    # ingest .jwpub file(s) first, then sync
+#
+# The master DB lives in root's data dir (ingestion runs as root); services
+# read the shared copy at /library/jwlinker/jw_library.db (JWLINKER_DB_PATH).
+set -euo pipefail
+
+JWLINKER=/opt/iiab/jwlinker/.venv/bin/jwlinker
+MASTER="$HOME/.local/share/jwlinker/jw_library.db"
+SHARED=/library/jwlinker/jw_library.db
+
+for f in "$@"; do
+  echo "ingesting: $f"
+  "$JWLINKER" extract-jwpub "$f"
+done
+
+if [ ! -f "$MASTER" ]; then
+  echo "master DB not found at $MASTER" >&2
+  exit 1
+fi
+
+mkdir -p "$(dirname "$SHARED")"
+sqlite3 "$MASTER" ".backup '$SHARED.tmp'"
+mv "$SHARED.tmp" "$SHARED"
+chown iiab-admin:iiab-admin "$SHARED"
+chmod 664 "$SHARED"
+echo "synced: $SHARED ($(du -h "$SHARED" | cut -f1), $(sqlite3 -readonly "$SHARED" 'SELECT COUNT(*) FROM Topics WHERE content IS NOT NULL') topics)"

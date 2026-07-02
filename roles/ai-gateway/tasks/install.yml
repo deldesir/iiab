@@ -198,6 +198,45 @@
     daemon_reload: yes
   become: yes
 
+- name: Install cognitive-pipeline job units (KG extract, KG->Wiki render, morning nudge, backup)
+  template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: '0644'
+  loop:
+    - ai-gateway-kgextract.service
+    - ai-gateway-kgextract.timer
+    - ai-gateway-kgwiki.service
+    - ai-gateway-kgwiki.timer
+    - ai-gateway-nudge.service
+    - ai-gateway-nudge.timer
+    - second-brain-backup.service
+    - second-brain-backup.timer
+  become: yes
+
+- name: Install pipeline maintenance scripts
+  copy:
+    src: "{{ item }}"
+    dest: "/usr/local/sbin/{{ item }}"
+    mode: '0755'
+  loop:
+    - second-brain-backup
+    - jwlinker-refresh
+  become: yes
+
+- name: Ensure pipeline timers are enabled and running
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  loop:
+    - ai-gateway-kgextract.timer
+    - ai-gateway-kgwiki.timer
+    - ai-gateway-nudge.timer
+    - second-brain-backup.timer
+  become: yes
+
 # RECORD AI Gateway AS INSTALLED
 
 - name: Record (final) disk space used
