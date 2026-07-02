@@ -1,0 +1,17 @@
+[Unit]
+Description=Nightly Organized→talkmaster assignment sync (auto-create talk revisions)
+Documentation=https://github.com/deldesir/gateway
+After=network.target organized.service siyuan.service
+Wants=organized.service
+
+[Service]
+Type=oneshot
+User=iiab-admin
+WorkingDirectory={{ ai_gateway_dir }}
+EnvironmentFile={{ ai_gateway_dir }}/.env
+ExecStart={{ ai_gateway_dir }}/.venv/bin/python -m app.jobs.talk_sync
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

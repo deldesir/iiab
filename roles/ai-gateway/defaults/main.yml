@@ -109,3 +109,9 @@ ai_gateway_mempalace_backend: "chromadb"
 # SiYuan Knowledge Wiki integration (enable in Phase 4)
 ai_gateway_siyuan_wiki_enabled: false
 ai_gateway_siyuan_api_url: "http://localhost:6806"
+
+# Talk sync: Organized weekend schedule → talkmaster revisions (nightly 03:45).
+# Set talk_sync_speaker in local_vars.yml (substring of the speaker's display
+# name in Organized) to enable; without it the job aborts loudly.
+talk_sync_language: "ht"
+talk_sync_pub: "s34"

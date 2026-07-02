@@ -210,6 +210,8 @@
     - ai-gateway-kgwiki.timer
     - ai-gateway-nudge.service
     - ai-gateway-nudge.timer
+    - ai-gateway-talksync.service
+    - ai-gateway-talksync.timer
     - second-brain-backup.service
     - second-brain-backup.timer
   become: yes
@@ -234,6 +236,7 @@
     - ai-gateway-kgextract.timer
     - ai-gateway-kgwiki.timer
     - ai-gateway-nudge.timer
+    - ai-gateway-talksync.timer
     - second-brain-backup.timer
   become: yes
 
