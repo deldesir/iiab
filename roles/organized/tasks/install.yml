@@ -157,6 +157,20 @@
     mode: '0755'
   become: yes
 
+- name: Install organized-import (one-shot Hourglass JSON+docx import, NWS CSV)
+  copy:
+    src: organized-import
+    dest: /usr/local/bin/organized-import
+    mode: '0755'
+  become: yes
+
+- name: Create the Hourglass drop directory
+  file:
+    path: /library/hourglass
+    state: directory
+    mode: '0755'
+  become: yes
+
 # --- Backend setup ---
 
 - name: Install gunicorn in backend venv
