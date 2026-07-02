@@ -150,6 +150,13 @@
   become: yes
   notify: restart organized
 
+- name: Install hourglass-check (validate Hourglass exports before import)
+  copy:
+    src: hourglass-check
+    dest: /usr/local/bin/hourglass-check
+    mode: '0755'
+  become: yes
+
 # --- Backend setup ---
 
 - name: Install gunicorn in backend venv

@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""Check a Hourglass export JSON against Organized's import requirements.
+
+Prints ONLY structural facts (key names, counts, flag checks) — never any
+personal values — so the output is safe to share.
+
+Usage: hourglass-check /path/to/hourglass-export.json
+"""
+
+import json
+import sys
+
+REQUIRED = ("congregation", "publishers", "privileges")
+KNOWN_EXTRAS = (
+    "notPublishers", "attendance", "fieldServiceGroups",
+    "branchReports", "reports", "emergencyContacts",
+)
+
+
+def main() -> int:
+    if len(sys.argv) != 2:
+        print(__doc__)
+        return 2
+    try:
+        data = json.load(open(sys.argv[1], encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        print(f"❌ cannot read/parse: {e}")
+        return 1
+
+    keys = set(data.keys())
+    print(f"top-level keys: {sorted(keys)}")
+
+    ok = True
+    for k in REQUIRED:
+        present = k in keys and data.get(k) is not None
+        print(f"{'✅' if present else '❌'} required key '{k}': {'present' if present else 'MISSING'}")
+        ok &= present
+
+    if not ok:
+        if "reports" in keys and "privileges" not in keys:
+            print("\n→ This looks like the Hourglass REPORT export (the fsr input).")
+            print("  Organized needs the FULL DATA export: Hourglass → Congregation")
+            print("  → Export data (untick end-to-end encryption).")
+        return 1
+
+    if (data.get("congregation") or {}).get("e2ekey"):
+        print("❌ export is END-TO-END ENCRYPTED — Organized will reject it.")
+        print("   Re-export from Hourglass with E2E encryption disabled.")
+        return 1
+    print("✅ not e2e-encrypted")
+
+    pubs = data.get("publishers") or []
+    print(f"✅ publishers: {len(pubs)} record(s)")
+    if pubs:
+        print(f"   publisher fields: {sorted(pubs[0].keys())}")
+        statuses = {}
+        for p in pubs:
+            statuses[p.get("status", "?")] = statuses.get(p.get("status", "?"), 0) + 1
+        print(f"   status distribution: {statuses}")
+
+    priv = data.get("privileges") or {}
+    print(f"✅ privilege lists: {sorted(priv.keys())}")
+    pt = priv.get("pt") or []
+    print(f"   public-talk speakers (pt): {len(pt)}")
+
+    for k in KNOWN_EXTRAS:
+        if k in keys:
+            v = data[k]
+            n = len(v) if isinstance(v, (list, dict)) else "?"
+            print(f"ℹ️  also present: {k} ({n})")
+
+    print("\n✅ VERDICT: this file should import into Organized")
+    print("   (Congregation settings → Import/Export → drop the file).")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
