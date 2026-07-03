@@ -39,6 +39,14 @@ echo "palace ok"
 # Gateway persona/config env (secrets — kept 0600 via dir perms)
 cp -a /opt/iiab/ai-gateway/.env "$DEST/$STAMP/ai-gateway.env"
 
+# Postgres databases — temba holds contacts/messages/flow history,
+# organized holds synced schedules + assignment responses. Flow DEFINITIONS
+# are reproducible from git; conversation and sync history are not.
+for db in temba organized; do
+    sudo -u postgres pg_dump -Fc "$db" > "$DEST/$STAMP/$db.pgdump" 2>/dev/null \
+        && echo "$db dump ok" || echo "WARN: $db dump failed" >&2
+done
+
 # Machine-local configuration that exists NOWHERE else — .env.local files
 # hold box-only secrets Ansible never writes, local_vars.yml is the
 # provisioning source of truth, and the send-auth token is generated once.
