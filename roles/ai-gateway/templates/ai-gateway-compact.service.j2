@@ -8,6 +8,8 @@ Type=oneshot
 User={{ ai_gateway_user }}
 WorkingDirectory={{ ai_gateway_dir }}
 EnvironmentFile={{ ai_gateway_dir }}/.env
+# Machine-local overrides — never written by Ansible; loaded last, so it wins.
+EnvironmentFile=-{{ ai_gateway_dir }}/.env.local
 Environment="MEMPALACE_PALACE_PATH={{ mempalace_palace_path | default(ai_gateway_dir ~ '/data/palace') }}"
 ExecStart={{ ai_gateway_dir }}/.venv/bin/mempalace compress
 StandardOutput=journal

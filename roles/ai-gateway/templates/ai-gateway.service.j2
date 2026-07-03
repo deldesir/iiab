@@ -17,6 +17,8 @@ MemorySwapMax=0
 
 # Secrets loaded from restricted file (mode 0600, owned by service user)
 EnvironmentFile={{ ai_gateway_dir }}/.env
+# Machine-local overrides — never written by Ansible; loaded last, so it wins.
+EnvironmentFile=-{{ ai_gateway_dir }}/.env.local
 
 # Non-sensitive config — managed by Ansible, edit via local_vars.yml
 Environment="RIVEBOT_URL={{ ai_gateway_rivebot_url | default('http://localhost:8087') }}"
