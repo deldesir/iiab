@@ -1,5 +1,6 @@
 [Unit]
 Description=Organized App Celery Worker
+OnFailure=notify-failure@%n.service
 After=network.target postgresql.service valkey-server.service
 Requires=valkey-server.service
 

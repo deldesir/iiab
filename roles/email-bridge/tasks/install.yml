@@ -128,6 +128,23 @@
   become: yes
   notify: restart email-bridge
 
+# Failure alerting: any unit carrying `OnFailure=notify-failure@%n.service`
+# emails the operator through this bridge when it enters failed state.
+# Owned by this role because the bridge is the delivery path.
+- name: Install notify-failure alert script
+  copy:
+    src: notify-failure
+    dest: /usr/local/sbin/notify-failure
+    mode: '0755'
+  become: yes
+
+- name: Install notify-failure@ template unit
+  copy:
+    src: notify-failure@.service
+    dest: /etc/systemd/system/notify-failure@.service
+    mode: '0644'
+  become: yes
+
 - name: Record (final) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df2

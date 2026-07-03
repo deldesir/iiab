@@ -1,5 +1,6 @@
 [Unit]
 Description=Organized App Backend (Gunicorn)
+OnFailure=notify-failure@%n.service
 After=network.target postgresql.service redis-server.service
 Requires=postgresql.service
 

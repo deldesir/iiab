@@ -1,0 +1,42 @@
+#!/bin/bash
+# notify-failure <unit> — email the operator when a systemd unit fails.
+#
+# Invoked via `OnFailure=notify-failure@%n.service` on cognitive-pipeline
+# units. Sends through the local email-bridge /send endpoint (SMTP out,
+# no public ingress). Best-effort by design: an alerting failure must
+# never cascade, so every exit path is 0; delivery problems go to syslog.
+#
+# Recipient + auth come from the bridge's own env, one source of truth:
+#   EMAIL_ALLOWED_SENDERS (first entry = the operator)
+#   EMAIL_SEND_AUTH       (shared secret guarding /send)
+
+UNIT="${1:-unknown}"
+ENVF=/opt/iiab/email-bridge/.env
+PORT=8096
+
+AUTH=$(grep -oP '^EMAIL_SEND_AUTH=\K.*' "$ENVF" 2>/dev/null)
+TO=$(grep -oP '^EMAIL_ALLOWED_SENDERS=\K[^,]*' "$ENVF" 2>/dev/null)
+
+if [ -z "$TO" ]; then
+    logger -t notify-failure "no recipient (EMAIL_ALLOWED_SENDERS empty) — alert for $UNIT dropped"
+    exit 0
+fi
+
+BODY="Subject: [$(hostname -s)] unit failed: $UNIT
+Unit $UNIT entered failed state on $(hostname -f) at $(date -Is).
+
+── systemctl status ──────────────────────────────────
+$(systemctl status "$UNIT" --no-pager -n 0 2>&1 | head -12)
+
+── last journal lines ────────────────────────────────
+$(journalctl -u "$UNIT" -n 25 --no-pager 2>&1 | tail -25)"
+
+if curl -sf -m 15 -X POST "http://127.0.0.1:$PORT/send" \
+        -H "Authorization: $AUTH" \
+        --data-urlencode "to=$TO" \
+        --data-urlencode "text=${BODY:0:7900}" >/dev/null; then
+    logger -t notify-failure "emailed alert for $UNIT"
+else
+    logger -t notify-failure "could not email alert for $UNIT (bridge down?)"
+fi
+exit 0

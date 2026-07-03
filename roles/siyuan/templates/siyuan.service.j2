@@ -1,5 +1,6 @@
 [Unit]
 Description=SiYuan Note-Taking Server
+OnFailure=notify-failure@%n.service
 After=network.target
 
 [Service]

@@ -1,5 +1,6 @@
 [Unit]
 Description=RapidPro Mailroom Service
+OnFailure=notify-failure@%n.service
 After=network.target postgresql.service {{ valkey_service_name }}
 
 [Service]
