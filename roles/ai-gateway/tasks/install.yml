@@ -33,27 +33,23 @@
     value: "{{ ai_gateway_dir }}"
   become: yes
 
-# - name: Clone or Update TalkMaster library
-#   shell: |
-#     if [ -d "{{ ai_gateway_talkmaster_dir }}/.git" ]; then
-#       cd "{{ ai_gateway_talkmaster_dir }}" && git fetch origin && git reset --hard origin/{{ ai_gateway_talkmaster_version }}
-#     else
-#       git clone --branch "{{ ai_gateway_talkmaster_version }}" --origin origin "{{ ai_gateway_talkmaster_repo }}" "{{ ai_gateway_talkmaster_dir }}"
-#     fi
-#   become: yes
-#   become_user: "{{ ai_gateway_user }}"
-#   no_log: true
-# 
-# - name: Clone or Update JWLinker library
-#   shell: |
-#     if [ -d "{{ ai_gateway_jwlinker_dir }}/.git" ]; then
-#       cd "{{ ai_gateway_jwlinker_dir }}" && git fetch origin && git reset --hard origin/{{ ai_gateway_jwlinker_version }}
-#     else
-#       git clone --branch "{{ ai_gateway_jwlinker_version }}" --origin origin "{{ ai_gateway_jwlinker_repo }}" "{{ ai_gateway_jwlinker_dir }}"
-#     fi
-#   become: yes
-#   become_user: "{{ ai_gateway_user }}"
-#   no_log: true
+# talkmaster + jwlinker are editable dependencies of the gateway (talk-prep
+# chain: talksync, talkprep tools, S-34 imports). They must exist BEFORE
+# `uv sync` or the editable sources fail to resolve. Clone-if-absent only —
+# never reset an existing tree, which may carry local work.
+- name: Clone TalkMaster library (if absent)
+  shell: git clone --branch "{{ ai_gateway_talkmaster_version }}" --origin origin "{{ ai_gateway_talkmaster_repo }}" "{{ ai_gateway_talkmaster_dir }}"
+  args:
+    creates: "{{ ai_gateway_talkmaster_dir }}/.git"
+  become: yes
+  become_user: "{{ ai_gateway_user }}"
+
+- name: Clone JWLinker library (if absent)
+  shell: git clone --branch "{{ ai_gateway_jwlinker_version }}" --origin origin "{{ ai_gateway_jwlinker_repo }}" "{{ ai_gateway_jwlinker_dir }}"
+  args:
+    creates: "{{ ai_gateway_jwlinker_dir }}/.git"
+  become: yes
+  become_user: "{{ ai_gateway_user }}"
 
 - name: Clone or Update AI Gateway repository
   shell: |
@@ -95,16 +91,6 @@
   become: yes
   environment:
     PATH: "/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-
-- name: Temporarily remove disabled dependencies from pyproject.toml
-  replace:
-    path: "{{ ai_gateway_dir }}/pyproject.toml"
-    regexp: '^(.*"{{ item }}".*)$'
-    replace: '# \1'
-  loop:
-    - talkmaster
-    - jwlinker
-  become: yes
 
 - name: Install AI Gateway dependencies (uv sync)
   command: "{{ ai_gateway_uv_bin }} sync"
