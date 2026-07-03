@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer for the morning cockpit radar (reality scan → SiYuan + digest)
+
+[Timer]
+OnCalendar=*-*-* 06:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
