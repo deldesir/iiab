@@ -150,6 +150,23 @@
   become: yes
   notify: restart organized
 
+# organized.env is regenerated on every run, so any secret that lives only
+# there is one provisioning away from being lost. organized.env.local is the
+# machine-local override file: created once if absent, NEVER overwritten by
+# Ansible, and loaded after organized.env by the units (EnvironmentFile=-),
+# so its values always win. Same pattern as ai-gateway's .env.local.
+- name: Ensure machine-local env override file exists (never overwritten)
+  copy:
+    dest: /etc/iiab/organized.env.local
+    force: no
+    content: |
+      # Machine-local secrets and overrides — NEVER written by Ansible.
+      # Loaded after organized.env by the systemd units, so values here win.
+    owner: "{{ organized_user }}"
+    group: "{{ organized_user }}"
+    mode: '0600'
+  become: yes
+
 - name: Install hourglass-check (validate Hourglass exports before import)
   copy:
     src: hourglass-check

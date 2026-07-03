@@ -9,6 +9,8 @@ User={{ organized_user | default('organized') }}
 Group={{ organized_user | default('organized') }}
 WorkingDirectory={{ organized_dir }}
 EnvironmentFile=/etc/iiab/organized.env
+# Machine-local overrides — never written by Ansible; loaded last, so it wins.
+EnvironmentFile=-/etc/iiab/organized.env.local
 ExecStart={{ organized_dir }}/.venv/bin/gunicorn \
     organized_backend.wsgi:application \
     --bind 127.0.0.1:{{ organized_port }} \
