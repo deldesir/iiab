@@ -27,10 +27,16 @@
   become: yes
   become_user: postgres
 
+# Both settings files carry live secrets (SECRET_KEY, DB password,
+# WEBSOCKETS_AUTH_SECRET) — keep them readable by the service user only,
+# not by every local account.
 - name: Configure RapidPro common settings
   template:
     src: settings_common.py.j2
     dest: "{{ rapidpro_dir }}/temba/settings_common.py"
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+    mode: '0600'
   become: yes
   register: rapidpro_settings_common
 
@@ -38,6 +44,9 @@
   template:
     src: settings.py.j2
     dest: "{{ rapidpro_dir }}/temba/settings.py"
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+    mode: '0600'
   become: yes
   register: rapidpro_settings
 
@@ -234,16 +243,21 @@
 
 
 
+# Mailroom and courier embed the DB URL (with password) in Environment=
+# lines — systemd only needs root to read unit files, so keep these two
+# out of reach of other local accounts.
 - name: Create Mailroom systemd service
   template:
     src: rapidpro-mailroom.service.j2
     dest: /etc/systemd/system/rapidpro-mailroom.service
+    mode: '0600'
   become: yes
 
 - name: Create Courier systemd service
   template:
     src: rapidpro-courier.service.j2
     dest: /etc/systemd/system/rapidpro-courier.service
+    mode: '0600'
   become: yes
 
 
