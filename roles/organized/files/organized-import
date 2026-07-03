@@ -1,0 +1,15 @@
+#!/bin/bash
+# One-shot Hourglass → Organized (+ New World Scheduler) import.
+#
+# Drop the latest Hourglass exports into /library/hourglass:
+#   - the JSON export (publishers, privileges, reports, attendance, groups)
+#   - the "Tout pwogram ansanm" .docx (the meeting program)
+# then run:
+#   organized-import              # import everything it finds
+#   organized-import --dry-run    # preview only
+#   organized-import --nws-out /library/hourglass/nws   # also write the NWS CSV
+# Explicit file paths and --dir work too; see --help.
+set -euo pipefail
+cd /opt/iiab/organized-backend
+set -a; source /etc/iiab/organized.env 2>/dev/null || true; set +a
+exec .venv/bin/python manage.py import_hourglass "$@"

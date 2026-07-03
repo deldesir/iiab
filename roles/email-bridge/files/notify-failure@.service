@@ -1,0 +1,9 @@
+# Email alert when a unit fails — attach with:
+#   OnFailure=notify-failure@%n.service
+# Installed by the email-bridge role; sends via the local bridge's /send.
+[Unit]
+Description=Email alert for failed unit %i
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/notify-failure %i

@@ -1,5 +1,6 @@
 [Unit]
 Description=Email Bridge (RapidPro External channel: SMTP send + IMAP poll)
+OnFailure=notify-failure@%n.service
 After=network.target
 
 [Service]

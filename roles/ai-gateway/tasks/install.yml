@@ -133,6 +133,25 @@
   become: yes
   notify: restart ai-gateway
 
+# .env is regenerated on every run, so any secret that lives only there is
+# one provisioning away from being lost. .env.local is the machine-local
+# override file: created once if absent, NEVER overwritten by Ansible, and
+# loaded after .env by both the systemd units (EnvironmentFile=-) and the
+# app (load_dotenv override), so its values always win.
+- name: Ensure machine-local env override file exists (never overwritten)
+  copy:
+    dest: "{{ ai_gateway_dir }}/.env.local"
+    force: no
+    content: |
+      # Machine-local secrets and overrides — NEVER written by Ansible.
+      # Loaded after .env (systemd EnvironmentFile order + app load_dotenv
+      # override), so values here win. Put anything here that is set on this
+      # box only and must survive `ansible-playbook` re-runs.
+    owner: "{{ ai_gateway_user }}"
+    group: "{{ ai_gateway_user }}"
+    mode: '0600'
+  become: yes
+
 - name: Ensure AI Gateway data directories exist
   file:
     path: "{{ item }}"
@@ -210,6 +229,8 @@
     - ai-gateway-kgwiki.timer
     - ai-gateway-nudge.service
     - ai-gateway-nudge.timer
+    - ai-gateway-talksync.service
+    - ai-gateway-talksync.timer
     - second-brain-backup.service
     - second-brain-backup.timer
   become: yes
@@ -234,6 +255,7 @@
     - ai-gateway-kgextract.timer
     - ai-gateway-kgwiki.timer
     - ai-gateway-nudge.timer
+    - ai-gateway-talksync.timer
     - second-brain-backup.timer
   become: yes
 

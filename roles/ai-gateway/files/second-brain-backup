@@ -39,6 +39,18 @@ echo "palace ok"
 # Gateway persona/config env (secrets — kept 0600 via dir perms)
 cp -a /opt/iiab/ai-gateway/.env "$DEST/$STAMP/ai-gateway.env"
 
+# Machine-local configuration that exists NOWHERE else — .env.local files
+# hold box-only secrets Ansible never writes, local_vars.yml is the
+# provisioning source of truth, and the send-auth token is generated once.
+# Losing any of these means re-keying services by hand after a disk loss.
+for f in /opt/iiab/ai-gateway/.env.local \
+         /etc/iiab/organized.env.local \
+         /etc/iiab/local_vars.yml \
+         /etc/iiab/email_bridge_send_auth.token; do
+    [ -f "$f" ] && cp -a "$f" "$DEST/$STAMP/$(echo "${f#/}" | tr / _)"
+done
+echo "machine-local config ok"
+
 chmod 700 "$DEST"
 find "$DEST" -mindepth 1 -maxdepth 1 -type d -mtime +"$KEEP_DAYS" -exec rm -rf {} +
 echo "backup complete: $DEST/$STAMP ($(du -sh "$DEST/$STAMP" | cut -f1))"

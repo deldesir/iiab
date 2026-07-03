@@ -1,5 +1,6 @@
 [Unit]
 Description=Organized App Celery Worker
+OnFailure=notify-failure@%n.service
 After=network.target postgresql.service valkey-server.service
 Requires=valkey-server.service
 
@@ -9,6 +10,8 @@ User={{ organized_user | default('organized') }}
 Group={{ organized_user | default('organized') }}
 WorkingDirectory={{ organized_dir }}
 EnvironmentFile=/etc/iiab/organized.env
+# Machine-local overrides — never written by Ansible; loaded last, so it wins.
+EnvironmentFile=-/etc/iiab/organized.env.local
 ExecStart={{ organized_dir }}/.venv/bin/celery \
     -A organized_backend worker \
     --loglevel=info \
