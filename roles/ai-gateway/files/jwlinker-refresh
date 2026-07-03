@@ -29,3 +29,13 @@ mv "$SHARED.tmp" "$SHARED"
 chown iiab-admin:iiab-admin "$SHARED"
 chmod 664 "$SHARED"
 echo "synced: $SHARED ($(du -h "$SHARED" | cut -f1), $(sqlite3 -readonly "$SHARED" 'SELECT COUNT(*) FROM Topics WHERE content IS NOT NULL') topics)"
+
+# Keep fsr's bundled S-34 title index in lockstep with the corpus so
+# laptop-side title resolution never drifts (regenerate + remind to commit).
+FSR_GEN=/opt/iiab/fsr/tools/gen_s34_index.py
+if [ -f "$FSR_GEN" ]; then
+  python3 "$FSR_GEN" --db "$SHARED" || echo "WARN: fsr index regeneration failed" >&2
+  if ! git -C /opt/iiab/fsr diff --quiet fsr/data/s34_titles.json 2>/dev/null; then
+    echo "NOTE: fsr/data/s34_titles.json changed — commit it in /opt/iiab/fsr so laptops pick it up."
+  fi
+fi
