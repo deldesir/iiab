@@ -1,0 +1,54 @@
+#!/bin/bash
+# Export active RapidPro flow definitions into a local git repo.
+# Flows (menus, localization, routing) otherwise live ONLY in Postgres:
+# the nightly pgdump can restore them, but nothing can review or diff
+# them. This gives every flow edit a commit. Local-only by design — no
+# remote, no credentials; history rides the same disk as the DB it
+# mirrors, so off-box protection is the backup job's concern.
+set -euo pipefail
+
+DEST=/library/rapidpro-flows
+mkdir -p "$DEST"
+cd "$DEST"
+if [ ! -d .git ]; then
+    git init -q
+    git config user.name "rapidpro-flows-export"
+    git config user.email "flows-export@box.lan"
+fi
+
+rm -f ./*.json
+python3 - "$DEST" <<'PYEOF'
+import json, re, subprocess, sys
+
+dest = sys.argv[1]
+SEP = "\x1f"
+out = subprocess.run(
+    ["sudo", "-u", "postgres", "psql", "temba", "-tA", "-F", SEP, "-c",
+     "SELECT f.name, fr.definition::text FROM flows_flow f "
+     "JOIN LATERAL (SELECT definition FROM flows_flowrevision "
+     "  WHERE flow_id = f.id ORDER BY revision DESC LIMIT 1) fr ON true "
+     "WHERE f.is_active AND NOT f.is_archived ORDER BY f.name"],
+    capture_output=True, text=True, check=True).stdout
+
+count = 0
+for line in out.splitlines():
+    if SEP not in line:
+        continue
+    name, _, raw = line.partition(SEP)
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "unnamed"
+    definition = json.loads(raw)
+    definition.pop("revision", None)  # noise: bumps on every save
+    with open(f"{dest}/{slug}.json", "w", encoding="utf-8") as f:
+        json.dump(definition, f, indent=1, ensure_ascii=False, sort_keys=True)
+        f.write("\n")
+    count += 1
+print(f"exported {count} flow definition(s)")
+PYEOF
+
+git add -A
+if git diff --cached --quiet; then
+    echo "no flow changes"
+else
+    git commit -q -m "flows @ $(date +%F)"
+    echo "committed flow changes"
+fi
