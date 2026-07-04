@@ -1,0 +1,31 @@
+# Box hardening: key-only SSH + brute-force banning.
+# Everything here is idempotent — safe to re-run any time.
+
+- name: Disable SSH password authentication (first-match drop-in beats cloud-init)
+  copy:
+    src: 00-hardening.conf
+    dest: /etc/ssh/sshd_config.d/00-hardening.conf
+    mode: '0644'
+    validate: 'sshd -t -f /etc/ssh/sshd_config'
+  become: yes
+  register: sshd_hardening
+
+- name: Reload sshd
+  systemd:
+    name: ssh
+    state: reloaded
+  become: yes
+  when: sshd_hardening.changed
+
+- name: Install fail2ban
+  apt:
+    name: fail2ban
+    state: present
+  become: yes
+
+- name: Enable fail2ban (default sshd jail)
+  systemd:
+    name: fail2ban
+    enabled: yes
+    state: started
+  become: yes
