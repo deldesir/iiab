@@ -1,4 +1,13 @@
 ---
+# runrole runs with minimal fact gathering, so ansible_default_ipv4 was
+# undefined and the template's guarded self-allow line silently vanished —
+# the role converged on a config that 403'd mailroom's hairpin webhooks.
+# Gather exactly the facts the template needs, right before using them.
+- name: Gather network facts for the hairpin self-allow
+  setup:
+    gather_subset:
+      - network
+
 - name: Deploy AI Gateway Nginx configuration
   template:
     src: ai-gateway-nginx.conf.j2
