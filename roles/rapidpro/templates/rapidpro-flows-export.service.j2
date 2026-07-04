@@ -1,0 +1,9 @@
+# Managed by Ansible (rapidpro role)
+[Unit]
+Description=Export RapidPro flow definitions to local git history
+After=postgresql-iiab.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/rapidpro-flows-export
+OnFailure=notify-failure@%n.service

@@ -268,6 +268,29 @@
     dest: /etc/systemd/system/rapidpro-celery.service
   become: yes
 
+- name: Install flow-export script (flows live only in Postgres otherwise)
+  copy:
+    src: rapidpro-flows-export
+    dest: /usr/local/sbin/rapidpro-flows-export
+    mode: '0755'
+  become: yes
+
+- name: Create flow-export systemd units
+  template:
+    src: "rapidpro-flows-export.{{ item }}.j2"
+    dest: "/etc/systemd/system/rapidpro-flows-export.{{ item }}"
+  loop: [service, timer]
+  become: yes
+
+- name: Enable nightly flow export
+  systemd:
+    name: rapidpro-flows-export.timer
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes
+  when: not is_proot
+
 - name: Reload systemd daemon
   systemd:
     daemon_reload: yes
