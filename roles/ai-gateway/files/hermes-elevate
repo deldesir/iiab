@@ -96,9 +96,13 @@ def cmd_generate() -> None:
            f"&issuer=hermes-elevate&period={STEP}&digits=6")
     fd = os.open(ENROLL_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
-        f.write("Enroll this in your authenticator app, then DELETE this "
-                "file.\n\nManual key (base32): " + b32 + "\n\nURI:\n"
-                + uri + "\n")
+        f.write(
+            "Add this key to your authenticator app, then DELETE this "
+            "file.\n\n"
+            "NEVER send this key anywhere — not in chat, not to Alva, not "
+            "by email. It is typed (or scanned) directly into the app and "
+            "exists nowhere else. Only the 6-digit codes are ever sent.\n\n"
+            "Manual key (base32): " + b32 + "\n\nURI:\n" + uri + "\n")
     log("TOTP secret generated; enrollment file written")
     print(f"Secret created. Enrollment data: {ENROLL_FILE} — "
           "add to your authenticator, then delete the file.")
