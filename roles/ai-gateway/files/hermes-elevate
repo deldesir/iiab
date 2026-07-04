@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""hermes-elevate — TOTP-gated root window for the chat assistant.
+
+The gateway's terminal tool runs as iiab-admin; root work from chat is
+impossible (sudo wants a password) and must stay impossible for anyone
+who merely holds the WhatsApp session or poisons a document the model
+reads. This wrapper is the single root path, and its gate is a TOTP
+code from the operator's authenticator app — something a prompt
+injection can never fabricate.
+
+Reached only via an exact-match NOPASSWD sudoers entry for iiab-admin.
+The privilege decision NEVER involves the LLM: verify/run check state
+on disk, deterministically.
+
+  generate         create the shared secret (root only, once); writes
+                   the enrollment URI to /root/hermes-totp-enroll.txt
+  verify <code>    check a TOTP code; on success open a 15-minute
+                   grant window. Codes are single-use; 5 failures lock
+                   verification for 15 minutes.
+  run <command...> execute as root while the window is open
+  status           window state (open/closed, seconds left)
+  drop             close the window immediately
+
+Everything is logged to syslog (tag: hermes-elevate).
+"""
+
+import base64
+import hashlib
+import hmac
+import json
+import os
+import secrets as pysecrets
+import struct
+import subprocess
+import sys
+import time
+
+SECRET_FILE = "/etc/iiab/hermes-totp.secret"
+ENROLL_FILE = "/root/hermes-totp-enroll.txt"
+STATE_DIR = "/run/hermes-elevate"
+GRANT_FILE = os.path.join(STATE_DIR, "grant")
+GUARD_FILE = os.path.join(STATE_DIR, "guard")
+
+GRANT_SECONDS = 900
+MAX_FAILS = 5
+LOCKOUT_SECONDS = 900
+STEP = 30
+
+
+def log(msg: str) -> None:
+    subprocess.run(["logger", "-t", "hermes-elevate", msg], check=False)
+
+
+def die(msg: str, code: int = 1) -> None:
+    print(msg)
+    sys.exit(code)
+
+
+def _ensure_state_dir() -> None:
+    os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+
+
+def _load_json(path: str) -> dict:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_json(path: str, data: dict) -> None:
+    _ensure_state_dir()
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
+def _totp(key: bytes, timestep: int) -> str:
+    digest = hmac.new(key, struct.pack(">Q", timestep), hashlib.sha1).digest()
+    offset = digest[19] & 0x0F
+    value = struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF
+    return str(value % 1_000_000).zfill(6)
+
+
+def cmd_generate() -> None:
+    if os.path.exists(SECRET_FILE):
+        die("Secret already exists. Remove it first to rotate (this "
+            "invalidates the enrolled authenticator).")
+    raw = pysecrets.token_bytes(20)
+    b32 = base64.b32encode(raw).decode().rstrip("=")
+    os.makedirs(os.path.dirname(SECRET_FILE), exist_ok=True)
+    fd = os.open(SECRET_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(b32 + "\n")
+    uri = (f"otpauth://totp/hermes-elevate@garantie?secret={b32}"
+           f"&issuer=hermes-elevate&period={STEP}&digits=6")
+    fd = os.open(ENROLL_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write("Enroll this in your authenticator app, then DELETE this "
+                "file.\n\nManual key (base32): " + b32 + "\n\nURI:\n"
+                + uri + "\n")
+    log("TOTP secret generated; enrollment file written")
+    print(f"Secret created. Enrollment data: {ENROLL_FILE} — "
+          "add to your authenticator, then delete the file.")
+
+
+def _read_secret() -> bytes:
+    try:
+        b32 = open(SECRET_FILE, encoding="utf-8").read().strip()
+    except OSError:
+        die("No secret enrolled.")
+    pad = "=" * (-len(b32) % 8)
+    return base64.b32decode(b32 + pad)
+
+
+def cmd_verify(code: str) -> None:
+    now = int(time.time())
+    guard = _load_json(GUARD_FILE)
+
+    if guard.get("locked_until", 0) > now:
+        left = guard["locked_until"] - now
+        log(f"verify REJECTED (locked, {left}s left)")
+        die(f"Locked out. Try again in {left // 60 + 1} minute(s).")
+
+    code = code.strip().replace(" ", "")
+    if not (code.isdigit() and len(code) == 6):
+        die("Invalid code format.")
+
+    key = _read_secret()
+    step_now = now // STEP
+    used = guard.get("last_used_step", 0)
+    matched = None
+    for step in (step_now, step_now - 1, step_now + 1):
+        if step > used and hmac.compare_digest(_totp(key, step), code):
+            matched = step
+            break
+
+    if matched is None:
+        fails = guard.get("fails", 0) + 1
+        guard["fails"] = fails
+        if fails >= MAX_FAILS:
+            guard["locked_until"] = now + LOCKOUT_SECONDS
+            guard["fails"] = 0
+            log(f"verify FAILED — lockout engaged ({LOCKOUT_SECONDS}s)")
+            _save_json(GUARD_FILE, guard)
+            die("Too many failures. Locked out.")
+        _save_json(GUARD_FILE, guard)
+        log(f"verify FAILED ({fails}/{MAX_FAILS})")
+        die("Invalid code.")
+
+    guard["fails"] = 0
+    guard["last_used_step"] = matched
+    _save_json(GUARD_FILE, guard)
+    _save_json(GRANT_FILE, {"expires": now + GRANT_SECONDS})
+    log(f"verify OK — root window open {GRANT_SECONDS}s")
+    print(f"OK — root window open for {GRANT_SECONDS // 60} minutes.")
+
+
+def _grant_left() -> int:
+    grant = _load_json(GRANT_FILE)
+    return max(0, int(grant.get("expires", 0)) - int(time.time()))
+
+
+def cmd_run(argv: list) -> None:
+    if not argv:
+        die("Nothing to run.")
+    left = _grant_left()
+    if left <= 0:
+        log(f"run DENIED (window closed): {' '.join(argv)}")
+        die("Permission denied.")
+    command = " ".join(argv)
+    log(f"run ({left}s left): {command}")
+    result = subprocess.run(["/bin/bash", "-lc", command])
+    sys.exit(result.returncode)
+
+
+def cmd_status() -> None:
+    left = _grant_left()
+    print(f"open, {left}s remaining" if left else "closed")
+
+
+def cmd_drop() -> None:
+    try:
+        os.remove(GRANT_FILE)
+    except OSError:
+        pass
+    log("window dropped")
+    print("closed")
+
+
+def main() -> None:
+    if os.geteuid() != 0:
+        die("Must run as root (via sudo).")
+    args = sys.argv[1:]
+    if not args:
+        die(__doc__.strip().splitlines()[0])
+    action, rest = args[0], args[1:]
+    if action == "generate":
+        cmd_generate()
+    elif action == "verify" and len(rest) == 1:
+        cmd_verify(rest[0])
+    elif action == "run":
+        cmd_run(rest)
+    elif action == "status":
+        cmd_status()
+    elif action == "drop":
+        cmd_drop()
+    else:
+        die("Usage: generate | verify <code> | run <command...> | status | drop")
+
+
+if __name__ == "__main__":
+    main()
