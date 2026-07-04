@@ -1,21 +1,6 @@
 ---
-# 'latest' resolves to the most recently *published* release of ANY kind,
-# i.e. the newest pre-release (beta/rc) when it is more recent than the
-# newest stable, otherwise the newest stable. We therefore list all releases
-# (the /releases/latest endpoint hides pre-releases) and pick by published_at.
-- name: Determine newest SiYuan release (including pre-releases) from GitHub
-  uri:
-    url: https://api.github.com/repos/siyuan-note/siyuan/releases?per_page=20
-    return_content: yes
-    headers:
-      User-Agent: "IIAB"
-  register: siyuan_releases
-  when: siyuan_version == 'latest'
-
-- name: Set siyuan_version to newest release (stable or pre-release, whichever is more recent)
-  set_fact:
-    siyuan_version: "{{ (siyuan_releases.json | rejectattr('draft') | sort(attribute='published_at') | list | last).tag_name | regex_replace('^v', '') }}"
-  when: siyuan_version == 'latest'
+# Version resolution + drift detection live in resolve-version.yml (run by
+# main.yml before this file is included).
 
 # Migrate workspace from old location (/opt/iiab/siyuan-server/workspace)
 # to /library/siyuan if notebooks exist at the old path
@@ -55,12 +40,36 @@
     - "{{ siyuan_dir }}"
     - "{{ siyuan_workspace }}"
 
-- name: Download SiYuan v{{ siyuan_version }} release tarball
+- name: Download SiYuan v{{ siyuan_version }} release tarball (checksum-verified)
   get_url:
     url: "https://github.com/siyuan-note/siyuan/releases/download/v{{ siyuan_version }}/siyuan-{{ siyuan_version }}-{{ siyuan_arch }}.tar.gz"
     dest: "/tmp/siyuan-{{ siyuan_version }}.tar.gz"
+    checksum: "sha256:https://github.com/siyuan-note/siyuan/releases/download/v{{ siyuan_version }}/SHA256SUMS.txt"
     mode: '0644'
+  register: siyuan_download
+  retries: 3
+  delay: 5
+  until: siyuan_download is succeeded
   become: yes
+
+# The 3.x data-format upgrades are ONE-WAY: snapshot the workspace before
+# replacing the kernel so a bad upgrade is recoverable.
+- name: Snapshot workspace before upgrading an existing install
+  shell: >
+    tar -czf "/library/backups/siyuan-pre-{{ siyuan_version }}-$(date +%F).tar.gz"
+    --exclude='temp' -C "{{ siyuan_workspace | dirname }}" "{{ siyuan_workspace | basename }}"
+  args:
+    creates: "/library/backups/siyuan-pre-{{ siyuan_version }}-*.tar.gz"
+  become: yes
+  when: siyuan_installed is defined
+
+- name: Stop SiYuan before replacing the kernel binary
+  systemd:
+    name: siyuan
+    state: stopped
+  become: yes
+  failed_when: false
+  when: siyuan_installed is defined
 
 # The release tarball is an Electron desktop bundle; we only need
 # the resources/ subdirectory which contains:
@@ -82,6 +91,13 @@
   file:
     path: "{{ siyuan_dir }}/kernel/SiYuan-Kernel"
     mode: '0755'
+  become: yes
+
+- name: Record installed version marker
+  copy:
+    content: "{{ siyuan_version }}\n"
+    dest: "{{ siyuan_dir }}/VERSION"
+    mode: '0644'
   become: yes
 
 - name: Clean up tarball

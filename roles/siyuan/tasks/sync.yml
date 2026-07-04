@@ -1,0 +1,56 @@
+---
+# Device-sync endpoint: a WebDAV server (rclone) over the workspace-external
+# sync store, published on the tailnet for the official mobile apps.
+#
+# NOTE the honest limitation: current SiYuan kernels gate ALL sync providers
+# (WebDAV/S3/local) behind a paid license (checkSync → IsPaidUser). This
+# endpoint is the self-hosted half; activating sync additionally requires
+# signing in with a PRO/subscriber account in Settings → Account.
+
+- name: Install rclone
+  apt:
+    name: rclone
+    state: present
+  become: yes
+
+- name: Create sync store directory
+  file:
+    path: "{{ siyuan_sync_dir }}"
+    state: directory
+    owner: "{{ siyuan_user }}"
+    group: "{{ siyuan_user }}"
+    mode: '0750'
+  become: yes
+
+- name: Generate WebDAV credentials once
+  shell: |
+    PASS=$(openssl rand -base64 18 | tr -d '/+=' | head -c 24)
+    printf 'user: siyuan\npassword: %s\n' "$PASS" > /etc/iiab/siyuan-sync-webdav.credentials
+    chmod 0600 /etc/iiab/siyuan-sync-webdav.credentials
+    printf 'siyuan:%s\n' "$(openssl passwd -apr1 "$PASS")" > /etc/iiab/siyuan-sync-webdav.htpasswd
+    chown {{ siyuan_user }} /etc/iiab/siyuan-sync-webdav.htpasswd
+    chmod 0600 /etc/iiab/siyuan-sync-webdav.htpasswd
+  args:
+    creates: /etc/iiab/siyuan-sync-webdav.credentials
+  become: yes
+
+- name: Install WebDAV systemd service
+  template:
+    src: siyuan-sync-webdav.service.j2
+    dest: /etc/systemd/system/siyuan-sync-webdav.service
+  become: yes
+
+- name: Enable WebDAV sync endpoint
+  systemd:
+    name: siyuan-sync-webdav
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes
+
+- name: Publish WebDAV on the tailnet
+  template:
+    src: siyuan-sync.conf.j2
+    dest: /etc/nginx/sites-enabled/siyuan-sync.conf
+  become: yes
+  notify: reload nginx

@@ -1,0 +1,56 @@
+---
+# Resolve siyuan_version ('latest' → concrete tag) and compare against the
+# installed-version marker so a plain role run converges on the target.
+
+- name: Determine newest SiYuan release (including pre-releases) from GitHub
+  uri:
+    url: https://api.github.com/repos/siyuan-note/siyuan/releases?per_page=20
+    return_content: yes
+    headers:
+      User-Agent: "IIAB"
+  register: siyuan_releases
+  retries: 3
+  delay: 5
+  until: siyuan_releases is succeeded
+  when: siyuan_version == 'latest'
+
+- name: Set siyuan_version to newest release (stable or pre-release, whichever is more recent)
+  set_fact:
+    siyuan_version: "{{ (siyuan_releases.json | rejectattr('draft') | sort(attribute='published_at') | list | last).tag_name | regex_replace('^v', '') }}"
+  when: siyuan_version == 'latest'
+
+- name: Read installed-version marker
+  slurp:
+    src: "{{ siyuan_dir }}/VERSION"
+  register: siyuan_version_marker
+  failed_when: false
+
+- name: Detect version drift
+  set_fact:
+    siyuan_version_drift: >-
+      {{ siyuan_version_marker.content is defined and
+         (siyuan_version_marker.content | b64decode | trim) != siyuan_version }}
+
+# Existing installs predate the marker: seed it from the running kernel so
+# drift detection works from the next run onward (never forces a reinstall
+# by itself).
+- name: Probe running kernel version to seed a missing marker
+  uri:
+    url: "http://127.0.0.1:{{ siyuan_port }}/api/system/version"
+    method: POST
+    return_content: yes
+  register: siyuan_live_version
+  failed_when: false
+  when: siyuan_version_marker.content is not defined
+
+- name: Seed installed-version marker from the running kernel
+  copy:
+    content: "{{ siyuan_live_version.json.data }}\n"
+    dest: "{{ siyuan_dir }}/VERSION"
+    owner: "{{ siyuan_user }}"
+    group: "{{ siyuan_user }}"
+    mode: '0644'
+  become: yes
+  when:
+    - siyuan_version_marker.content is not defined
+    - siyuan_live_version.json.data is defined
