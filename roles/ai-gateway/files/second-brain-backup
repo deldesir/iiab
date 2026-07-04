@@ -25,6 +25,11 @@ backup_sqlite /opt/iiab/ai-gateway/.mempalace/knowledge_graph.sqlite3     knowle
 backup_sqlite /opt/iiab/ai-gateway/checkpoints.sqlite                     checkpoints.sqlite
 backup_sqlite /library/jwlinker/jw_library.db                             jw_library.db
 
+# WhatsApp session (whatsmeow store + wuzapi users) — losing these means
+# re-linking the number, and repeated re-links raise the ban risk.
+backup_sqlite /opt/iiab/wuzapi/dbdata/main.db                             wuzapi-main.db
+backup_sqlite /opt/iiab/wuzapi/dbdata/users.db                            wuzapi-users.db
+
 # SiYuan workspace (notes + conf; excludes temp/history caches)
 tar -czf "$DEST/$STAMP/siyuan-workspace.tar.gz" \
     --exclude='temp' --exclude='history' \
