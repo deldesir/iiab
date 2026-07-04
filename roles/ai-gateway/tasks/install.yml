@@ -229,6 +229,19 @@
   loop:
     - second-brain-backup
     - jwlinker-refresh
+    - hermes-elevate
+  become: yes
+
+# TOTP-gated root window for the chat assistant (hermes-elevate).
+# Enrollment stays MANUAL and one-time: `hermes-elevate generate` as
+# root writes the authenticator secret — the role never creates or
+# rotates it.
+- name: Allow the gateway user to reach the elevation wrapper
+  copy:
+    content: "iiab-admin ALL=(root) NOPASSWD: /usr/local/sbin/hermes-elevate\n"
+    dest: /etc/sudoers.d/hermes-elevate
+    mode: '0440'
+    validate: 'visudo -cf %s'
   become: yes
 
 - name: Ensure pipeline timers are enabled and running
