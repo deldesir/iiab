@@ -7,8 +7,9 @@ note-taking server using pre-built release binaries from GitHub.
 
 - Downloads the official Linux release tarball
 - Extracts only `resources/` (kernel binary + frontend assets), skipping Electron desktop bloat
-- Sets `RUN_IN_CONTAINER=true` so the kernel binds `0.0.0.0:6806`, reached through the
-  nginx reverse proxy (direct `:6806` is firewalled to non-local clients by iptables)
+- Runs the kernel in std mode (loopback only) — container mode disabled the Account/sync
+  credential inputs in the UI. nginx republishes the kernel on the tailscale address
+  (`siyuan_native_bind`) so tailnet devices keep the native `:6806` URL
 - Web UI at `https://box/sy/` — localhost / LAN / Tailscale only (see Security model)
 
 ## Version selection
@@ -40,7 +41,8 @@ not confuse them:
   only to have Ansible manage/propagate it to consumers. (Older installs may carry
   a hand-set, guessable value like `iiab-siyuan-token` — rotate it.)
 
-The kernel binds `0.0.0.0:6806` (via `RUN_IN_CONTAINER=true`), so the nginx config
+The kernel binds `127.0.0.1:6806` (std mode); nginx republishes it on the tailscale
+address only — the public interface never hears :6806. The nginx config
 (`siyuan-nginx.conf.j2`) restricts **every** SiYuan location to localhost + LAN +
 Tailscale (`allow … ; deny all;`) — matching `ai-gateway.conf` / `wuzapi.conf`.
 Without that ACL the `/api/` catch-all would expose the admin API to the public

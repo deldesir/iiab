@@ -15,6 +15,26 @@
   when: siyuan_enabled
   notify: reload nginx
 
+# std-mode kernel binds loopback only; nginx republishes it on the tailnet
+# at the native URL. ip_nonlocal_bind lets nginx bind the tailscale address
+# even when tailscale0 comes up after nginx at boot.
+- name: Allow nginx to bind the tailscale address before the interface exists
+  sysctl:
+    name: net.ipv4.ip_nonlocal_bind
+    value: '1'
+    state: present
+    sysctl_file: /etc/sysctl.d/90-siyuan-native.conf
+  become: yes
+  when: siyuan_enabled
+
+- name: Publish SiYuan natively on the tailnet, if siyuan_enabled
+  template:
+    src: siyuan-native.conf.j2
+    dest: /etc/nginx/sites-enabled/siyuan-native.conf
+  become: yes
+  when: siyuan_enabled
+  notify: reload nginx
+
 - name: Disable & Stop 'siyuan' systemd service, if not siyuan_enabled
   systemd:
     name: siyuan

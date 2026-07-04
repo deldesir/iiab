@@ -1,0 +1,26 @@
+# Managed by Ansible (siyuan role).
+# Publishes the loopback-bound SiYuan kernel on the tailnet at the native
+# URL (http://{{ siyuan_native_bind }}:{{ siyuan_port }}). In std (non-container)
+# mode the kernel binds 127.0.0.1 only — container mode used to provide the
+# 0.0.0.0 bind but also disabled the Account/sync credential inputs in the UI.
+# Only the tailscale address is bound: the public interface never hears :{{ siyuan_port }}.
+server {
+    # tailscale0 may come up after nginx: ip_nonlocal_bind (set by the role)
+    # lets this bind succeed before the interface exists.
+    listen {{ siyuan_native_bind }}:{{ siyuan_port }};
+
+    access_log /var/log/nginx/siyuan-native.log;
+
+    location / {
+        proxy_pass http://127.0.0.1:{{ siyuan_port }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300;
+        client_max_body_size 512M;
+    }
+}
