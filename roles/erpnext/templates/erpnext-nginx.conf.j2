@@ -139,7 +139,7 @@ location ^~ /blog/ { return 301 /erp$request_uri; }
 location = /blog { return 301 /erp/blog; }
 location ^~ /about/ { return 301 /erp$request_uri; }
 location = /about { return 301 /erp/about; }
-location ^~ /contact/ { return 301 /erp$request_uri; }
+location = /contact/ { return 301 /erp/contact; }
 location = /contact { return 301 /erp/contact; }
 
 # ── Root-level Frappe endpoints (Redirect to /erp/ for subpath consistency) ─────
