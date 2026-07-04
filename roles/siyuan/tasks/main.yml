@@ -17,9 +17,17 @@
 
 - block:
 
-    - name: Install SiYuan if 'siyuan_installed' not defined, e.g. in {{ iiab_state_file }}
+    # The install also runs on VERSION DRIFT: resolve the target version
+    # first (cheap API call, retried), compare with the marker written by
+    # the last install, and converge. A plain role run therefore upgrades
+    # a 'latest' install to the newest release — with an automatic
+    # pre-upgrade workspace snapshot (the data format upgrade is one-way).
+    - name: Resolve target SiYuan version and detect drift
+      include_tasks: resolve-version.yml
+
+    - name: Install SiYuan if never installed, on version drift, or on --reinstall
       include_tasks: install.yml
-      when: siyuan_installed is undefined
+      when: siyuan_installed is undefined or siyuan_version_drift
 
     - include_tasks: enable-or-disable.yml
 

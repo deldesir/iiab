@@ -1,0 +1,17 @@
+# Managed by Ansible (siyuan role)
+[Unit]
+Description=WebDAV endpoint for SiYuan device sync (rclone)
+After=network.target
+OnFailure=notify-failure@%n.service
+
+[Service]
+User={{ siyuan_user }}
+ExecStart=/usr/bin/rclone serve webdav {{ siyuan_sync_dir }} \
+  --addr 127.0.0.1:{{ siyuan_sync_port }} \
+  --htpasswd /etc/iiab/siyuan-sync-webdav.htpasswd \
+  --log-level NOTICE
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
