@@ -40,6 +40,12 @@ siyuan_api_token: ""
 # Workspace (where notebooks live) — under /library/ to survive reinstalls
 siyuan_workspace: /library/siyuan
 
+# In std (non-container) mode the kernel binds 127.0.0.1 only. nginx
+# publishes it on this address so tailnet devices keep using the native
+# URL (http://100.64.0.18:6806). Requires ip_nonlocal_bind (set by the
+# role) because tailscale0 may come up after nginx.
+siyuan_native_bind: "100.64.0.18"
+
 # Architecture mapping for release tarballs
 siyuan_arch_dict:
   x86_64: linux

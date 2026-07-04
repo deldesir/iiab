@@ -7,7 +7,11 @@ After=network.target
 Type=simple
 User={{ siyuan_user }}
 WorkingDirectory={{ siyuan_dir }}
-Environment=RUN_IN_CONTAINER=true
+# NOTE: no RUN_IN_CONTAINER — container mode made the frontend report
+# system.container=docker, which DISABLES the Account / sync credential
+# inputs in the UI. In std mode the kernel binds 127.0.0.1 only; remote
+# (tailscale) access is published by nginx on {{ siyuan_native_bind }}:{{ siyuan_port }}
+# (see siyuan-nginx.conf.j2), so the kernel is no longer raw on all interfaces.
 # Secret loaded from restricted file (mode 0600, owned by service user)
 EnvironmentFile={{ siyuan_dir }}/.env
 {% if siyuan_version.split('.')[0] | int > 3 or (siyuan_version.split('.')[0] | int == 3 and siyuan_version.split('.')[1] | int >= 7) %}
