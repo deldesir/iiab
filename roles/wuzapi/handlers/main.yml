@@ -5,11 +5,11 @@
     state: restarted
     daemon_reload: yes
   become: yes
-  when: ansible_service_mgr == 'systemd'
+  when: not is_proot
 
 - name: reload nginx
   systemd:
     name: nginx
     state: reloaded
   become: yes
-  when: ansible_service_mgr == 'systemd'
+  when: not is_proot
