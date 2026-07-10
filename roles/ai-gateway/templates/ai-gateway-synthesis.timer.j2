@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer for the morning Hermes synthesis (after the 06:40 brief)
+
+[Timer]
+OnCalendar=*-*-* 06:50:00 America/Port-au-Prince
+Persistent=true
+
+[Install]
+WantedBy=timers.target

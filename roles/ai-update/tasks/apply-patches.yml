@@ -55,6 +55,27 @@
     msg: "Hermes 4KB storage cap patch FAILED — check tools/memory_tool.py"
   when: patch_cap is failed
 
+# Patch 3: _SafeWriter must be weakref-able
+# Reason: _install_safe_stdio() wraps sys.stdout/stderr in _SafeWriter before
+# most libraries import. structlog's WRITE_LOCKS (structlog/_output.py) is a
+# WeakKeyDictionary keyed by the stream object, so any structlog logger then
+# dies with "cannot create weak reference to '_SafeWriter' object" (seen as
+# create_revision canvas builds failing in the gateway). A slotted class is
+# only weakref-able if __slots__ includes __weakref__.
+- name: "hermes: _SafeWriter weakref slot (structlog compatibility)"
+  replace:
+    path: /opt/iiab/hermes-agent/agent/process_bootstrap.py
+    regexp: '__slots__ = \("_inner",\)'
+    replace: '__slots__ = ("_inner", "__weakref__")  # IIAB: weakref-able for structlog WRITE_LOCKS'
+  become: yes
+  register: patch_safewriter
+  ignore_errors: yes
+
+- name: "⚠️  _SafeWriter weakref patch did not apply"
+  debug:
+    msg: "Hermes _SafeWriter weakref patch FAILED — check agent/process_bootstrap.py"
+  when: patch_safewriter is failed
+
 # ═══════════════════════════════════════════════════════════════════
 # MemPalace patches
 # ═══════════════════════════════════════════════════════════════════
