@@ -20,20 +20,25 @@ Environment='MAILROOM_SPOOL_DIR={{ rapidpro_dir }}/spool/mailroom'
 Environment='MAILROOM_ELASTIC='
 # Bind the public web server to loopback. RapidPro uses the separate INTERNAL
 # server (MAILROOM_URL=127.0.0.1:8091); no external caller needs :8090 here.
-Environment='MAILROOM_PUBLIC_ADDRESS={{ rapidpro_public_bind_address }}'
+# v26.3.3+ renamed PublicAddress -> InternetAddress; the old env is ignored.
+Environment='MAILROOM_INTERNET_ADDRESS={{ rapidpro_public_bind_address }}'
+Environment='MAILROOM_INTERNAL_ADDRESS=127.0.0.1'
 
 {% if rapidpro_aws_enabled %}
-# AWS Configuration (S3 + DynamoDB)
-Environment='MAILROOM_AWS_ACCESS_KEY_ID={{ rapidpro_aws_access_key_id }}'
-Environment='MAILROOM_AWS_SECRET_ACCESS_KEY={{ rapidpro_aws_secret_access_key }}'
-Environment='MAILROOM_AWS_REGION={{ rapidpro_aws_region }}'
+# AWS Configuration (S3 + DynamoDB). v26.3.3+ uses the SDK default credential
+# chain — AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_REGION are read by the
+# SDK itself (no MAILROOM_ prefix).
+Environment='AWS_ACCESS_KEY_ID={{ rapidpro_aws_access_key_id }}'
+Environment='AWS_SECRET_ACCESS_KEY={{ rapidpro_aws_secret_access_key }}'
+Environment='AWS_REGION={{ rapidpro_aws_region }}'
 Environment='MAILROOM_S3_ENDPOINT=https://s3.{{ rapidpro_aws_region }}.amazonaws.com'
 Environment='MAILROOM_S3_ATTACHMENTS_BUCKET={{ rapidpro_s3_bucket_prefix }}-attachments'
 Environment='MAILROOM_DYNAMO_TABLE_PREFIX={{ rapidpro_dynamo_table_prefix }}'
 {% else %}
-# Local-first mode: DynamoDB and S3 disabled
+# Local-first mode: DynamoDB and S3 disabled (empty prefix/bucket skip the
+# AWS clients entirely — no SDK credential resolution, no IMDS probe)
 Environment='MAILROOM_DYNAMO_TABLE_PREFIX='
-Environment='MAILROOM_AWS_ACCESS_KEY_ID='
+Environment='MAILROOM_S3_ATTACHMENTS_BUCKET='
 {% endif %}
 
 # ADR-010: Allow localhost webhooks for CRM ops flows (Finding 1)

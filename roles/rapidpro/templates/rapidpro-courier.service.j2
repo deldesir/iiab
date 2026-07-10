@@ -15,7 +15,9 @@ Environment='COURIER_DOMAIN={{ rapidpro_domain }}'
 Environment='COURIER_MEDIA_BASE_URL=/rp/media'
 # Bind the public webhook server to loopback (clients are local: wuzapi +
 # email-bridge POST to 127.0.0.1). Internal server stays on localhost:8081.
-Environment='COURIER_PUBLIC_ADDRESS={{ rapidpro_public_bind_address }}'
+# v26.3.3+ renamed PublicAddress -> InternetAddress; the old env is ignored.
+Environment='COURIER_INTERNET_ADDRESS={{ rapidpro_public_bind_address }}'
+Environment='COURIER_INTERNAL_ADDRESS=127.0.0.1'
 # Allow loopback in courier's SSRF blocklist: External-channel sends (e.g. the
 # email-bridge) target 127.0.0.1, which courier's default DisallowedNetworks
 # rejects. This is the default list MINUS 127.0.0.0/8 and ::1 (other private
@@ -24,17 +26,20 @@ Environment='COURIER_PUBLIC_ADDRESS={{ rapidpro_public_bind_address }}'
 Environment='COURIER_DISALLOWED_NETWORKS=fe80::/10,fc00::/7,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,169.254.0.0/16,0.0.0.0/8'
 
 {% if rapidpro_aws_enabled %}
-# AWS Configuration (S3 + DynamoDB)
-Environment='COURIER_AWS_ACCESS_KEY_ID={{ rapidpro_aws_access_key_id }}'
-Environment='COURIER_AWS_SECRET_ACCESS_KEY={{ rapidpro_aws_secret_access_key }}'
-Environment='COURIER_AWS_REGION={{ rapidpro_aws_region }}'
+# AWS Configuration (S3 + DynamoDB). v26.3.3+ uses the SDK default credential
+# chain — AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_REGION are read by the
+# SDK itself (no COURIER_ prefix).
+Environment='AWS_ACCESS_KEY_ID={{ rapidpro_aws_access_key_id }}'
+Environment='AWS_SECRET_ACCESS_KEY={{ rapidpro_aws_secret_access_key }}'
+Environment='AWS_REGION={{ rapidpro_aws_region }}'
 Environment='COURIER_S3_ENDPOINT=https://s3.{{ rapidpro_aws_region }}.amazonaws.com'
 Environment='COURIER_S3_ATTACHMENTS_BUCKET={{ rapidpro_s3_bucket_prefix }}-attachments'
 Environment='COURIER_DYNAMO_TABLE_PREFIX={{ rapidpro_dynamo_table_prefix }}'
 {% else %}
-# Local-first mode: DynamoDB and S3 disabled
+# Local-first mode: DynamoDB and S3 disabled (empty prefix/bucket skip the
+# AWS clients entirely — no SDK credential resolution, no IMDS probe)
 Environment='COURIER_DYNAMO_TABLE_PREFIX='
-Environment='COURIER_AWS_ACCESS_KEY_ID='
+Environment='COURIER_S3_ATTACHMENTS_BUCKET='
 {% endif %}
 
 ExecStart=/usr/local/bin/courier
