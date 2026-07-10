@@ -203,7 +203,7 @@
     daemon_reload: yes
   become: yes
 
-- name: Install cognitive-pipeline job units (KG extract, KG->Wiki render, morning nudge, backup)
+- name: Install cognitive-pipeline job units (KG extract, KG->Wiki render, morning nudge, backup, radar, person sync, daily brief, synthesis)
   template:
     src: "{{ item }}.j2"
     dest: "/etc/systemd/system/{{ item }}"
@@ -217,6 +217,14 @@
     - ai-gateway-nudge.timer
     - ai-gateway-talksync.service
     - ai-gateway-talksync.timer
+    - ai-gateway-radar.service
+    - ai-gateway-radar.timer
+    - ai-gateway-personsync.service
+    - ai-gateway-personsync.timer
+    - ai-gateway-dailybrief.service
+    - ai-gateway-dailybrief.timer
+    - ai-gateway-synthesis.service
+    - ai-gateway-synthesis.timer
     - second-brain-backup.service
     - second-brain-backup.timer
   become: yes
@@ -255,6 +263,10 @@
     - ai-gateway-kgwiki.timer
     - ai-gateway-nudge.timer
     - ai-gateway-talksync.timer
+    - ai-gateway-radar.timer
+    - ai-gateway-personsync.timer
+    - ai-gateway-dailybrief.timer
+    - ai-gateway-synthesis.timer
     - second-brain-backup.timer
   become: yes
 
