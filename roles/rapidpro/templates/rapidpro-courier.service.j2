@@ -13,6 +13,10 @@ Environment='COURIER_VALKEY=valkey://localhost:6379/0'
 Environment='COURIER_SPOOL_DIR={{ rapidpro_dir }}/spool/courier'
 Environment='COURIER_DOMAIN={{ rapidpro_domain }}'
 Environment='COURIER_MEDIA_BASE_URL=/rp/media'
+# Courier v26.3.x gained Centrifugo publishing; its compiled default endpoint
+# is localhost:8000/api — which IIAB deployments may have assigned to another
+# service. Same treatment as mailroom: closed local port, publishes fail fast.
+Environment='COURIER_CENTRIFUGO_ENDPOINT=http://127.0.0.1:9/api'
 # Bind the public webhook server to loopback (clients are local: wuzapi +
 # email-bridge POST to 127.0.0.1). Internal server stays on localhost:8081.
 # v26.3.3+ renamed PublicAddress -> InternetAddress; the old env is ignored.
