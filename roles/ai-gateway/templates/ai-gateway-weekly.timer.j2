@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer for the Sunday weekly review synthesis
+
+[Timer]
+OnCalendar=Sun *-*-* 18:00:00 America/Port-au-Prince
+Persistent=true
+
+[Install]
+WantedBy=timers.target

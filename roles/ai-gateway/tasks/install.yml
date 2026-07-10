@@ -225,6 +225,8 @@
     - ai-gateway-dailybrief.timer
     - ai-gateway-synthesis.service
     - ai-gateway-synthesis.timer
+    - ai-gateway-weekly.service
+    - ai-gateway-weekly.timer
     - second-brain-backup.service
     - second-brain-backup.timer
   become: yes
@@ -267,6 +269,7 @@
     - ai-gateway-personsync.timer
     - ai-gateway-dailybrief.timer
     - ai-gateway-synthesis.timer
+    - ai-gateway-weekly.timer
     - second-brain-backup.timer
   become: yes
 
