@@ -35,3 +35,9 @@ rivebot_siyuan_poll_interval_s: "30"  # How often to poll (seconds)
 # RapidPro integration
 rivebot_rapidpro_api_url: "{% if iiab_ssl_enabled | default(False) %}https://{{ iiab_ssl_domain }}{% else %}http://box.lan{% endif %}/api/v2"
 rivebot_rapidpro_api_token: "{{ rapidpro_auth_token | default('') }}"
+
+# Gateway tools-API auth: rivebot presents this key (X-API-Key) on every
+# macro call. Must equal the gateway's GATEWAY_INTERNAL_KEY; when left empty
+# the role reads it from the gateway's live env files at install time so a
+# re-render can never strip it (fail-closed = every chat macro 403s).
+rivebot_gateway_internal_key: ""
