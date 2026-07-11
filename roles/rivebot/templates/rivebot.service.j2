@@ -12,6 +12,9 @@ EnvironmentFile={{ rivebot_home }}/.env
 ExecStartPre=-/usr/bin/fuser -k {{ rivebot_port }}/tcp
 
 ExecStart={{ rivebot_uv_bin }} run uvicorn rivebot.main:app --host 127.0.0.1 --port {{ rivebot_port }} --log-level info
+# uv propagates the uvicorn child's SIGTERM as exit 143 on stop/restart;
+# treat it as a clean stop so systemd doesn't log a spurious failure.
+SuccessExitStatus=143
 Restart=always
 RestartSec=3
 
