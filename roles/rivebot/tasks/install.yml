@@ -73,6 +73,28 @@
     recurse: yes
   become: yes
 
+# The gateway internal key is hand-managed in the gateway's env files (it is
+# not an Ansible var on existing installs). Read it from there when the var
+# is unset so re-rendering .env can never strip the key — without it every
+# macro call 403s (fail-closed) and the whole chat layer silently dies.
+- name: Read the gateway internal key from the gateway env (if var unset)
+  shell: >-
+    grep -hoP '^GATEWAY_INTERNAL_KEY=\K.*'
+    /opt/iiab/ai-gateway/.env.local /opt/iiab/ai-gateway/.env
+    2>/dev/null | tail -1 | tr -d '"'
+  register: rivebot_gateway_key_probe
+  changed_when: false
+  failed_when: false
+  become: yes
+  when: not (rivebot_gateway_internal_key | default(''))
+
+- name: Adopt the probed gateway internal key
+  set_fact:
+    rivebot_gateway_internal_key: "{{ rivebot_gateway_key_probe.stdout }}"
+  when:
+    - not (rivebot_gateway_internal_key | default(''))
+    - rivebot_gateway_key_probe.stdout | default('')
+
 - name: Deploy RiveBot environment file
   template:
     src: rivebot.env.j2
