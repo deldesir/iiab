@@ -67,6 +67,13 @@ ai_gateway_admin_phone: ""
 ai_gateway_api_key: ""
 ai_gateway_authorized_users: ""
 
+# Cockpit deliverables (capture → weekly sitrep / month-end report drafts).
+# Empty = the app's generic fallbacks; set the real labels in local_vars.yml.
+ai_gateway_work_site: ""            # site/city shown on the drafts' From: line
+ai_gateway_sitrep_recipient: ""     # who the weekly sitrep is addressed to
+ai_gateway_cockpit_notebook: ""     # SiYuan notebook for Life docs (default: Life)
+ai_gateway_travay_notebook: ""      # SiYuan notebook for work docs (default: 💼 Travay)
+
 # RiveBot intent-matching service
 ai_gateway_rivebot_url: "http://localhost:8087"
 
