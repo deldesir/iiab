@@ -227,6 +227,12 @@
     - ai-gateway-synthesis.timer
     - ai-gateway-weekly.service
     - ai-gateway-weekly.timer
+    - ai-gateway-eveningwrap.service
+    - ai-gateway-eveningwrap.timer
+    - ai-gateway-sitrep.service
+    - ai-gateway-sitrep.timer
+    - ai-gateway-monthend.service
+    - ai-gateway-monthend.timer
     - second-brain-backup.service
     - second-brain-backup.timer
   become: yes
@@ -270,6 +276,9 @@
     - ai-gateway-dailybrief.timer
     - ai-gateway-synthesis.timer
     - ai-gateway-weekly.timer
+    - ai-gateway-eveningwrap.timer
+    - ai-gateway-sitrep.timer
+    - ai-gateway-monthend.timer
     - second-brain-backup.timer
   become: yes
 

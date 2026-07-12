@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer for the weekly sitrep draft (Friday 16:00)
+
+[Timer]
+OnCalendar=Fri *-*-* 16:00:00 America/Port-au-Prince
+Persistent=true
+
+[Install]
+WantedBy=timers.target
