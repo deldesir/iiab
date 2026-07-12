@@ -1,0 +1,19 @@
+[Unit]
+Description=Fire due operator reminders (captures.jsonl kind=reminder → admin nudge)
+OnFailure=notify-failure@%n.service
+Documentation=https://github.com/deldesir/gateway
+After=network.target
+
+[Service]
+Type=oneshot
+User=iiab-admin
+WorkingDirectory={{ ai_gateway_dir }}
+EnvironmentFile={{ ai_gateway_dir }}/.env
+EnvironmentFile=-{{ ai_gateway_dir }}/.env.local
+Environment="MEMPALACE_PALACE_PATH={{ ai_gateway_dir }}/data/palace"
+ExecStart={{ ai_gateway_dir }}/.venv/bin/python -m app.jobs.reminders
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

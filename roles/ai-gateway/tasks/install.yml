@@ -233,6 +233,8 @@
     - ai-gateway-sitrep.timer
     - ai-gateway-monthend.service
     - ai-gateway-monthend.timer
+    - ai-gateway-reminders.service
+    - ai-gateway-reminders.timer
     - second-brain-backup.service
     - second-brain-backup.timer
   become: yes
@@ -279,6 +281,7 @@
     - ai-gateway-eveningwrap.timer
     - ai-gateway-sitrep.timer
     - ai-gateway-monthend.timer
+    - ai-gateway-reminders.timer
     - second-brain-backup.timer
   become: yes
 
