@@ -1,0 +1,11 @@
+[Unit]
+Description=Timer for the Cockpit Home refresh
+
+[Timer]
+OnCalendar=*-*-* 06:45:00 America/Port-au-Prince
+OnCalendar=*-*-* 12:30:00 America/Port-au-Prince
+OnCalendar=*-*-* 18:30:00 America/Port-au-Prince
+Persistent=true
+
+[Install]
+WantedBy=timers.target
