@@ -12,7 +12,10 @@ EnvironmentFile={{ ai_gateway_dir }}/.env
 # Machine-local overrides — never written by Ansible; loaded last, so it wins.
 EnvironmentFile=-{{ ai_gateway_dir }}/.env.local
 Environment="MEMPALACE_PALACE_PATH={{ mempalace_palace_path | default(ai_gateway_dir ~ '/data/palace') }}"
-ExecStart={{ ai_gateway_dir }}/.venv/bin/mempalace compress
+# Retry a few times with a gap: the palace lock is held only transiently by
+# the always-on gateway during active memory ops, so a run that collides at
+# 03:00 clears on a retry a minute later (avoids a false OnFailure alert).
+ExecStart=/bin/bash -c 'n=0; until {{ ai_gateway_dir }}/.venv/bin/mempalace compress; do n=$$((n+1)); [ $$n -ge 5 ] && echo "compact: palace still locked after $$n attempts" && exit 1; echo "compact: palace busy, retry $$n/5 in 60s"; sleep 60; done'
 StandardOutput=journal
 StandardError=journal
 
