@@ -44,6 +44,28 @@ echo "palace ok"
 # Gateway persona/config env (secrets — kept 0600 via dir perms)
 cp -a /opt/iiab/ai-gateway/.env "$DEST/$STAMP/ai-gateway.env"
 
+# RBAC access grants — who may talk to the gateway and at what tier.
+cp -a /opt/iiab/ai-gateway/data/access_grants.json "$DEST/$STAMP/access_grants.json" 2>/dev/null \
+    && echo "access grants ok" || echo "WARN: access_grants.json missing" >&2
+
+# Operator quick-capture log — one-line jots (tickets, notes, people, pioneer
+# hours) that feed the deliverable jobs and the shepherd/KG bridge. Nowhere else.
+cp -a /opt/iiab/ai-gateway/data/captures.jsonl "$DEST/$STAMP/captures.jsonl" 2>/dev/null \
+    && echo "captures ok" || echo "note: captures.jsonl not yet created" >&2
+
+# Operator cockpit settings — chat-tuned config (ministry goal, snoozes, meeting
+# days, field_group). Exists nowhere else; not regenerable.
+cp -a /opt/iiab/ai-gateway/data/settings.json "$DEST/$STAMP/settings.json" 2>/dev/null \
+    && echo "settings ok" || echo "note: settings.json not yet created" >&2
+
+# Job state (run-once guards + kg-extract progress). Regenerable, but cheap to
+# keep — avoids re-nudging / re-paying LLM extraction after a restore. Glob so
+# any future *_state.json is covered automatically.
+for s in /opt/iiab/ai-gateway/data/*_state.json; do
+    [ -f "$s" ] && cp -a "$s" "$DEST/$STAMP/$(basename "$s")"
+done
+echo "job state ok"
+
 # Postgres databases — temba holds contacts/messages/flow history,
 # organized holds synced schedules + assignment responses. Flow DEFINITIONS
 # are reproducible from git; conversation and sync history are not.
