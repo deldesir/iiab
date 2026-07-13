@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer for the weekly shepherd nudge (Saturday morning, before field service)
+
+[Timer]
+OnCalendar=Sat *-*-* 08:00:00 America/Port-au-Prince
+Persistent=true
+
+[Install]
+WantedBy=timers.target

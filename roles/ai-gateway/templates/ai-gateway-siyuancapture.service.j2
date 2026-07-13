@@ -1,0 +1,21 @@
+[Unit]
+Description=SiYuan inbound capture (poll ✍️ Inbox → captures.jsonl, loop-safe)
+OnFailure=notify-failure@%n.service
+Documentation=https://github.com/deldesir/gateway
+After=network.target siyuan.service
+Wants=siyuan.service
+
+[Service]
+Type=oneshot
+User=iiab-admin
+WorkingDirectory={{ ai_gateway_dir }}
+EnvironmentFile={{ ai_gateway_dir }}/.env
+# Machine-local overrides — never written by Ansible; loaded last, so it wins.
+EnvironmentFile=-{{ ai_gateway_dir }}/.env.local
+Environment="MEMPALACE_PALACE_PATH={{ ai_gateway_dir }}/data/palace"
+ExecStart={{ ai_gateway_dir }}/.venv/bin/python -m app.jobs.siyuan_capture
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

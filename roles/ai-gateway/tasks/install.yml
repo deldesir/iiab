@@ -241,6 +241,12 @@
     - ai-gateway-spiritual.timer
     - ai-gateway-home.service
     - ai-gateway-home.timer
+    - ai-gateway-shepherd.service
+    - ai-gateway-shepherd.timer
+    - ai-gateway-siyuancapture.service
+    - ai-gateway-siyuancapture.timer
+    - ai-gateway-persontouches.service
+    - ai-gateway-persontouches.timer
     - second-brain-backup.service
     - second-brain-backup.timer
   become: yes
@@ -291,6 +297,9 @@
     - ai-gateway-weekahead.timer
     - ai-gateway-spiritual.timer
     - ai-gateway-home.timer
+    - ai-gateway-shepherd.timer
+    - ai-gateway-siyuancapture.timer
+    - ai-gateway-persontouches.timer
     - second-brain-backup.timer
   become: yes
 
