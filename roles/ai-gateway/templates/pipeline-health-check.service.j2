@@ -1,0 +1,13 @@
+[Unit]
+Description=Cognitive-pipeline health check (ai-gateway timers active + nightly backup restorable)
+OnFailure=notify-failure@%n.service
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pipeline-health-check
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
