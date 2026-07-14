@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# pipeline-health-check — surface SILENT failures in the cognitive pipeline.
+#
+# Motivated by a real incident: the ai-gateway-home timer sat `enabled` but
+# inactive for days and nothing said a word. This checks, once a day:
+#   (a) every ai-gateway timer that is enabled is actually running, and no
+#       ai-gateway/second-brain unit is in `failed`;
+#   (b) the nightly backup is fresh AND every artifact in it is genuinely
+#       restorable — sqlite integrity_check, tar readability, pg_restore --list
+#       on the custom-format dumps, json/jsonl parse, secrets present.
+#
+# Exits non-zero on ANY problem; the unit carries
+# `OnFailure=notify-failure@%n.service`, which emails the operator the failing
+# unit's last 25 journal lines — i.e. the problem list printed below. Runs as
+# root: the backup dir is 0700 root and holds secrets. On success it writes a
+# timestamped line to $BK/.health-status (a liveness marker you can eyeball).
+set -u
+BK=/library/backups/second-brain
+STATUS="$BK/.health-status"
+problems=()
+
+add() { problems+=("$1"); }
+
+# ── (a) timers enabled but not running, and failed units ────────────────────
+while read -r t; do
+    [ -z "$t" ] && continue
+    [ "$(systemctl is-enabled "$t" 2>/dev/null)" = "enabled" ] || continue
+    [ "$(systemctl is-active "$t" 2>/dev/null)" = "active" ] \
+        || add "timer enabled but not active: $t"
+done < <(systemctl list-unit-files 'ai-gateway-*.timer' --no-legend 2>/dev/null | awk '{print $1}')
+
+while read -r u; do
+    [ -z "$u" ] && continue
+    add "failed unit: $u"
+done < <(systemctl --failed --no-legend 2>/dev/null | awk '/ai-gateway|second-brain/{print $1}')
+
+# ── (b) backup fresh + restorable ───────────────────────────────────────────
+latest=$(ls -1d "$BK"/20* 2>/dev/null | sort | tail -1)
+if [ -z "$latest" ]; then
+    add "no backups found in $BK"
+else
+    age=$(( ( $(date +%s) - $(stat -c %Y "$latest") ) / 86400 ))
+    [ "$age" -le 1 ] || add "latest backup is ${age}d old ($(basename "$latest"))"
+    PGR=$(command -v pg_restore || true)
+    if cd "$latest" 2>/dev/null; then
+        for f in *.db *.sqlite *.sqlite3; do [ -f "$f" ] || continue
+            [ "$(sqlite3 "$f" 'PRAGMA integrity_check;' 2>&1 | head -1)" = "ok" ] \
+                || add "sqlite corrupt: $f"; done
+        for f in *.tar.gz; do [ -f "$f" ] || continue
+            gzip -t "$f" 2>/dev/null || add "tar corrupt: $f"; done
+        for f in *.pgdump; do [ -f "$f" ] || continue
+            [ -n "$PGR" ] || { add "pg_restore missing — cannot verify $f"; continue; }
+            [ "$("$PGR" --list "$f" 2>/dev/null | grep -c ';')" -gt 0 ] \
+                || add "pgdump unreadable: $f"; done
+        for f in *.json; do [ -f "$f" ] || continue
+            python3 -c 'import json,sys;json.load(open(sys.argv[1]))' "$f" 2>/dev/null \
+                || add "json invalid: $f"; done
+        for f in *.jsonl; do [ -f "$f" ] || continue
+            python3 -c 'import json,sys;[json.loads(l) for l in open(sys.argv[1]) if l.strip()]' "$f" 2>/dev/null \
+                || add "jsonl invalid: $f"; done
+        [ -s ai-gateway.env ] || add "secret missing/empty: ai-gateway.env"
+    else
+        add "cannot read backup dir $latest"
+    fi
+fi
+
+ts=$(date -Is)
+if [ "${#problems[@]}" -eq 0 ]; then
+    echo "$ts OK — ai-gateway timers active; backup fresh + restorable ($(basename "${latest:-none}"))"
+    echo "$ts OK ${latest:-none}" > "$STATUS" 2>/dev/null || true
+    exit 0
+fi
+echo "$ts PIPELINE HEALTH — ${#problems[@]} problem(s):"
+for p in "${problems[@]}"; do echo "  - $p"; done
+{ echo "$ts PROBLEMS (${#problems[@]})"; for p in "${problems[@]}"; do echo "  - $p"; done; } > "$STATUS" 2>/dev/null || true
+exit 1

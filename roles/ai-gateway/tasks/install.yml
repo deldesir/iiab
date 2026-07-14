@@ -251,6 +251,8 @@
     - ai-gateway-ldctwp.timer
     - ai-gateway-ldcpeople.service
     - ai-gateway-ldcpeople.timer
+    - pipeline-health-check.service
+    - pipeline-health-check.timer
     - second-brain-backup.service
     - second-brain-backup.timer
   become: yes
@@ -264,6 +266,7 @@
     - second-brain-backup
     - jwlinker-refresh
     - hermes-elevate
+    - pipeline-health-check
   become: yes
 
 # TOTP-gated root window for the chat assistant (hermes-elevate).
@@ -306,6 +309,7 @@
     - ai-gateway-persontouches.timer
     - ai-gateway-ldctwp.timer
     - ai-gateway-ldcpeople.timer
+    - pipeline-health-check.timer
     - second-brain-backup.timer
   become: yes
 
