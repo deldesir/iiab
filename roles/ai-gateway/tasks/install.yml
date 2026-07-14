@@ -247,6 +247,8 @@
     - ai-gateway-siyuancapture.timer
     - ai-gateway-persontouches.service
     - ai-gateway-persontouches.timer
+    - ai-gateway-ldctwp.service
+    - ai-gateway-ldctwp.timer
     - second-brain-backup.service
     - second-brain-backup.timer
   become: yes
@@ -300,6 +302,7 @@
     - ai-gateway-shepherd.timer
     - ai-gateway-siyuancapture.timer
     - ai-gateway-persontouches.timer
+    - ai-gateway-ldctwp.timer
     - second-brain-backup.timer
   become: yes
 
