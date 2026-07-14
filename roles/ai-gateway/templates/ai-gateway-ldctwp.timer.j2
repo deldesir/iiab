@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer for the LDC TWP assignment notifier (daily morning check of the lead window)
+
+[Timer]
+OnCalendar=*-*-* 07:30:00 America/Port-au-Prince
+Persistent=true
+
+[Install]
+WantedBy=timers.target

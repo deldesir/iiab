@@ -58,6 +58,12 @@ cp -a /opt/iiab/ai-gateway/data/captures.jsonl "$DEST/$STAMP/captures.jsonl" 2>/
 cp -a /opt/iiab/ai-gateway/data/settings.json "$DEST/$STAMP/settings.json" 2>/dev/null \
     && echo "settings ok" || echo "note: settings.json not yet created" >&2
 
+# LDC TWP assignment schedule — the operator's session/role rotation (source for
+# the TWP notifier). Hand-authored, not regenerable. (ldc_twp_state.json is
+# picked up by the *_state.json glob below.)
+cp -a /opt/iiab/ai-gateway/data/ldc_twp.json "$DEST/$STAMP/ldc_twp.json" 2>/dev/null \
+    && echo "ldc twp ok" || echo "note: ldc_twp.json not present" >&2
+
 # Job state (run-once guards + kg-extract progress). Regenerable, but cheap to
 # keep — avoids re-nudging / re-paying LLM extraction after a restore. Glob so
 # any future *_state.json is covered automatically.
