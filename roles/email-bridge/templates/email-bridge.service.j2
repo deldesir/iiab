@@ -9,6 +9,10 @@ User={{ email_bridge_user }}
 WorkingDirectory={{ email_bridge_home }}
 EnvironmentFile={{ email_bridge_home }}/.env
 
+# uvicorn exits 143 (SIGTERM) on a normal `systemctl restart` — don't treat that
+# as a failure (it would spuriously trip OnFailure=notify-failure on every restart).
+SuccessExitStatus=143 SIGTERM
+
 # Kill any orphan holding the port (prevents crash loops)
 ExecStartPre=-/usr/bin/fuser -k {{ email_bridge_port }}/tcp
 
