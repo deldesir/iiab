@@ -81,3 +81,9 @@ email_bridge_courier_base: "http://localhost:8080"
 email_bridge_send_auth_token: "{{ lookup('password', iiab_etc_path ~ '/email_bridge_send_auth.token chars=ascii_letters,digits length=40') }}"
 email_bridge_send_auth: "{{ email_bridge_send_auth_token }}"
 email_bridge_sent_token: "SENT"        # must equal the channel's mt_response_check
+
+# ── Attachments ──────────────────────────────────────────────────────────────
+# Extra hosts (comma-sep) the bridge may fetch RapidPro media from; loopback +
+# the courier host are always allowed. Set to your media host if served off-box.
+email_bridge_attachment_hosts: ""
+email_bridge_attachment_max_bytes: 20971520   # 20 MB (under Gmail's 25 MB cap)
