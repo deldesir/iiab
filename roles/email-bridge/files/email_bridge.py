@@ -98,6 +98,16 @@ ATTACHMENT_HOSTS = _default_hosts | {
     h.strip().lower() for h in os.getenv("EMAIL_ATTACHMENT_HOSTS", "").split(",") if h.strip()
 }
 
+# Inbound attachments: persist real attachments (Content-Disposition: attachment)
+# from polled mail so they aren't silently dropped, and annotate the forwarded
+# text with their saved paths. The gateway runs on the same box and can read them
+# (e.g. the operator emails a document for the assistant to act on).
+INBOUND_DIR = os.getenv(
+    "EMAIL_INBOUND_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbound"),
+)
+SAVE_INBOUND = _flag("EMAIL_SAVE_INBOUND_ATTACHMENTS", "1")
+
 # Server-side sender scope: only forward mail FROM these addresses (comma-
 # separated, case-insensitive); empty = forward all. Scopes ingestion without
 # any Gmail-side filter, and never disturbs other mail in the watched mailbox
@@ -331,6 +341,43 @@ def _plain_text(msg: email.message.Message) -> str:
     return payload.decode(msg.get_content_charset() or "utf-8", "replace")
 
 
+def _safe_filename(name: str) -> str:
+    name = os.path.basename(name or "").strip() or "attachment"
+    return "".join(c if (c.isalnum() or c in "._-") else "_" for c in name)
+
+
+def _save_inbound_attachments(msg: email.message.Message, uid: int) -> list[str]:
+    """Persist real attachments (Content-Disposition: attachment) from an inbound
+    message to INBOUND_DIR, returning a human-readable annotation per saved file.
+    Inline parts (logos, tracking pixels, the text/html body) are skipped, and a
+    part over the size cap is noted but not saved — so nothing is silently lost."""
+    if not SAVE_INBOUND:
+        return []
+    notes: list[str] = []
+    for part in msg.walk():
+        if "attachment" not in str(part.get("Content-Disposition", "")).lower():
+            continue
+        raw = part.get_filename()
+        name = str(make_header(decode_header(raw))) if raw else "attachment"
+        payload = part.get_payload(decode=True) or b""
+        if not payload:
+            continue
+        if len(payload) > MAX_ATTACH_BYTES:
+            notes.append(f"[Attachment skipped (too large, {len(payload)} B): {name}]")
+            continue
+        try:
+            os.makedirs(INBOUND_DIR, exist_ok=True)
+            dest = os.path.join(INBOUND_DIR, f"{uid}_{_safe_filename(name)}")
+            with open(dest, "wb") as f:
+                f.write(payload)
+            notes.append(f"[Attachment saved: {dest} ({part.get_content_type()}, {len(payload)} B)]")
+            log.info("saved inbound attachment %s (%d B) from uid %s", dest, len(payload), uid)
+        except OSError as e:
+            log.warning("could not save inbound attachment %s: %s", name, e)
+            notes.append(f"[Attachment received but not saved ({e}): {name}]")
+    return notes
+
+
 async def _post_to_courier(from_addr: str, text: str) -> None:
     async with httpx.AsyncClient(timeout=15) as client:
         r = await client.post(COURIER_RECEIVE_URL, data={"from": from_addr, "text": text})
@@ -398,6 +445,12 @@ def _fetch_new(last_uid: int) -> tuple[list[tuple[str, str]], int]:
                 from_addr = parseaddr(str(make_header(decode_header(msg.get("From", "")))))[1]
                 if from_addr and _sender_allowed(from_addr):
                     text = _strip_quoted(_plain_text(msg))[:MAX_BODY]
+                    # Persist any attachments and annotate the text with their
+                    # paths — an attachment-only email still forwards (the notes
+                    # make the text non-empty) instead of being silently dropped.
+                    notes = _save_inbound_attachments(msg, uid)
+                    if notes:
+                        text = (text + "\n\n" + "\n".join(notes)).strip()
                     if text:
                         results.append((from_addr, text))
                         forwarded = True
@@ -448,5 +501,7 @@ async def health():
         "courier": bool(COURIER_RECEIVE_URL),
         "attachments": True,
         "attachment_hosts": sorted(ATTACHMENT_HOSTS),
+        "inbound_attachments": SAVE_INBOUND,
+        "inbound_dir": INBOUND_DIR,
         "poll_interval": POLL_INTERVAL,
     }

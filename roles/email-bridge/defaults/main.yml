@@ -87,3 +87,7 @@ email_bridge_sent_token: "SENT"        # must equal the channel's mt_response_ch
 # the courier host are always allowed. Set to your media host if served off-box.
 email_bridge_attachment_hosts: ""
 email_bridge_attachment_max_bytes: 20971520   # 20 MB (under Gmail's 25 MB cap)
+# Inbound attachments from polled mail are persisted here (the gateway, same box,
+# can read them) and their paths appended to the forwarded text.
+email_bridge_inbound_dir: "{{ email_bridge_home }}/inbound"
+email_bridge_save_inbound: True
