@@ -155,6 +155,11 @@ location = /website_script.js { return 302 /erp/website_script.js; }
 location ^~ /backups/ { return 307 /erp$request_uri; }
 location ^~ /private/files/ { return 307 /erp$request_uri; }
 
+# Print view — the POS/desk print window opens a root-level /printview URL when
+# the SPA can't resolve the /erp subpath; bounce it into the /erp namespace so
+# receipt and EOD printing reach Frappe instead of 404ing at the root.
+location ^~ /printview { return 307 /erp$request_uri; }
+
 # ── Frappe API endpoints ────────────────────────────────────────────────────────
 location ^~ /api/method/ {
     return 307 /erp$request_uri;
