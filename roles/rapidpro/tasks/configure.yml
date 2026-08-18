@@ -24,6 +24,7 @@
     - postgis_topology
     - hstore
     - "uuid-ossp"
+    - vector    # pgvector >= 0.8, built from source in install.yml (knowledge app)
   become: yes
   become_user: postgres
 
