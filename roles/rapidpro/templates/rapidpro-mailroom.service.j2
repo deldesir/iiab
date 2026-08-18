@@ -17,6 +17,10 @@ Environment='MAILROOM_VALKEY=valkey://localhost:6379/0'
 Environment='MAILROOM_CENTRIFUGO_ENDPOINT=http://127.0.0.1:9/api'
 Environment='MAILROOM_SPOOL_DIR={{ rapidpro_dir }}/spool/mailroom'
 Environment='MAILROOM_ELASTIC='
+# knowledge-base embeddings served by the local AI gateway (minilm, 384-dim,
+# matching the knowledge schema's VectorField); empty disables the feature
+Environment='MAILROOM_EMBEDDINGS_ENDPOINT={{ rapidpro_embeddings_endpoint | default("http://127.0.0.1:8086/v1") }}'
+Environment='MAILROOM_EMBEDDINGS_MODEL=intfloat/multilingual-e5-small'
 # Bind the public web server to loopback. RapidPro uses the separate INTERNAL
 # server (MAILROOM_URL=127.0.0.1:8091); no external caller needs :8090 here.
 # v26.3.3+ renamed PublicAddress -> InternetAddress; the old env is ignored.
