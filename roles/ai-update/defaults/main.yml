@@ -17,14 +17,19 @@ ai_update_gateway_components:
 
   # hermes-agent has NO IIAB fork commits — the deldesir fork is a stale mirror.
   # IIAB's only customizations are the deploy-time memory_tool patches in
-  # apply-patches.yml (targets verified present at v2026.6.19). So track upstream
+  # apply-patches.yml (all 3 targets verified present at v2026.8.18: tenant
+  # isolation regex, user_char_limit cap, _SafeWriter slots). So track upstream
   # directly, PINNED to a release tag for reproducibility — bump it deliberately
-  # after a staged test (4 GB footprint + 2600-commit behavioral changes).
-  # torch / local-STT are optional extras the gateway does NOT install.
+  # after a staged test (uv sync footprint + conversation smoke). At v2026.8.18
+  # the full gateway surface was audited compatible: all 16 AIAgent kwargs,
+  # chat/run_conversation signatures, session token counters, SessionDB, the
+  # gemini native provider, SILENT_MARKER, and the session:compress event.
+  # Voice/A2A/MCP2 are optional extras the gateway does NOT install; nemo-relay
+  # (new default dep) is lazily imported by the relay runtime only.
   - name: hermes-agent
     repo: "https://github.com/nousresearch/hermes-agent.git"
     dest: /opt/iiab/hermes-agent
-    version: v2026.6.19
+    version: v2026.8.18
 
   # deldesir fork is the integration point. Upstream MemPalace/mempalace is synced
   # INTO this fork deliberately (feature-aware — e.g. the embeddinggemma default is
