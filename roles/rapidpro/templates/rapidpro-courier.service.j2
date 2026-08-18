@@ -12,7 +12,6 @@ Environment='COURIER_DB=postgres://{{ rapidpro_db_user }}:{{ rapidpro_db_pass }}
 Environment='COURIER_VALKEY=valkey://localhost:6379/0'
 Environment='COURIER_SPOOL_DIR={{ rapidpro_dir }}/spool/courier'
 Environment='COURIER_DOMAIN={{ rapidpro_domain }}'
-Environment='COURIER_MEDIA_BASE_URL=/rp/media'
 # Courier v26.3.x gained Centrifugo publishing; its compiled default endpoint
 # is localhost:8000/api — which IIAB deployments may have assigned to another
 # service. Same treatment as mailroom: closed local port, publishes fail fast.

@@ -1,0 +1,49 @@
+---
+# pgvector for RapidPro's knowledge app (requires extension >= 0.8). Ubuntu
+# 24.04 packages only 0.6, and the PGDG repo could hijack the distro postgres
+# packaging, so build the extension from source instead. Included by the
+# rapidpro role's install.yml AND by ai-update's rapidpro-post-update.yml so
+# devices gain it on their next update, not only on fresh installs.
+
+- name: Check available pgvector extension version
+  command: psql -tAc "SELECT default_version FROM pg_available_extensions WHERE name = 'vector'"
+  become: yes
+  become_user: postgres
+  register: pgvector_available
+  changed_when: False
+
+- name: Build pgvector from source (>= 0.8 required)
+  when: (pgvector_available.stdout | trim | default('0', true)) is version('0.8', '<')
+  become: yes
+  block:
+    - name: Run pg_config to get the PostgreSQL major version
+      shell: pg_config --version | sed 's/^[^0-9]*//; s/[^0-9].*//'
+      register: pgvector_pg_major
+      changed_when: False
+
+    - name: Install PostgreSQL server headers for the pgvector build
+      apt:
+        name: "postgresql-server-dev-{{ pgvector_pg_major.stdout }}"
+        state: present
+
+    - name: Clone pgvector v0.8.1
+      git:
+        repo: https://github.com/pgvector/pgvector.git
+        dest: /opt/pgvector
+        version: v0.8.1
+        force: yes
+
+    - name: Build and install pgvector
+      shell: make clean && make && make install
+      args:
+        chdir: /opt/pgvector
+
+# The extension itself needs superuser; pre-creating it makes the knowledge
+# migration's VectorExtension operation a no-op for the unprivileged DB user.
+- name: Enable the vector extension in the RapidPro database
+  postgresql_ext:
+    name: vector
+    login_db: "{{ rapidpro_db_name }}"
+    login_host: 127.0.0.1
+  become: yes
+  become_user: postgres
