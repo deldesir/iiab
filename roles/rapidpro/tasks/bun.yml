@@ -1,0 +1,40 @@
+---
+# bun for RapidPro's components build. Since v26.3.36 upstream moved
+# temba-components into components/ and collectstatic's ComponentsFinder shells
+# out to `bun install --frozen-lockfile` + `bun run build` — node/yarn are no
+# longer sufficient. Included by the rapidpro role's install.yml AND by
+# ai-update's rapidpro-post-update.yml. Installed as a single static binary;
+# uname -m decides the asset (bare ansible_* facts are undefined in IIAB runs).
+
+- name: Check whether bun is installed
+  stat:
+    path: /usr/local/bin/bun
+  register: bun_binary
+
+- name: Install bun
+  when: not bun_binary.stat.exists
+  become: yes
+  block:
+    - name: Get machine architecture
+      command: uname -m
+      register: bun_arch
+      changed_when: False
+
+    - name: Download bun release
+      get_url:
+        url: "https://github.com/oven-sh/bun/releases/latest/download/bun-linux-{{ 'aarch64' if bun_arch.stdout == 'aarch64' else 'x64' }}.zip"
+        dest: /tmp/bun.zip
+        mode: '0644'
+
+    - name: Unpack bun
+      unarchive:
+        src: /tmp/bun.zip
+        dest: /tmp
+        remote_src: yes
+
+    - name: Install bun binary
+      copy:
+        src: "/tmp/bun-linux-{{ 'aarch64' if bun_arch.stdout == 'aarch64' else 'x64' }}/bun"
+        dest: /usr/local/bin/bun
+        mode: '0755'
+        remote_src: yes
