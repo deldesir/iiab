@@ -1,0 +1,21 @@
+[Unit]
+Description=Team contact notifier (send each team member new/changed contact cards → operator review by default)
+OnFailure=notify-failure@%n.service
+Documentation=https://github.com/deldesir/gateway
+After=network.target
+
+[Service]
+Type=oneshot
+User=iiab-admin
+WorkingDirectory={{ ai_gateway_dir }}
+EnvironmentFile={{ ai_gateway_dir }}/.env
+# Machine-local overrides — never written by Ansible; loaded last, so it wins.
+# CONTACT_SYNC_AUTOSEND=1 there switches from operator review to direct delivery.
+EnvironmentFile=-{{ ai_gateway_dir }}/.env.local
+Environment="MEMPALACE_PALACE_PATH={{ ai_gateway_dir }}/data/palace"
+ExecStart={{ ai_gateway_dir }}/.venv/bin/python -m app.jobs.contact_sync_notify
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

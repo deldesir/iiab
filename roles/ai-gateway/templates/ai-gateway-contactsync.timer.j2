@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer for the team contact notifier (daily check for directory changes)
+
+[Timer]
+OnCalendar=*-*-* 08:15:00 America/Port-au-Prince
+Persistent=true
+
+[Install]
+WantedBy=timers.target
