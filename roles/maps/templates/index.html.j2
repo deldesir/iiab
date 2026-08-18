@@ -37,62 +37,16 @@
             const STYLE_SATELLITE = "satellite"
             const STYLE_HYBRID = "hybrid"
 
-            const VECTOR_TYPE_OSM = "osm"
-            const VECTOR_TYPE_NATURAL_EARTH = "nat"
-
             /****************
              *    configs   *
              ****************/
 
-            const WORLD_MAP_VECTOR_MAX_ZOOM = (num => {
-                if (Number.isNaN(num)) {
-                    // Use a default that is hopefully always available.
-                    // We hope they notice and report the bug if it ever comes here!
-                    console.warn("Unexpected value for maps_vector_quality")
-                    return 1
-                }
-                return num
-            })(Number(
-                // "osm-z11" -> "11", "nat-z8" -> "8", "somethingelse" -> undefined, etc
-                "{{ maps_vector_quality }}".split("-z")[1]
-            ))
-            // VECTOR_TYPE_OSM or VECTOR_TYPE_NATURAL_EARTH
-            const WORLD_MAP_VECTOR_TYPE = "{{ maps_vector_quality }}".split("-z")[0]
-
-            const WORLD_MAP_SATELLITE_MAX_ZOOM = (num => {
-                if (Number.isNaN(num)) {
-                    if ("{{ maps_satellite_zoom }}" === "none") {
-                        return null
-                    }
-
-                    // Use a default that is hopefully always available.
-                    // We hope they notice and report the bug if it ever comes here!
-                    console.warn("Unexpected value for maps_satellite_zoom")
-                    return 7
-                }
-                return num
-            })(Number("{{ maps_satellite_zoom }}"))
-
-            const WORLD_MAP_TERRAIN_MAX_ZOOM = (num => {
-                if (Number.isNaN(num)) {
-                    if ("{{ maps_terrain_zoom }}" === "none") {
-                        // Note that terrarium-none.pmtiles which is maxzoom=0 will still be used in
-                        // this case as a dummy to make maps.black / maplibre happy if we have FQRs
-                        // and the user enables terrain.
-                        return 0
-                    }
-
-                    // Use a default that we hope will not break everything. We hope they notice
-                    // the warning and report the bug if it ever comes here!
-                    console.warn("Unexpected value for maps_terrain_zoom")
-                    return 0
-                }
-                return num
-            })(Number("{{ maps_terrain_zoom }}"))
-
             const MAP_SEARCH_ENGINE = "{{ maps_search_engine }}"
             const REGION_DOWNLOADER_ENABLED = "{{ maps_region_downloader }}" === "True"
 
+        </script>
+        <script src='maps-config.js'>
+            // Various MAX_ZOOM and other configs are found in this file
         </script>
         <script type="module">
             import { AddressTextualIndex } from "./{{ maps_static_search_dir }}/static_search.js"
@@ -141,12 +95,6 @@
                 patchResource: async handlerResult => {
                     const style = handlerResult && handlerResult.data
                     if (style && style.sources && !style.iiabPatched) {
-                        // Cut down on noise. Sometimes a protomaps style is set before our chosen
-                        // style. If we find a way to actually stop that, we should remove this.
-                        if ('openstreetmap-protomaps' in style.sources) {
-                            return handlerResult
-                        }
-
                         await until(fqrLoaded, 100)
 
                         // Grab the sources and layers as they are so we can replicate them in FQRs
@@ -733,7 +681,7 @@
             const fqrLoaded = () => !!downloadedFQRegions
 
             function setFQRegions() {
-                return fetch('{{ tile_extract.info_file }}', { cache: 'no-store' })
+                return fetch('{{ maps_tools.tile_extract.info_file }}', { cache: 'no-store' })
                     .then((response) => {
                         if (response.status < 400) {
                             return response.json()
@@ -1149,7 +1097,7 @@
 
                         const downloadCommand = document.createElement('div');
                         downloadCommand.set = function(downloadName) {
-                            const downloadCommandString = `sudo {{ tile_extract.working_dir }}/tile-extract.py extract ${downloadName} ${min_lon},${min_lat},${max_lon},${max_lat}`
+                            const downloadCommandString = `sudo {{ maps_tools.tile_extract.working_dir }}/tile-extract.py extract ${downloadName} ${min_lon},${min_lat},${max_lon},${max_lat}`
                             this.innerHTML = `<pre
                                 style="font-size:0.8em; background-color:#DDD; padding:1em; border-style:dashed; border-color:#FFF; border-width:2px; white-space: pre-wrap; word-wrap: break-word; line-height:1em;"
                                 onclick="window.getSelection().selectAllChildren(this)"
@@ -1243,7 +1191,7 @@
                     ]
 
                     const deleteCommand = document.createElement('div');
-                    const deleteCommandString = `sudo {{ tile_extract.working_dir }}/tile-extract.py delete ${regionName}`
+                    const deleteCommandString = `sudo {{ maps_tools.tile_extract.working_dir }}/tile-extract.py delete ${regionName}`
                     const deleteCommandStyle = [
                         "font-size: 0.8em;",
                         "background-color: #DDD;",
@@ -1646,7 +1594,7 @@
                 // in case of nat-z8 and no FQRs, get rid of OSM attribution.
                 (async () => {
                     await until(fqrLoaded)
-                    if (WORLD_MAP_VECTOR_TYPE === VECTOR_TYPE_NATURAL_EARTH && !fqRegionsExist()) {
+                    if (WORLD_MAP_IS_NATURAL_EARTH && !fqRegionsExist()) {
                         await until(() =>
                           mb.licenses &&
                           mb.licenses.data &&

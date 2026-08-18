@@ -28,7 +28,7 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
    maps_install: True
    maps_enabled: True
 
-   maps_vector_quality: nat-z8
+   maps_vector_zoom: nat-z8
    maps_satellite_zoom: 7
    ```
 
@@ -38,7 +38,7 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
 2. Or if you want **~9.5 GB** = 8.3 GB vector (Higher detail, up to zoom 11 [users can overzoom to zoom 15], from OpenStreetMap) + 1.2 GB satellite (up to zoom 9), include:
 
    ```
-   maps_vector_quality: osm-z11
+   maps_vector_zoom: 11
    maps_satellite_zoom: 9
    ```
 
@@ -48,14 +48,14 @@ Here are 3 examples below, to help you decide what you'll put in [/etc/iiab/loca
 3. Or if you want **~160 GB** = 80 GB vector (Higher detail, up to zoom 14 [users can overzoom to zoom 18], including 3D buildings, from OpenStreetMap) + 80 GB satellite (up to zoom 12), include:
 
    ```
-   maps_vector_quality: osm-z14
+   maps_vector_zoom: 14
    maps_satellite_zoom: 12
    ```
 
 ![Vector OSM Full Zoom](README-assets/vector/vector-osm-z14.png)
 ![Satellite Full Zoom](README-assets/satellite/satellite-z12.png)
 
-See `maps_dot_black_vector_tiles` and `maps_dot_black_satellite_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
+See `vector` and `satellite` [here](https://github.com/iiab/iiab/blob/master/roles/maps/MAPS_CATALOG_DETAILS.md) for all valid values.
 
 *NOTE: The satellite data is licensed "NonCommercial" under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).  To skip worldwide satellite imagery, set:*
 
@@ -99,7 +99,7 @@ PREREQ: Confirm that at least a [minimum IIAB Maps](#whats-a-minimum-iiab-maps-i
 
 ![Terrain Full Zoom](README-assets/terrain/terrain-z10.png)
 
-See `maps_dot_black_terrain_tiles` [here](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) for all valid values.
+See `terrain` [here](https://github.com/iiab/iiab/blob/master/roles/maps/MAPS_CATALOG_DETAILS.md) for all valid values.
 
 ### How do I view 3D Terrain?
 
@@ -243,10 +243,10 @@ If you are installing IIAB Maps for testing purposes (QA, CI, etc), there are "u
 [*] Grand total disk usage is [~66 MB instead of the ~312 MB delivered by default_vars.yml](https://github.com/iiab/iiab/pull/4324), as of March 2026.
 
    ```
-   maps_ne6_zoom: ci
+   maps_ne6_zoom: 4-ci
 
-   maps_vector_quality: osm-z1
-   maps_satellite_zoom: 4
+   maps_vector_zoom: 1-ci
+   maps_satellite_zoom: 4-ci
 
    maps_search_engine: static
    maps_search_static_db: pop-100k-cities
@@ -263,16 +263,22 @@ For large file downloads:
 
 ## How to change or upgrade your IIAB Maps
 
-If your IIAB was installed many months ago (or many years ago), it's far better to start from scratch [installing a completely new version of IIAB](https://wiki.iiab.io/go/FAQ#Is_a_quick_installation_possible?).
+Your IIAB Maps **software**, **data**, and **settings** can be updated separately or together.
 
-If your IIAB was installed quite recently, it's usually safe to update your IIAB software: (at your own risk, if your IIAB is online, and has enough disk space!)
+If your IIAB was installed many months ago (or many years ago), it's far better to start from scratch than to update your **software**. See: [installing a completely new version of IIAB](https://wiki.iiab.io/go/FAQ#Is_a_quick_installation_possible?).
+
+If your IIAB was installed quite recently, it's usually safe to update your IIAB **software**: (at your own risk, if your IIAB is online, and has enough disk space!)
 
 ```
 cd /opt/iiab/iiab
 sudo git pull
 ```
 
-After [changing any IIAB Maps variables](#whats-a-minimum-iiab-maps-install) in `/etc/iiab/local_vars.yml`, you can now "reinstall" IIAB Maps to enact your new settings, by running:
+To update your **settings**, you can [change any IIAB Maps variables](#whats-a-minimum-iiab-maps-install) in `/etc/iiab/local_vars.yml`.
+
+To have access to newer map **data** for your __global basemaps__, simply delete `/library/www/maps/maps-catalog-global-orig.json`. (Full Quality Region updates always download the latest available data)
+
+You can now "reinstall" IIAB Maps to enact any of the above changes, by running:
 
 ```
 sudo ./runrole maps --reinstall
@@ -280,9 +286,11 @@ sudo ./runrole maps --reinstall
 
 ## Further options & detail:
 
-* [Key map variables](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) based on [PR #4120](https://github.com/iiab/iiab/pull/4120) from Oct/Nov 2025
-* Map data files as of 2026-04-14: https://iiab.switnet.org/maps/2/
+* [Values for `*_zoom` variables](https://github.com/iiab/iiab/blob/master/roles/maps/MAPS_CATALOG_DETAILS.md)
+* [Other map variables](https://github.com/iiab/iiab/blob/master/roles/maps/defaults/main.yml) originally based on [PR #4120](https://github.com/iiab/iiab/pull/4120) from Oct/Nov 2025
+* Map data files are updated quasi-monthly here, since 2026-04-14: https://iiab.switnet.org/maps/2/
 * IIAB integration thanks to [Dan Krol](https://github.com/orblivion)
+* [Details on data file naming conventions](https://github.com/iiab/iiab/blob/master/roles/maps/NAMING_CONVENTION.md)
 
 ## Next Steps
 
