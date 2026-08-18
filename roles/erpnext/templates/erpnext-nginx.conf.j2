@@ -159,6 +159,8 @@ location ^~ /private/files/ { return 307 /erp$request_uri; }
 # the SPA can't resolve the /erp subpath; bounce it into the /erp namespace so
 # receipt and EOD printing reach Frappe instead of 404ing at the root.
 location ^~ /printview { return 307 /erp$request_uri; }
+# Same for /printpreview (the desk's print-preview page, e.g. from a Stock Entry).
+location ^~ /printpreview { return 307 /erp$request_uri; }
 
 # ── Frappe API endpoints ────────────────────────────────────────────────────────
 location ^~ /api/method/ {
