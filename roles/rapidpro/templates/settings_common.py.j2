@@ -42,6 +42,7 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 2500  # needed for exports of big workspaces
 
 # Detect if we're running Django tests
 TESTING = sys.argv[1:2] == ["test"]
+TEST_RUNNER = "temba.testrunner.TembaTestRunner"
 
 if TESTING:
     # Use fast MD5 hasher for tests to speed up test execution
@@ -49,6 +50,7 @@ if TESTING:
     DEBUG = False
 
 _db_host = "localhost"
+_dynamodb_host = "dynamodb"
 _valkey_host = "localhost"
 _localstack_host = "localhost"
 
@@ -136,13 +138,10 @@ LANGUAGE_CODE = "en-us"
 # Supported languages for the UI (uses Django's LANGUAGES format)
 LANGUAGES = (
     ("en-us", _("English")),
-    ("cs", _("Czech")),
     ("es", _("Spanish")),
     ("fr", _("French")),
     ("ht", _("Haitian Creole")),
-    ("mn", _("Mongolian")),
     ("pt-br", _("Portuguese")),
-    ("ru", _("Russian")),
 )
 DEFAULT_LANGUAGE = "en-us"
 
@@ -158,6 +157,7 @@ USE_L10N = True  # Enable locale-specific formatting
 # Classes that know how to find static files in various locations
 STATICFILES_FINDERS = (
     "django.contrib.staticfiles.finders.FileSystemFinder",
+    "temba.utils.staticfiles.ComponentsFinder",
     "django.contrib.staticfiles.finders.AppDirectoriesFinder",
     "compressor.finders.CompressorFinder",
 )
@@ -169,12 +169,14 @@ RESOURCES_DIR = os.path.join(PROJECT_DIR, "../resources")
 FIXTURE_DIRS = (os.path.join(PROJECT_DIR, "../fixtures"),)  # Test fixtures
 TESTFILES_DIR = os.path.join(PROJECT_DIR, "../testfiles")
 
+# the components/ project, whose build output is served by temba.utils.staticfiles.ComponentsFinder
+COMPONENTS_DIR = os.path.join(PROJECT_DIR, "../components")
+
 # Additional directories to search for static files
 STATICFILES_DIRS = (
     os.path.join(PROJECT_DIR, "../static"),  # Main static assets
     os.path.join(PROJECT_DIR, "../media"),  # Media files
     os.path.join(PROJECT_DIR, "../node_modules/@nyaruka/flow-editor/build"),  # Flow editor React app
-    os.path.join(PROJECT_DIR, "../node_modules/@nyaruka/temba-components/dist/static"),  # UI components
     os.path.join(PROJECT_DIR, "../node_modules"),  # Node dependencies
     os.path.join(PROJECT_DIR, "../node_modules/react/umd"),  # React for legacy components
     os.path.join(PROJECT_DIR, "../node_modules/react-dom/umd"),  # ReactDOM for legacy components
@@ -212,6 +214,7 @@ TEMPLATES = [
             os.path.join(PROJECT_DIR, "../templates"),  # Main templates directory
         ],
         "OPTIONS": {
+            "builtins": ["django.contrib.humanize.templatetags.humanize"],
             "context_processors": [
                 # Standard Django context processors
                 "django.contrib.auth.context_processors.auth",
@@ -321,6 +324,7 @@ INSTALLED_APPS = (
     "temba.notifications",
     "temba.flows",
     "temba.tickets",
+    "temba.knowledge",
     "temba.triggers",
     "temba.utils",
     "temba.campaigns",
@@ -442,13 +446,14 @@ PERMISSIONS = {
         "workspace",
     ),
     "request_logs.httplog": ("webhooks",),
+    "knowledge.article": ("colors", "publish", "sort", "upload"),
+    "knowledge.knowledge": ("menu", "upload"),
     "tickets.ticket": ("assign", "menu", "note", "export", "analytics"),
     "triggers.trigger": ("archived", "type", "menu"),
 }
 
 # Permission assignments for each user role/group
 GROUP_PERMISSIONS = {
-    "Beta": (),  # Beta users get no special permissions by default
     "Dashboard": ("orgs.org_dashboard",),  # Dashboard-only access
     "Granters": ("orgs.org_grant",),  # Can grant organizations to users
     "Administrators": (
@@ -511,7 +516,6 @@ GROUP_PERMISSIONS = {
         "msgs.msg_list",
         "msgs.msg_menu",
         "msgs.msg_update",
-        "msgs.optin.*",
         "notifications.incident.*",
         "notifications.notification.*",
         "orgs.export.*",
@@ -539,6 +543,9 @@ GROUP_PERMISSIONS = {
         "request_logs.httplog_read",
         "request_logs.httplog_webhooks",
         "templates.template.*",
+        "knowledge.article.*",
+        "knowledge.knowledge.*",
+        "knowledge.knowledgeitem.*",
         "tickets.shortcut.*",
         "tickets.team.*",
         "tickets.ticket.*",
@@ -610,8 +617,6 @@ GROUP_PERMISSIONS = {
         "msgs.msg_list",
         "msgs.msg_menu",
         "msgs.msg_update",
-        "msgs.optin_create",
-        "msgs.optin_list",
         "notifications.notification_list",
         "orgs.export_download",
         "orgs.org_download",
@@ -626,6 +631,21 @@ GROUP_PERMISSIONS = {
         "request_logs.httplog_webhooks",
         "templates.template_list",
         "templates.template_read",
+        "knowledge.article_colors",
+        "knowledge.article_create",
+        "knowledge.article_delete",
+        "knowledge.article_list",
+        "knowledge.article_publish",
+        "knowledge.article_sort",
+        "knowledge.article_update",
+        "knowledge.article_upload",
+        "knowledge.knowledge_create",
+        "knowledge.knowledge_delete",
+        "knowledge.knowledge_menu",
+        "knowledge.knowledge_read",
+        "knowledge.knowledge_update",
+        "knowledge.knowledge_upload",
+        "knowledge.knowledgeitem_delete",
         "tickets.shortcut_create",
         "tickets.shortcut_delete",
         "tickets.shortcut_list",
@@ -707,7 +727,6 @@ _default_database_config = {
 # Primary and optional read-only database (e.g., read replica) configuration
 DATABASES = {"default": _default_database_config, "readonly": _default_database_config.copy()}
 
-DEFAULT_AUTO_FIELD = "django.db.models.AutoField"  # Primary key type
 
 # ===============================================================================
 # Cache Configuration
@@ -738,12 +757,19 @@ CELERY_TASK_TRACK_STARTED = True  # Track when tasks start running
 CELERY_BROKER_TRANSPORT_OPTIONS = {"socket_timeout": 5}
 
 # Periodic task schedule (runs these tasks automatically)
+# valkey-backed beat scheduler which can be embedded in every worker (celery worker --beat) - a distributed lock
+# ensures only one instance actually schedules, and if it stops refreshing the lock another takes over on expiry
+# (the redbeat settings themselves are derived from the broker settings in temba_celery.py)
+CELERY_BEAT_SCHEDULER = "redbeat.RedBeatScheduler"
+CELERY_BEAT_MAX_LOOP_INTERVAL = 30  # max sleep between beat ticks - each tick refreshes the scheduler lock
+
+# NOTE: entries are synced into valkey when a beat instance starts, so like task signatures, schedule changes need to
+# be backward compatible with the previous version during a rolling deploy
 CELERY_BEAT_SCHEDULE = {
     "check-android-channels": {"task": "check_android_channels", "schedule": timedelta(seconds=300)},
     "delete-released-orgs": {"task": "delete_released_orgs", "schedule": crontab(hour=4, minute=0)},
     "expire-invitations": {"task": "expire_invitations", "schedule": crontab(hour=0, minute=10)},
     "fail-old-android-messages": {"task": "fail_old_android_messages", "schedule": crontab(hour=0, minute=0)},
-    "refresh-whatsapp-tokens": {"task": "refresh_whatsapp_tokens", "schedule": crontab(hour=6, minute=0)},
     "refresh-turn-whatsapp-tokens": {"task": "refresh_turn_whatsapp_tokens", "schedule": crontab(hour=6, minute=0)},
     "refresh-templates": {"task": "refresh_templates", "schedule": timedelta(hours=6)},
     "send-notification-emails": {"task": "send_notification_emails", "schedule": timedelta(seconds=60)},
@@ -786,15 +812,6 @@ REST_HANDLE_EXCEPTIONS = not TESTING  # Don't handle exceptions in tests (let th
 # Asset Compression (django-compressor)
 # ===============================================================================
 
-if TESTING:
-    # Disable LESS compilation during tests for speed
-    COMPRESS_PRECOMPILERS = ()
-else:
-    # Compile LESS files to CSS in production
-    COMPRESS_PRECOMPILERS = (
-        ("text/less", 'lessc --include-path="%s" {infile} {outfile}' % os.path.join(PROJECT_DIR, "../static", "less")),
-    )
-
 # Post-processing filters for compressed assets
 COMPRESS_FILTERS = {
     "css": ["compressor.filters.css_default.CssAbsoluteFilter"],  # Fix CSS URLs
@@ -826,7 +843,6 @@ CHANNEL_TYPES = [
     "temba.channels.types.clickmobile.ClickMobileType",
     "temba.channels.types.clicksend.ClickSendType",
     "temba.channels.types.dartmedia.DartMediaType",
-    "temba.channels.types.dialog360_legacy.Dialog360LegacyType",
     "temba.channels.types.dialog360.Dialog360Type",
     "temba.channels.types.dmark.DMarkType",
     "temba.channels.types.external.ExternalType",
@@ -877,7 +893,6 @@ CHANNEL_TYPES = [
     "temba.channels.types.wavy.WavyType",
     "temba.channels.types.wechat.WeChatType",
     "temba.channels.types.whatsapp.WhatsAppType",
-    "temba.channels.types.whatsapp_legacy.WhatsAppLegacyType",
     "temba.channels.types.wuzapi.type.WuzapiType",
     "temba.channels.types.yo.YoType",
     "temba.channels.types.zenvia_sms.ZenviaSMSType",
@@ -890,23 +905,27 @@ LLM_TYPES = {
     "temba.ai.types.anthropic.type.AnthropicType": {
         # model id -> max output tokens
         "models": {
+            "claude-opus-4-8": 128_000,
             "claude-opus-4-7": 128_000,
             "claude-opus-4-5-20251101": 64_000,
-            "claude-sonnet-4-6": 64_000,
-            "claude-3-7-sonnet-20250219": 64_000,
+            "claude-sonnet-5": 128_000,
+            "claude-sonnet-4-6": 128_000,
             "claude-haiku-4-5-20251001": 64_000,
-            "claude-3-5-haiku-20241022": 8_192,
         },
     },
     "temba.ai.types.google.type.GoogleType": {
         "models": {
+            "gemini-3.6-flash": 65_536,
+            "gemini-3.5-flash": 65_536,
+            "gemini-3.5-flash-lite": 65_536,
             "gemini-2.5-flash": 65_536,
-            "gemini-2.0-flash": 8_192,
-            "gemini-1.5-flash": 8_192,
         },
     },
     "temba.ai.types.openai.type.OpenAIType": {
         "models": {
+            "gpt-5.6-sol": 128_000,
+            "gpt-5.6-terra": 128_000,
+            "gpt-5.6-luna": 128_000,
             "gpt-5.5": 128_000,
             "gpt-5.4": 128_000,
             "gpt-5.4-mini": 128_000,
@@ -952,6 +971,7 @@ ORG_LIMIT_DEFAULTS = {
     "labels": 250,  # Max message labels
     "llms": 10,  # Max LLM connections
     "teams": 50,  # Max ticket teams
+    "knowledge": 10,
     "topics": 50,  # Max ticket topics
 }
 
@@ -1034,6 +1054,10 @@ SOCIALACCOUNT_LOGIN_ON_GET = True  # Allow immediate social login (no confirmati
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 # Authentication methods and policies
+
+# maps email domains to the SSO provider (an allauth provider or app id) their users should be logging in with,
+# used to warn those still logging in with a password
+SSO_LOGIN_WARNING_DOMAINS = {}
 ACCOUNT_LOGIN_METHODS = ("email",)  # Only allow email login (not username)
 ACCOUNT_EMAIL_VERIFICATION = "none"  # Require email verification
 ACCOUNT_EMAIL_NOTIFICATIONS = False  # Send email notifications
@@ -1050,6 +1074,9 @@ ACCOUNT_CONFIRM_EMAIL_ON_GET = False  # Confirm email via GET request
 # Fields to show on signup form
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1"]  # Email (required) and password
 
+
+if TESTING:
+    ACCOUNT_RATE_LIMITS = False  # rate limit state in the cache would otherwise persist between test runs
 # ===============================================================================
 # End of settings_common.py
 # ===============================================================================
