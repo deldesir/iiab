@@ -131,12 +131,14 @@ if command -v ansible > /dev/null; then    # "command -v" is POSIX compliant; al
     echo "Found Ansible ""$CURR_ANSIBLE_VER"
 fi
 if version_gt $MIN_ANSIBLE_VER $CURR_ANSIBLE_VER ; then
-    echo -e "\nEXITING: ansible-core ""$MIN_ANSIBLE_VER"" or higher required.\n"
-
-    echo -e "PLEASE RUN '/opt/iiab/iiab/scripts/ansible' to install the latest Ansible.\n"
-
-    echo -e "IIAB INSTALL INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation"
-    exit 1
+    echo -e "\nansible-core ""$MIN_ANSIBLE_VER"" or higher required -- running /opt/iiab/iiab/scripts/ansible to install it.\n"
+    /opt/iiab/iiab/scripts/ansible
+    CURR_ANSIBLE_VER=$(ansible --version | head -1 | cut -f 2- -d " " | sed 's/.* \([^ ]*\)\].*/\1/')
+    if version_gt $MIN_ANSIBLE_VER $CURR_ANSIBLE_VER ; then
+        echo -e "\nEXITING: automatic Ansible install failed -- please run '/opt/iiab/iiab/scripts/ansible' by hand.\n"
+        echo -e "IIAB INSTALL INSTRUCTIONS: https://github.com/iiab/iiab/wiki/IIAB-Installation"
+        exit 1
+    fi
 fi
 
 # Stage 0 will always be run.  From there on up to Stage 9 we keep a counter

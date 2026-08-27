@@ -1,0 +1,16 @@
+# Fresh cloud images fire apt-daily/unattended-upgrades on first boot; racing
+# them fails random apt tasks with "could not get dpkg lock". Stop the timers
+# for this boot (they re-arm on reboot) and wait out any in-flight run.
+
+- name: Stop apt-daily timers for the install window (they re-arm on next boot)
+  systemd:
+    name: "{{ item }}"
+    state: stopped
+  loop:
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+  failed_when: False
+
+- name: Wait for the dpkg/apt lock to be released (up to 10 min)
+  command: flock -w 600 /var/lib/dpkg/lock-frontend true
+  changed_when: False
