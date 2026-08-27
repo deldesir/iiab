@@ -244,7 +244,7 @@
 # DB drop is destructive — only triggered by explicit erpnext_force_drop_db flag,
 # OR if the database is orphaned (when site_config.json is completely missing after a folder purge).
 - name: Drop ERPNext DB (ONLY when erpnext_force_drop_db is set or database is orphaned)
-  mysql_db:
+  ansible.mysql.mysql_db:
     name: "{{ erpnext_db_name }}"
     state: absent
     login_unix_socket: /run/mysqld/mysqld.sock
@@ -346,14 +346,14 @@
   when: erpnext_enabled | bool
 
 - name: Create ERPNext database
-  mysql_db:
+  ansible.mysql.mysql_db:
     name: "{{ erpnext_db_name }}"
     state: present
     login_unix_socket: /run/mysqld/mysqld.sock
   when: erpnext_enabled | bool
 
 - name: Create ERPNext database user
-  mysql_user:
+  ansible.mysql.mysql_user:
     name: "{{ erpnext_db_user }}"
     password: "{{ erpnext_db_password }}"
     priv: "{{ erpnext_db_name }}.*:ALL"
