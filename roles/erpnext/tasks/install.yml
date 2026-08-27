@@ -154,6 +154,17 @@
     enabled: yes
   when: erpnext_enabled | bool
 
+- name: Make yarn resilient to slow registries (bench app installs pull hundreds of tarballs)
+  copy:
+    dest: "/home/{{ erpnext_user_name }}/.yarnrc"
+    content: |
+      network-timeout 600000
+      network-concurrency 4
+    owner: "{{ erpnext_user_name }}"
+    group: "{{ erpnext_user_name }}"
+    mode: '0644'
+  when: erpnext_enabled | bool
+
 - name: Grant frappe user passwordless sudo for bench tooling
   copy:
     dest: /etc/sudoers.d/frappe
@@ -208,6 +219,21 @@
     creates: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+
+# The get-app tasks below use `creates:` guards, so a FAILED get-app (e.g. a
+# yarn network timeout) leaves a partial apps/<name> dir that skips forever.
+# An app is only truly installed once bench records it in sites/apps.txt.
+- name: Remove partially-installed bench apps (on disk but absent from apps.txt)
+  shell: |
+    [ -f /home/{{ erpnext_user_name }}/frappe-bench/sites/apps.txt ] || exit 0
+    for d in /home/{{ erpnext_user_name }}/frappe-bench/apps/*/; do
+      app=$(basename "$d")
+      grep -qx "$app" /home/{{ erpnext_user_name }}/frappe-bench/sites/apps.txt || rm -rf "$d"
+    done
+  args:
+    executable: /bin/bash
+  changed_when: False
   when: erpnext_enabled | bool
 
 - name: Install ERPNext app in bench

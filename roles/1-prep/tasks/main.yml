@@ -6,6 +6,9 @@
 - name: Create IIAB directory structure ("file layout")
   include_tasks: fl.yml
 
+- name: Wait out unattended-upgrades etc (fresh hosts hold the dpkg lock)
+  include_tasks: apt-lock.yml
+
 - name: SSHD
   include_role:
     name: sshd
