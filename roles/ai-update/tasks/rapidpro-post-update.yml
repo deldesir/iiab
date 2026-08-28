@@ -41,6 +41,17 @@
     mode: '0600'
   become: yes
 
+# Django 6.1 (RapidPro v26.3.55+) refuses to boot when the legacy EMAIL_* settings
+# coexist with the MAILERS dict that settings_common.py now defines. settings.py is
+# device-local and never re-rendered here, but older renders wrote
+# `EMAIL_BACKEND = ...` into it — strip any legacy email setting idempotently.
+- name: Strip legacy Django email settings superseded by MAILERS from settings.py
+  lineinfile:
+    path: "{{ ai_update_rapidpro_dir }}/temba/settings.py"
+    regexp: '^\s*EMAIL_(BACKEND|HOST|PORT|HOST_USER|HOST_PASSWORD|USE_TLS|USE_SSL|TIMEOUT|SSL_KEYFILE|SSL_CERTFILE)\s*='
+    state: absent
+  become: yes
+
 - name: Sync RapidPro Python dependencies
   shell: |
     export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
@@ -77,6 +88,17 @@
 - name: Purge Django cache
   shell: |
     {{ ai_update_rapidpro_dir }}/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
+  args:
+    chdir: "{{ ai_update_rapidpro_dir }}"
+  become: yes
+  ignore_errors: yes
+
+# RedBeat keeps beat entries in valkey after they leave CELERY_BEAT_SCHEDULE, so a
+# task upstream removed would keep firing as "unregistered". Prune against the
+# freshly rendered settings (idempotent; internal redbeat:: keys untouched).
+- name: Prune RedBeat schedule entries no longer in CELERY_BEAT_SCHEDULE
+  shell: |
+    {{ ai_update_rapidpro_dir }}/.venv/bin/python manage.py shell -c "$(cat /opt/iiab/iiab/roles/ai-update/files/prune_redbeat_entries.py)"
   args:
     chdir: "{{ ai_update_rapidpro_dir }}"
   become: yes

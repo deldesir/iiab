@@ -166,7 +166,8 @@ ACCOUNT_LOGOUT_REDIRECT_URL = "{{ rapidpro_url if rapidpro_url.endswith('/') els
 # ----------------------------------------------------------------------------------
 # Email
 # ----------------------------------------------------------------------------------
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# Email delivery is configured by MAILERS in settings_common.py (console backend by default);
+# Django 6.1 ignores EMAIL_BACKEND once MAILERS is defined.
 
 # ----------------------------------------------------------------------------------
 # Security

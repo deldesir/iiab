@@ -1,8 +1,8 @@
 import os
 import sys
 from datetime import timedelta
+from ipaddress import ip_network
 
-import iptools
 from celery.schedules import crontab
 
 from django.utils.translation import gettext_lazy as _
@@ -13,7 +13,8 @@ from django.utils.translation import gettext_lazy as _
 
 # IP addresses/networks allowed to access debug tools like Django Debug Toolbar
 # Includes localhost, local network, and Docker network ranges
-INTERNAL_IPS = iptools.IpRangeList("127.0.0.1", "192.168.0.10", "192.168.0.0/24", "0.0.0.0")  # network block
+# Django tests these by string membership, so the network block is expanded rather than kept as a range
+INTERNAL_IPS = ["127.0.0.1", "0.0.0.0"] + [str(ip) for ip in ip_network("192.168.0.0/24")]
 HOSTNAME = "localhost"
 
 # User-Agent header for outgoing HTTP requests to external services
@@ -176,7 +177,6 @@ COMPONENTS_DIR = os.path.join(PROJECT_DIR, "../components")
 STATICFILES_DIRS = (
     os.path.join(PROJECT_DIR, "../static"),  # Main static assets
     os.path.join(PROJECT_DIR, "../media"),  # Media files
-    os.path.join(PROJECT_DIR, "../node_modules"),  # Node dependencies
 )
 
 STATIC_ROOT = os.path.join(PROJECT_DIR, "../sitestatic")  # Where collected static files are stored
@@ -189,13 +189,22 @@ MEDIA_URL = "/media/"  # URL prefix for media files
 # Email Configuration
 # ===============================================================================
 
-# SMTP settings for outgoing transactional emails
-EMAIL_HOST = "smtp.gmail.com"
-EMAIL_HOST_USER = "server@temba.io"
+# Mailers are how email is sent (Django 6.1 MAILERS; EMAIL_BACKEND/EMAIL_HOST_* are ignored once this exists).
+# The default mailer sends most email; messages which carry their own SMTP configuration URL - e.g.
+# notifications for workspaces with their own branding and SMTP settings - are sent by the custom SMTP
+# mailer. Both must always be configured. IIAB/nanoRP: there is no SMTP relay on the box, so the default
+# mailer is the console backend (invite/notification bodies land in the rapidpro-gunicorn journal);
+# outbound mail to people goes through the email-bridge/gateway instead.
+MAILERS = {
+    "default": {
+        "BACKEND": "django.core.mail.backends.console.EmailBackend",
+    },
+    "custom_smtp": {
+        "BACKEND": "temba.utils.email.backend.CustomSMTPBackend",
+        "OPTIONS": {"timeout": 10},
+    },
+}
 DEFAULT_FROM_EMAIL = "Temba <server@temba.io>"
-EMAIL_HOST_PASSWORD = "mypassword"  # SECURITY: Use environment variables in production!
-EMAIL_USE_TLS = True
-EMAIL_TIMEOUT = 10  # Timeout in seconds
 
 # Fallback FROM address when users haven't configured their own SMTP in flows
 FLOW_FROM_EMAIL = "Temba <no-reply@temba.io>"
@@ -295,7 +304,6 @@ INSTALLED_APPS = (
     "allauth.socialaccount",
     "allauth.socialaccount.providers.google",
     "formtools",  # Multi-step forms
-    "imagekit",  # Image processing
     "rest_framework",  # API framework
     "rest_framework.authtoken",
     "compressor",  # Asset compression
@@ -373,7 +381,9 @@ BRAND = {
     "landing": {
         "hero": "brands/rapidpro/splash.jpg",
     },
-    "features": ["signups"],  # Enabled features for this brand (signups, sso, etc.)
+    "features": [],  # Enabled features for this brand (e.g. sso); account creation is invite-only upstream now
+    # brands that offer self-serve signup can set "signup_url" to where users without a workspace should be
+    # sent to create one - account creation itself is invite-only unless the adapters say otherwise
 }
 
 # Global feature flags for this installation
@@ -434,7 +444,6 @@ PERMISSIONS = {
         "prometheus",
         "resthooks",
         "service",
-        "signup",
         "spa",
         "switch",
         "trial",
@@ -766,7 +775,6 @@ CELERY_BEAT_SCHEDULE = {
     "check-android-channels": {"task": "check_android_channels", "schedule": timedelta(seconds=300)},
     "delete-released-orgs": {"task": "delete_released_orgs", "schedule": crontab(hour=4, minute=0)},
     "expire-invitations": {"task": "expire_invitations", "schedule": crontab(hour=0, minute=10)},
-    "fail-old-android-messages": {"task": "fail_old_android_messages", "schedule": crontab(hour=0, minute=0)},
     "refresh-turn-whatsapp-tokens": {"task": "refresh_turn_whatsapp_tokens", "schedule": crontab(hour=6, minute=0)},
     "refresh-templates": {"task": "refresh_templates", "schedule": timedelta(hours=6)},
     "send-notification-emails": {"task": "send_notification_emails", "schedule": timedelta(seconds=60)},
@@ -835,7 +843,6 @@ CHANNEL_TYPES = [
     "temba.channels.types.bandwidth.BandwidthType",
 
     "temba.channels.types.burstsms.BurstSMSType",
-    "temba.channels.types.chip.ChipType",
     "temba.channels.types.clickatell.ClickatellType",
     "temba.channels.types.clickmobile.ClickMobileType",
     "temba.channels.types.clicksend.ClickSendType",
@@ -888,6 +895,7 @@ CHANNEL_TYPES = [
     "temba.channels.types.vk.VKType",
     "temba.channels.types.vonage.VonageType",
     "temba.channels.types.wavy.WavyType",
+    "temba.channels.types.webchat.WebChatType",
     "temba.channels.types.wechat.WeChatType",
     "temba.channels.types.whatsapp.WhatsAppType",
     "temba.channels.types.wuzapi.type.WuzapiType",
@@ -970,6 +978,7 @@ ORG_LIMIT_DEFAULTS = {
     "teams": 50,  # Max ticket teams
     "knowledge": 10,
     "topics": 50,  # Max ticket topics
+    "triggers": 250,  # Max triggers per workspace
 }
 
 # Data retention periods for different model types
