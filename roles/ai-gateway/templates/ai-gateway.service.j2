@@ -11,9 +11,11 @@ WorkingDirectory={{ ai_gateway_dir }}
 StandardOutput=journal
 StandardError=journal
 
-# Memory cgroup limits — prevent OOM from crashing the entire server
-# Peak with 2 concurrent Hermes threads: ~480MB (§15 memory budget)
-MemoryMax=800M
+# Memory cgroup limits — prevent OOM from crashing the entire server.
+# Sized for the 4 GB edge target by default; a heavy turn (MemPalace HNSW load
+# + an 80k-token context) exceeds 800M and gets the service OOM-killed mid-reply,
+# so roomier boxes raise ai_gateway_memory_max in local_vars (e.g. 2G on 12 GB).
+MemoryMax={{ ai_gateway_memory_max | default('800M') }}
 MemorySwapMax=0
 
 # Secrets loaded from restricted file (mode 0600, owned by service user)
