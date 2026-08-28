@@ -93,6 +93,17 @@
   become: yes
   ignore_errors: yes
 
+# RedBeat keeps beat entries in valkey after they leave CELERY_BEAT_SCHEDULE, so a
+# task upstream removed would keep firing as "unregistered". Prune against the
+# freshly rendered settings (idempotent; internal redbeat:: keys untouched).
+- name: Prune RedBeat schedule entries no longer in CELERY_BEAT_SCHEDULE
+  shell: |
+    {{ ai_update_rapidpro_dir }}/.venv/bin/python manage.py shell -c "$(cat /opt/iiab/iiab/roles/ai-update/files/prune_redbeat_entries.py)"
+  args:
+    chdir: "{{ ai_update_rapidpro_dir }}"
+  become: yes
+  ignore_errors: yes
+
 - name: Fix Nginx permissions on static assets and socket directory
   shell: |
     chmod -R a+rX {{ ai_update_rapidpro_dir }}/sitestatic {{ ai_update_rapidpro_dir }}/media
