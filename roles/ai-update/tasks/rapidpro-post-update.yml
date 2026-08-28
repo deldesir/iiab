@@ -41,6 +41,17 @@
     mode: '0600'
   become: yes
 
+# Django 6.1 (RapidPro v26.3.55+) refuses to boot when the legacy EMAIL_* settings
+# coexist with the MAILERS dict that settings_common.py now defines. settings.py is
+# device-local and never re-rendered here, but older renders wrote
+# `EMAIL_BACKEND = ...` into it — strip any legacy email setting idempotently.
+- name: Strip legacy Django email settings superseded by MAILERS from settings.py
+  lineinfile:
+    path: "{{ ai_update_rapidpro_dir }}/temba/settings.py"
+    regexp: '^\s*EMAIL_(BACKEND|HOST|PORT|HOST_USER|HOST_PASSWORD|USE_TLS|USE_SSL|TIMEOUT|SSL_KEYFILE|SSL_CERTFILE)\s*='
+    state: absent
+  become: yes
+
 - name: Sync RapidPro Python dependencies
   shell: |
     export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
