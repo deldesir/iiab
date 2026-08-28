@@ -29,7 +29,7 @@ ai_update_gateway_components:
   - name: hermes-agent
     repo: "https://github.com/nousresearch/hermes-agent.git"
     dest: /opt/iiab/hermes-agent
-    version: v2026.8.18
+    version: v2026.8.27
 
   # deldesir fork is the integration point. Upstream MemPalace/mempalace is synced
   # INTO this fork deliberately (feature-aware — e.g. the embeddinggemma default is
