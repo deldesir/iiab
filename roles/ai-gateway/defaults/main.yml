@@ -12,6 +12,20 @@ ai_gateway_uv_bin: /root/.local/bin/uv
 ai_gateway_repo: "https://github.com/deldesir/gateway.git"
 ai_gateway_repo_version: "main"
 
+# systemd MemoryMax for the service (4 GB edge default; raise on bigger boxes)
+ai_gateway_memory_max: "800M"
+
+# Wall-clock budget for one chat turn (seconds). Mailroom drops the LLM call at
+# 60 s, so the gateway answers honestly before that instead of going silent.
+ai_gateway_turn_budget_secs: 45
+
+# Read-only ERPNext view for the operator persona (erpnext_sales_summary).
+# Leave the URL empty to disable. Key/secret belong in local_vars.yml.
+ai_gateway_erpnext_url: ""
+ai_gateway_erpnext_host: ""
+ai_gateway_erpnext_api_key: ""
+ai_gateway_erpnext_api_secret: ""
+
 # Domain libraries (cloned automatically by the role)
 ai_gateway_talkmaster_repo: "https://github.com/deldesir/talkmaster.git"
 ai_gateway_talkmaster_dir: /opt/iiab/talkmaster
