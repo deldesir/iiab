@@ -13,7 +13,7 @@
     path: /opt/iiab/hermes-agent/tools/memory_tool.py
     regexp: |
       def get_memory_dir\(\) -> Path:
-          """Return the profile-scoped memories directory."""
+          """[^"\n]*"""
           return get_hermes_home\(\) / "memories"
     replace: |
       import contextvars
@@ -43,16 +43,17 @@
 # Reason: Prevent token exhaustion from unbounded user memory growth
 - name: "hermes: 4KB USER.md storage cap"
   replace:
-    path: /opt/iiab/hermes-agent/tools/memory_tool.py
-    regexp: 'return self\.user_char_limit'
-    replace: 'return 4096  # IIAB: storage cap for multi-tenant'
+    # upstream moved MemoryStore (and its limit getter) out of memory_tool.py
+    path: /opt/iiab/hermes-agent/tools/memory_tool_store.py
+    regexp: 'return self\.user_char_limit if target == "user" else self\.memory_char_limit'
+    replace: 'return 4096 if target == "user" else self.memory_char_limit  # IIAB: storage cap for multi-tenant'
   become: yes
   register: patch_cap
   ignore_errors: yes
 
 - name: "⚠️  storage cap patch did not apply"
   debug:
-    msg: "Hermes 4KB storage cap patch FAILED — check tools/memory_tool.py"
+    msg: "Hermes 4KB storage cap patch FAILED — check tools/memory_tool_store.py"
   when: patch_cap is failed
 
 # Patch 3: _SafeWriter must be weakref-able
@@ -75,6 +76,24 @@
   debug:
     msg: "Hermes _SafeWriter weakref patch FAILED — check agent/process_bootstrap.py"
   when: patch_safewriter is failed
+
+# The `replace` module reports "ok" when its regexp matches NOTHING, so the
+# `is failed` warnings above cannot catch an upstream refactor that moves an
+# anchor. Check the end state instead and stop the play: an agent restarted
+# without tenant isolation would share one memory file between every user.
+- name: "hermes: verify deploy patches are present (fails loudly on a silent miss)"
+  shell: |
+    set -e
+    grep -q 'current_tenant_urn' /opt/iiab/hermes-agent/tools/memory_tool.py \
+      || { echo "MISSING: tenant memory isolation (tools/memory_tool.py)"; exit 1; }
+    grep -rq 'IIAB: storage cap' /opt/iiab/hermes-agent/tools/memory_tool.py /opt/iiab/hermes-agent/tools/memory_tool_store.py 2>/dev/null \
+      || { echo "MISSING: USER.md storage cap"; exit 1; }
+    grep -q '__weakref__' /opt/iiab/hermes-agent/agent/process_bootstrap.py \
+      || { echo "MISSING: _SafeWriter weakref slot"; exit 1; }
+  args:
+    executable: /bin/bash
+  changed_when: false
+  become: yes
 
 # ═══════════════════════════════════════════════════════════════════
 # MemPalace patches
