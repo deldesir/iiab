@@ -31,6 +31,14 @@ builder_cli_repo: "https://github.com/deldesir/builder-cli.git"
 builder_cli_dir: "/opt/iiab/builder-cli"
 builder_cli_branch: "main"
 
+# Per-box branding (browser tab title, login page, website navbar, About page).
+# Empty = fall back to the site's default Company, filling empty fields only;
+# set it in local_vars to make the name authoritative on every role run.
+erpnext_business_name: ""
+# Optional HTML for the About page introduction (empty = generic intro, only
+# written when the field is still blank).
+erpnext_about_intro_html: ""
+
 storefront_repo: "https://github.com/deldesir/novadah-storefront.git"
 storefront_dir: "/opt/iiab/novadah-storefront"
 storefront_branch: "main"

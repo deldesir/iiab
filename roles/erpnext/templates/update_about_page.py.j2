@@ -1,12 +1,27 @@
 import frappe
+from frappe.utils import escape_html
+
+# Per-box branding. `erpnext_business_name` (local_vars) is authoritative when
+# set; otherwise the site's default Company is used, and only to fill EMPTY
+# fields -- names the operator set in the UI are never overwritten.
+BUSINESS_NAME = {{ erpnext_business_name | default('') | to_json }}
+ABOUT_INTRO_HTML = {{ erpnext_about_intro_html | default('') | to_json }}
+
+
+def _brand_name():
+    return BUSINESS_NAME or frappe.db.get_single_value("Global Defaults", "default_company") or ""
+
 
 def run():
     print("Starting database updates...")
-    
+
     # 1. Update Website Settings
     website_settings = frappe.get_doc("Website Settings")
-    website_settings.app_name = "Novadah"
-    website_settings.brand_html = "<span>Novadah</span>"
+    brand = _brand_name()
+    if brand and (BUSINESS_NAME or not website_settings.app_name):
+        website_settings.app_name = brand
+    if brand and (BUSINESS_NAME or not website_settings.brand_html):
+        website_settings.brand_html = "<span>{0}</span>".format(escape_html(brand))
     website_settings.head_html = """<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -104,8 +119,11 @@ def run():
     # 2. Update About Us Settings (Translate title & company introduction)
     about_settings = frappe.get_doc("About Us Settings")
     about_settings.page_title = "À propos de nous"
-    about_settings.company_introduction = """<p>Chez <strong>Novadah Multi-Services</strong>, nous sommes votre partenaire de confiance à Gonaïves pour la technologie, la maison et la mode.</p>
-<p>Notre mission est de vous proposer une sélection rigoureuse d'ordinateurs performants, d'appareils électroménagers modernes et de vêtements élégants de qualité supérieure. Nous nous engageons à offrir une expérience d'achat en ligne unique, alliant design moderne, service client exceptionnel et livraison rapide à Gonaïves et dans tout le pays.</p>"""
+    if ABOUT_INTRO_HTML:
+        about_settings.company_introduction = ABOUT_INTRO_HTML
+    elif not about_settings.company_introduction and brand:
+        about_settings.company_introduction = """<p>Chez <strong>{0}</strong>, nous sommes votre partenaire de confiance.</p>
+<p>Notre mission est de vous proposer une sélection rigoureuse de produits de qualité, avec un service client attentif et une expérience d'achat simple et moderne.</p>""".format(escape_html(brand))
     about_settings.save(ignore_permissions=True)
     print("✓ Updated About Us Settings (French Title & Company Introduction).")
 
