@@ -30,6 +30,14 @@ backup_sqlite /library/jwlinker/jw_library.db                             jw_lib
 backup_sqlite /opt/iiab/wuzapi/dbdata/main.db                             wuzapi-main.db
 backup_sqlite /opt/iiab/wuzapi/dbdata/users.db                            wuzapi-users.db
 
+# Social Code training state (FSRS progress, XP, replay journal) — none of
+# these are git-tracked; registers/emotions are rebuildable but cheap to keep.
+backup_sqlite /opt/iiab/social-code/data/empathy_lab.db                   social-code-empathy.db
+backup_sqlite /opt/iiab/social-code/apps/wit_gym/data/wit.db              social-code-wit.db
+backup_sqlite /opt/iiab/social-code/apps/small_talk/src/small_talk/data/small_talk_i18n.db social-code-smalltalk.db
+backup_sqlite /opt/iiab/social-code/data/registers/registers.db           social-code-registers.db
+backup_sqlite /opt/iiab/social-code/data/emotions/emotions.db             social-code-emotions.db
+
 # SiYuan workspace (notes + conf; excludes temp/history caches)
 tar -czf "$DEST/$STAMP/siyuan-workspace.tar.gz" \
     --exclude='temp' --exclude='history' \
@@ -87,9 +95,15 @@ done
 for f in /opt/iiab/ai-gateway/.env.local \
          /etc/iiab/organized.env.local \
          /etc/iiab/local_vars.yml \
-         /etc/iiab/email_bridge_send_auth.token; do
+         /etc/iiab/email_bridge_send_auth.token \
+         /etc/iiab/fleet-backup.conf \
+         /etc/iiab/fleet-backup.passphrase; do
     [ -f "$f" ] && cp -a "$f" "$DEST/$STAMP/$(echo "${f#/}" | tr / _)"
 done
+# Per-box backup passphrases (fleet-backup-mail new-passphrase): without them the
+# bundles mailed to those boxes' own recipients can never be opened again.
+[ -d /etc/iiab/fleet-backup.passphrase.d ] && tar -czf "$DEST/$STAMP/etc_iiab_fleet-backup.passphrase.d.tar.gz" \
+    -C /etc/iiab fleet-backup.passphrase.d
 echo "machine-local config ok"
 
 chmod 700 "$DEST"

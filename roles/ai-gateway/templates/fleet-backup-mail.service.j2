@@ -1,0 +1,11 @@
+[Unit]
+Description=Pull Frappe site backups from the fleet, keep an off-box copy, email encrypted bundles
+OnFailure=notify-failure@%n.service
+After=network-online.target email-bridge.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/fleet-backup-mail
+StandardOutput=journal
+StandardError=journal

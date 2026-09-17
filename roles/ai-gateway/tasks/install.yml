@@ -257,6 +257,8 @@
     - pipeline-health-check.timer
     - second-brain-backup.service
     - second-brain-backup.timer
+    - fleet-backup-mail.service
+    - fleet-backup-mail.timer
   become: yes
 
 - name: Install pipeline maintenance scripts
@@ -266,6 +268,7 @@
     mode: '0755'
   loop:
     - second-brain-backup
+    - fleet-backup-mail
     - jwlinker-refresh
     - hermes-elevate
     - pipeline-health-check
@@ -314,6 +317,23 @@
     - ai-gateway-contactsync.timer
     - pipeline-health-check.timer
     - second-brain-backup.timer
+  become: yes
+
+# Emailed Frappe backups run from ONE hub box: the box whose operator wrote
+# /etc/iiab/fleet-backup.conf (recipient + box list). Everywhere else the
+# script and units are installed but stay dormant.
+- name: Is this box the fleet-backup hub?
+  stat:
+    path: /etc/iiab/fleet-backup.conf
+  register: fleet_backup_conf
+
+- name: Enable the emailed fleet-backup timer on the hub
+  systemd:
+    name: fleet-backup-mail.timer
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  when: fleet_backup_conf.stat.exists
   become: yes
 
 # RECORD AI Gateway AS INSTALLED
