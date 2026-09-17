@@ -100,6 +100,10 @@ for f in /opt/iiab/ai-gateway/.env.local \
          /etc/iiab/fleet-backup.passphrase; do
     [ -f "$f" ] && cp -a "$f" "$DEST/$STAMP/$(echo "${f#/}" | tr / _)"
 done
+# Per-box backup passphrases (fleet-backup-mail new-passphrase): without them the
+# bundles mailed to those boxes' own recipients can never be opened again.
+[ -d /etc/iiab/fleet-backup.passphrase.d ] && tar -czf "$DEST/$STAMP/etc_iiab_fleet-backup.passphrase.d.tar.gz" \
+    -C /etc/iiab fleet-backup.passphrase.d
 echo "machine-local config ok"
 
 chmod 700 "$DEST"

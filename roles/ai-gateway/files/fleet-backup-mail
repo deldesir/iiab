@@ -12,6 +12,15 @@
 #   bench --site site.local restore <db>.sql.gz   # see RESTORE.txt in the bundle
 #
 # Config: /etc/iiab/fleet-backup.conf   Passphrase: /etc/iiab/fleet-backup.passphrase
+#
+# Recipients (these settings affect ONLY these backup mails, nothing else the
+# stack sends): RECIPIENT is the default for every box; RECIPIENT_OVERRIDES
+# ("box=email box=email") redirects individual boxes. Manage them with:
+#   fleet-backup-mail recipients                      show who gets which box
+#   fleet-backup-mail set-recipient <email> [<box>]   default, or one box
+#   fleet-backup-mail unset-recipient <box>           back to the default
+#   fleet-backup-mail new-passphrase <box>            per-box passphrase, so a
+#       box's own recipient never needs the passphrase that opens every box
 set -uo pipefail
 
 CONF=${FLEET_BACKUP_CONF:-/etc/iiab/fleet-backup.conf}
@@ -24,7 +33,9 @@ BRIDGE_URL=http://127.0.0.1:8096/send-file
 BRIDGE_ENV=/opt/iiab/email-bridge/.env
 BENCH=/home/frappe/frappe-bench
 SITE=site.local
+PASSDIR=${FLEET_BACKUP_PASSDIR:-/etc/iiab/fleet-backup.passphrase.d}   # optional per-box passphrases: $PASSDIR/<label>
 RECIPIENT=""
+RECIPIENT_OVERRIDES=""
 BOXES=""
 DRY_RUN=${DRY_RUN:-0}              # DRY_RUN=1: build bundles, send nothing
 
@@ -32,6 +43,53 @@ DRY_RUN=${DRY_RUN:-0}              # DRY_RUN=1: build bundles, send nothing
 . "$CONF"
 [ -n "$RECIPIENT" ] && [ -n "$BOXES" ] || { echo "RECIPIENT/BOXES missing in $CONF" >&2; exit 2; }
 [ -s "$PASSFILE" ] || { echo "missing $PASSFILE" >&2; exit 2; }
+
+label_of() { echo "${1#*=}"; }                # BOXES entry -> label ("local=<label>" or "<ssh-host>")
+recipient_for() {                             # per-box override, else the default
+  local pair
+  for pair in $RECIPIENT_OVERRIDES; do
+    [ "${pair%%=*}" = "$1" ] && { echo "${pair#*=}"; return; }
+  done
+  echo "$RECIPIENT"
+}
+passfile_for() { [ -s "$PASSDIR/$1" ] && echo "$PASSDIR/$1" || echo "$PASSFILE"; }
+known_box() { local e; for e in $BOXES; do [ "$(label_of "$e")" = "$1" ] && return 0; done; return 1; }
+valid_email() { [[ "$1" =~ ^[^@[:space:]\"=]+@[^@[:space:]\"=]+\.[^@[:space:]\"=]+$ ]]; }
+set_conf() {                                  # set_conf VAR VALUE — rewrite or append VAR="VALUE" in $CONF
+  if grep -q "^$1=" "$CONF"; then sed -i "s|^$1=.*|$1=\"$2\"|" "$CONF"; else printf '%s="%s"\n' "$1" "$2" >> "$CONF"; fi
+  chmod 600 "$CONF"
+}
+overrides_without() { local pair out=""; for pair in $RECIPIENT_OVERRIDES; do [ "${pair%%=*}" = "$1" ] || out="$out $pair"; done; echo "${out# }"; }
+
+case "${1:-run}" in
+  run) ;;
+  recipients)
+    printf '%-26s %-34s %s\n' BOX RECIPIENT PASSPHRASE
+    for e in $BOXES; do l=$(label_of "$e"); r=$(recipient_for "$l")
+      printf '%-26s %-34s %s\n' "$l" "$r$([ "$r" = "$RECIPIENT" ] && echo ' (default)')" "$([ -s "$PASSDIR/$l" ] && echo per-box || echo fleet)"
+    done; exit 0 ;;
+  set-recipient)
+    email=${2:-}; box=${3:-}
+    valid_email "$email" || { echo "usage: $0 set-recipient <email> [<box>]   (not a valid address: '$email')" >&2; exit 2; }
+    if [ -z "$box" ]; then
+      set_conf RECIPIENT "$email"; echo "default recipient for all boxes -> $email"
+    else
+      known_box "$box" || { echo "unknown box '$box'. Known: $(for e in $BOXES; do printf '%s ' "$(label_of "$e")"; done)" >&2; exit 2; }
+      set_conf RECIPIENT_OVERRIDES "$(echo "$(overrides_without "$box") $box=$email" | sed 's/^ //')"
+      echo "$box -> $email"
+      [ -s "$PASSDIR/$box" ] || echo "note: $box bundles still use the FLEET passphrase, which opens every box's backups. To give this recipient a passphrase of their own: $0 new-passphrase $box"
+    fi; exit 0 ;;
+  unset-recipient)
+    box=${2:-}; [ -n "$box" ] || { echo "usage: $0 unset-recipient <box>" >&2; exit 2; }
+    set_conf RECIPIENT_OVERRIDES "$(overrides_without "$box")"; echo "$box -> $RECIPIENT (default)"; exit 0 ;;
+  new-passphrase)
+    box=${2:-}; known_box "$box" || { echo "usage: $0 new-passphrase <box>   (unknown box '$box')" >&2; exit 2; }
+    [ -s "$PASSDIR/$box" ] && { echo "$PASSDIR/$box already exists — not overwriting (older mails need it)" >&2; exit 1; }
+    ( umask 077; mkdir -p "$PASSDIR"; openssl rand -base64 33 > "$PASSDIR/$box" )
+    echo "created $PASSDIR/$box — hand its content to that box's recipient over a safe channel"; exit 0 ;;
+  *) echo "usage: $0 [run|recipients|set-recipient <email> [<box>]|unset-recipient <box>|new-passphrase <box>]" >&2; exit 2 ;;
+esac
+
 SEND_AUTH=$(grep -E '^EMAIL_SEND_AUTH=' "$BRIDGE_ENV" | cut -d= -f2- | tr -d '"'"'")
 
 STAMP=$(date +%F)
@@ -55,11 +113,11 @@ pull() {
 }
 human() { numfmt --to=iec --suffix=B "$1"; }
 
-send_mail() {  # send_mail <subject> <body> [file]
-  [ "$DRY_RUN" = 1 ] && { echo "  DRY_RUN: would send '$1' ${3:+(+ $(basename "$3"))}"; return 0; }
+send_mail() {  # send_mail <to> <subject> <body> [file]
+  [ "$DRY_RUN" = 1 ] && { echo "  DRY_RUN: would send to $1: '$2' ${4:+(+ $(basename "$4"))}"; return 0; }
   local args=(-s -m 300 -o "$WORK/resp" -w '%{http_code}' -H "Authorization: $SEND_AUTH"
-              -F "to=$RECIPIENT" -F "subject=$1" -F "text=$2")
-  [ -n "${3:-}" ] && args+=(-F "files=@$3;type=application/octet-stream")
+              -F "to=$1" -F "subject=$2" -F "text=$3")
+  [ -n "${4:-}" ] && args+=(-F "files=@$4;type=application/octet-stream")
   local code; code=$(curl "${args[@]}" "$BRIDGE_URL")
   [ "$code" = 200 ] || { echo "  email-bridge HTTP $code: $(head -c 200 "$WORK/resp")" >&2; return 1; }
 }
@@ -67,7 +125,9 @@ send_mail() {  # send_mail <subject> <body> [file]
 backup_box() {
   local entry=$1 box label
   box=${entry%%=*}; label=${entry#*=}          # "local=<label>" or "<ssh-host>"
-  echo "== $label"
+  local to passfile
+  to=$(recipient_for "$label"); passfile=$(passfile_for "$label")
+  echo "== $label -> $to"
   local bdir=$BENCH/sites/$SITE/private/backups
   local db; db=$(on "$box" "ls -t $bdir/*-database*.sql.gz 2>/dev/null | head -1") || return 1
   [ -n "$db" ] || { echo "  no database backup found" >&2; return 1; }
@@ -109,7 +169,7 @@ backup_box() {
 
   local bundle=$WORK/$label-$prefix.tar.gpg
   tar -cf - -C "$stage" . | gpg --batch --yes --quiet --symmetric --cipher-algo AES256 \
-      --pinentry-mode loopback --passphrase-file "$PASSFILE" -o "$bundle" || return 1
+      --pinentry-mode loopback --passphrase-file "$passfile" -o "$bundle" || return 1
   rm -rf "$stage"
   local size; size=$(stat -c %s "$bundle")
   local dbsize; dbsize=$(stat -c %s "$out/$(basename "$db")")
@@ -117,17 +177,17 @@ backup_box() {
 
   local body="Encrypted backup of $label: database $(human "$dbsize") taken ${age_h}h before bundling, site config, uploaded files.
 
-Decrypt with the fleet passphrase (kept on the hub: $PASSFILE):
+Decrypt with the backup passphrase (kept on the hub: $passfile):
   gpg -d $(basename "$bundle") | tar x
 then follow RESTORE.txt inside. An off-box copy is also kept on the hub under $DEST/$label/ for $KEEP_DAYS days."
   if [ "$size" -le "$PART_BYTES" ]; then
-    send_mail "[backup] ${warn}$label $STAMP ($(human "$size"))" "$body" "$bundle" || return 1
+    send_mail "$to" "[backup] ${warn}$label $STAMP ($(human "$size"))" "$body" "$bundle" || return 1
   else
     split -b "$PART_BYTES" -d -a 2 "$bundle" "$bundle.part"
     local parts=("$bundle".part*) i=0
     for p in "${parts[@]}"; do
       i=$((i + 1))
-      send_mail "[backup] ${warn}$label $STAMP part $i/${#parts[@]}" \
+      send_mail "$to" "[backup] ${warn}$label $STAMP part $i/${#parts[@]}" \
         "$body
 
 This backup is split: save all ${#parts[@]} parts, then  cat $(basename "$bundle").part* > $(basename "$bundle")" "$p" || return 1
@@ -142,7 +202,7 @@ done
 
 if [ ${#FAILED[@]} -gt 0 ]; then
   echo "FAILED: ${FAILED[*]}" >&2
-  send_mail "[backup] FAILED $STAMP: ${FAILED[*]}" \
+  send_mail "$RECIPIENT" "[backup] FAILED $STAMP: ${FAILED[*]}" \
     "fleet-backup-mail could not back up: ${FAILED[*]}. See: journalctl -u fleet-backup-mail" || true
   exit 1
 fi
