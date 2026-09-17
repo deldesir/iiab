@@ -58,9 +58,11 @@ declare -A REPO_DIR=(
   [mailroom]=/opt/iiab/mailroom
   [wuzapi]=/opt/iiab/wuzapi-src
 )
-# repo -> upstream remote URL (added automatically if the remote is missing).
+# repo -> upstream remote URL (added automatically if the remote is missing, and
+# repointed if it differs). The keys are this estate's names: upstream renamed
+# nyaruka/rapidpro to nyaruka/temba -- "RapidPro" now names the whole stack.
 declare -A UPSTREAM_URL=(
-  [rapidpro]=https://github.com/nyaruka/rapidpro.git
+  [rapidpro]=https://github.com/nyaruka/temba.git
   [courier]=https://github.com/nyaruka/courier.git
   [mailroom]=https://github.com/nyaruka/mailroom.git
   [wuzapi]=https://github.com/asternic/wuzapi.git
@@ -156,9 +158,13 @@ ensure_remotes() {
   [[ -d "$dir/.git" ]] || die "$dir is not a git repo (expected the $repo fork checkout)"
   local branch; branch="$(git -C "$dir" rev-parse --abbrev-ref HEAD)"
   [[ "$branch" == "main" || "$branch" == "master" ]] || die "$repo: on branch '$branch', expected main/master"
-  if ! git -C "$dir" remote get-url upstream >/dev/null 2>&1; then
+  local current; current="$(git -C "$dir" remote get-url upstream 2>/dev/null || true)"
+  if [[ -z "$current" ]]; then
     log "$repo: adding upstream remote ${UPSTREAM_URL[$repo]}"
     git -C "$dir" remote add upstream "${UPSTREAM_URL[$repo]}"
+  elif [[ "${current%.git}" != "${UPSTREAM_URL[$repo]%.git}" ]]; then
+    log "$repo: upstream remote moved: $current -> ${UPSTREAM_URL[$repo]}"
+    git -C "$dir" remote set-url upstream "${UPSTREAM_URL[$repo]}"
   fi
 }
 

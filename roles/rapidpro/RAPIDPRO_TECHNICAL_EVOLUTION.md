@@ -22,7 +22,7 @@ The resulting architecture delivers a "VM-Parity" experience on mobile hardware 
 
 This phase achieved functional synergy between the disparate Go and Python components of the RapidPro stack, tailored for the IIAB environment.
 
-*   **Upstream Architecture:** Cloned directly from `nyaruka/rapidpro`, `nyaruka/courier`, `nyaruka/mailroom`, and `asternic/wuzapi`.
+*   **Upstream Architecture:** Cloned directly from `nyaruka/temba` (named `nyaruka/rapidpro` until upstream's 2026 rename; "RapidPro" now names the whole stack), `nyaruka/courier`, `nyaruka/mailroom`, and `asternic/wuzapi`.
 *   **Core Synergies & "Leveraging" Logic:**
     *   **Courier adjusted to leverage Wuzapi:** A native Go handler (`WZ`) was integrated into Courier to handle direct REST mapping of RapidPro channels to Wuzapi endpoints. This handler utilizes a **synchronous REST pipeline** targeting `/chat/send/{type}` (image, video, audio, document) based on MIME-type discovery.
     *   **Wuzapi adjusted to leverage Courier:** Wuzapi was configured to operate as a secure producer for Courier webhooks, utilizing a **mutual HMAC handshake** (negotiated via the `hmac_key` channel config and transmitted via `X-HMAC-Signature` headers) for payload verification.
