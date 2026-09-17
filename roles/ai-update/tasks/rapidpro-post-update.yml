@@ -23,8 +23,39 @@
   become: yes
   changed_when: false
 
+# The settings template and the pgvector/bun tasks need the rapidpro role's
+# defaults, but include_vars OUTRANKS local_vars.yml: loading the defaults file
+# blanked every operator value whose default is "" (SECRET_KEY, the websockets
+# secret, the wuzapi and custom_ai tokens) in the re-rendered settings.
+# So: remember every value that is already defined, load the defaults (lazily,
+# they reference each other), then put the remembered values back with
+# set_fact, which outranks include_vars.
+- name: Remember rapidpro variables that are already defined (local_vars, default_vars)
+  set_fact:
+    _rapidpro_defined_vars: "{{ _rapidpro_defined_vars | default({}) | combine({item: lookup('vars', item)}) }}"
+  loop: "{{ (lookup('file', '/opt/iiab/iiab/roles/rapidpro/defaults/main.yml') | from_yaml).keys() | list }}"
+  when: lookup('vars', item, default='__undefined__') != '__undefined__'
+  no_log: true
+
 - name: Load rapidpro role defaults (settings template + pgvector vars)
   include_vars: /opt/iiab/iiab/roles/rapidpro/defaults/main.yml
+
+- name: Put the already-defined values back on top of the role defaults
+  set_fact:
+    "{{ item.key }}": "{{ item.value }}"
+  loop: "{{ _rapidpro_defined_vars | default({}) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  no_log: true
+
+# A settings file rendered with an empty SECRET_KEY takes the web app down on
+# the next worker recycle. Refuse to write one.
+- name: Refuse to render settings without the operator's secret key
+  assert:
+    that:
+      - rapidpro_secret_key | default('') | length > 0
+    fail_msg: "rapidpro_secret_key is empty - set it in local_vars.yml; refusing to re-render settings_common.py"
+    quiet: true
 
 - name: Ensure pgvector for the knowledge app
   include_tasks: /opt/iiab/iiab/roles/rapidpro/tasks/pgvector.yml
@@ -36,6 +67,7 @@
   template:
     src: /opt/iiab/iiab/roles/rapidpro/templates/settings_common.py.j2
     dest: "{{ ai_update_rapidpro_dir }}/temba/settings_common.py"
+    backup: yes
     owner: "{{ ai_update_gateway_user }}"
     group: "{{ ai_update_gateway_user }}"
     mode: '0600'

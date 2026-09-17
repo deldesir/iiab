@@ -16,6 +16,8 @@
 
     - name: "Get existing git safe.directory entries"
       command: git config --global --get-all safe.directory
+      environment:
+        HOME: "{{ lookup('env', 'HOME') | default('/root', true) }}"   # timers and transient units have no HOME
       register: _safe_dirs
       changed_when: false
       failed_when: false
@@ -23,6 +25,8 @@
 
     - name: "Add missing dirs to git safe.directory"
       command: git config --global --add safe.directory "{{ item }}"
+      environment:
+        HOME: "{{ lookup('env', 'HOME') | default('/root', true) }}"   # timers and transient units have no HOME
       become: yes
       loop:
         - "{{ ai_update_gateway_dir }}"
