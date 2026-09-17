@@ -1,0 +1,149 @@
+#!/bin/bash
+# fleet-backup-mail — pull each Frappe box's newest site backup to this hub,
+# keep an off-box copy, and email it as ONE encrypted bundle per box.
+#
+# Why a hub: SMTP credentials stay on one machine (the email-bridge here), the
+# remotes get an off-box copy they otherwise lack, and one timer covers the fleet.
+#
+# The bundle is GPG-symmetric (AES256) with the fleet passphrase, because the
+# site_config backup carries DB passwords + encryption keys and the dump carries
+# customer data. Restore:
+#   gpg -d <box>-<stamp>.tar.gpg | tar x          # asks for the fleet passphrase
+#   bench --site site.local restore <db>.sql.gz   # see RESTORE.txt in the bundle
+#
+# Config: /etc/iiab/fleet-backup.conf   Passphrase: /etc/iiab/fleet-backup.passphrase
+set -uo pipefail
+
+CONF=${FLEET_BACKUP_CONF:-/etc/iiab/fleet-backup.conf}
+PASSFILE=/etc/iiab/fleet-backup.passphrase
+DEST=/library/backups/fleet
+KEEP_DAYS=14
+STALE_HOURS=12
+PART_BYTES=$((15 * 1024 * 1024))   # Gmail caps a message at 25 MB after base64 (~18 MB raw)
+BRIDGE_URL=http://127.0.0.1:8096/send-file
+BRIDGE_ENV=/opt/iiab/email-bridge/.env
+BENCH=/home/frappe/frappe-bench
+SITE=site.local
+RECIPIENT=""
+BOXES=""
+DRY_RUN=${DRY_RUN:-0}              # DRY_RUN=1: build bundles, send nothing
+
+# shellcheck disable=SC1090
+. "$CONF"
+[ -n "$RECIPIENT" ] && [ -n "$BOXES" ] || { echo "RECIPIENT/BOXES missing in $CONF" >&2; exit 2; }
+[ -s "$PASSFILE" ] || { echo "missing $PASSFILE" >&2; exit 2; }
+SEND_AUTH=$(grep -E '^EMAIL_SEND_AUTH=' "$BRIDGE_ENV" | cut -d= -f2- | tr -d '"'"'")
+
+STAMP=$(date +%F)
+WORK=$(mktemp -d /tmp/fleet-backup.XXXXXX)
+[ "${KEEP_WORK:-0}" = 1 ] && echo "workdir kept: $WORK" || trap 'rm -rf "$WORK"' EXIT
+umask 077
+mkdir -p "$DEST"
+FAILED=()
+
+# on <box> <cmd…> — run on the box ("local" = this machine), as root.
+on() { local box=$1; shift; if [ "$box" = local ]; then bash -c "$*"; else ssh -o BatchMode=yes -o ConnectTimeout=20 "root@$box" "$*"; fi; }
+# pull <box> <remote-path> <local-dir> [rsync opts…]
+pull() {
+  local box=$1 src=$2 dst=$3; shift 3
+  if [ "$box" = local ]; then
+    # shellcheck disable=SC2086  # unquoted on purpose: the glob must expand locally
+    rsync -a "$@" $src "$dst"
+  else
+    rsync -a -e "ssh -o BatchMode=yes -o ConnectTimeout=20" "$@" "root@$box:$src" "$dst"
+  fi
+}
+human() { numfmt --to=iec --suffix=B "$1"; }
+
+send_mail() {  # send_mail <subject> <body> [file]
+  [ "$DRY_RUN" = 1 ] && { echo "  DRY_RUN: would send '$1' ${3:+(+ $(basename "$3"))}"; return 0; }
+  local args=(-s -m 300 -o "$WORK/resp" -w '%{http_code}' -H "Authorization: $SEND_AUTH"
+              -F "to=$RECIPIENT" -F "subject=$1" -F "text=$2")
+  [ -n "${3:-}" ] && args+=(-F "files=@$3;type=application/octet-stream")
+  local code; code=$(curl "${args[@]}" "$BRIDGE_URL")
+  [ "$code" = 200 ] || { echo "  email-bridge HTTP $code: $(head -c 200 "$WORK/resp")" >&2; return 1; }
+}
+
+backup_box() {
+  local entry=$1 box label
+  box=${entry%%=*}; label=${entry#*=}          # "local=<label>" or "<ssh-host>"
+  echo "== $label"
+  local bdir=$BENCH/sites/$SITE/private/backups
+  local db; db=$(on "$box" "ls -t $bdir/*-database*.sql.gz 2>/dev/null | head -1") || return 1
+  [ -n "$db" ] || { echo "  no database backup found" >&2; return 1; }
+  local prefix; prefix=$(basename "$db" | cut -d- -f1)          # 20260917_060008
+  local out=$DEST/$label/$STAMP; mkdir -p "$out" "$DEST/$label/files/public" "$DEST/$label/files/private"
+  pull "$box" "$bdir/${prefix}-*" "$out/" || return 1
+  pull "$box" "$BENCH/sites/$SITE/public/files/" "$DEST/$label/files/public/" --delete || return 1
+  pull "$box" "$BENCH/sites/$SITE/private/files/" "$DEST/$label/files/private/" --delete || return 1
+
+  local mtime age_h warn=""
+  mtime=$(on "$box" "stat -c %Y '$db'") || return 1
+  age_h=$(( ( $(date +%s) - mtime ) / 3600 ))
+  [ "$age_h" -ge "$STALE_HOURS" ] && warn="STALE ${age_h}h - "
+
+  # Bundle: backup set + uploaded files + restore notes (incl. Frappe's own
+  # backup key when the box encrypts natively — safe, the bundle is encrypted).
+  local stage=$WORK/$label; mkdir -p "$stage"
+  cp -a "$out"/${prefix}-* "$stage/"
+  tar -czf "$stage/uploaded-files.tar.gz" -C "$DEST/$label" files
+  local native=""
+  if [[ "$(basename "$db")" == *-enc.* ]]; then
+    native=$(on "$box" "python3 -c \"import json;print(json.load(open('$BENCH/sites/$SITE/site_config.json')).get('backup_encryption_key',''))\"")
+  fi
+  {
+    echo "Backup of $label ($SITE), taken $(date -d "@$mtime" '+%F %H:%M %Z'), bundled $STAMP."
+    echo
+    echo "Restore on a bench that has the same apps installed:"
+    if [ -n "$native" ]; then
+      echo "  bench --site $SITE restore $(basename "$db") --backup-encryption-key '$native'"
+    else
+      echo "  bench --site $SITE restore $(basename "$db")"
+    fi
+    echo "  tar xzf uploaded-files.tar.gz   # then copy files/public + files/private into sites/$SITE/"
+    echo "  bench --site $SITE migrate"
+    echo
+    echo "The *site_config_backup* file holds the site's encryption_key: copy that key into the"
+    echo "new site_config.json or stored passwords/API secrets in the restored DB are unreadable."
+  } > "$stage/RESTORE.txt"
+
+  local bundle=$WORK/$label-$prefix.tar.gpg
+  tar -cf - -C "$stage" . | gpg --batch --yes --quiet --symmetric --cipher-algo AES256 \
+      --pinentry-mode loopback --passphrase-file "$PASSFILE" -o "$bundle" || return 1
+  rm -rf "$stage"
+  local size; size=$(stat -c %s "$bundle")
+  local dbsize; dbsize=$(stat -c %s "$out/$(basename "$db")")
+  echo "  $(basename "$db") ($(human "$dbsize"), ${age_h}h old) -> bundle $(human "$size")"
+
+  local body="Encrypted backup of $label: database $(human "$dbsize") taken ${age_h}h before bundling, site config, uploaded files.
+
+Decrypt with the fleet passphrase (kept on the hub: $PASSFILE):
+  gpg -d $(basename "$bundle") | tar x
+then follow RESTORE.txt inside. An off-box copy is also kept on the hub under $DEST/$label/ for $KEEP_DAYS days."
+  if [ "$size" -le "$PART_BYTES" ]; then
+    send_mail "[backup] ${warn}$label $STAMP ($(human "$size"))" "$body" "$bundle" || return 1
+  else
+    split -b "$PART_BYTES" -d -a 2 "$bundle" "$bundle.part"
+    local parts=("$bundle".part*) i=0
+    for p in "${parts[@]}"; do
+      i=$((i + 1))
+      send_mail "[backup] ${warn}$label $STAMP part $i/${#parts[@]}" \
+        "$body
+
+This backup is split: save all ${#parts[@]} parts, then  cat $(basename "$bundle").part* > $(basename "$bundle")" "$p" || return 1
+    done
+  fi
+  find "$DEST/$label" -mindepth 1 -maxdepth 1 -type d -name '20*' -mtime +"$KEEP_DAYS" -exec rm -rf {} +
+}
+
+for entry in $BOXES; do
+  backup_box "$entry" || FAILED+=("${entry#*=}")
+done
+
+if [ ${#FAILED[@]} -gt 0 ]; then
+  echo "FAILED: ${FAILED[*]}" >&2
+  send_mail "[backup] FAILED $STAMP: ${FAILED[*]}" \
+    "fleet-backup-mail could not back up: ${FAILED[*]}. See: journalctl -u fleet-backup-mail" || true
+  exit 1
+fi
+echo "all boxes backed up and mailed"
