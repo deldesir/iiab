@@ -23,10 +23,11 @@ cd /opt/iiab/mailroom
 git fetch upstream
 git merge upstream/main -m "Merge upstream nyaruka/mailroom vX.Y.Z into main"
 
-# RapidPro (Python — no binary needed)
+# temba, the RapidPro web app (Python — no binary needed). Upstream renamed
+# nyaruka/rapidpro to nyaruka/temba; the fork and /opt/iiab/rapidpro keep their names.
 cd /opt/iiab/rapidpro
 git fetch upstream
-git merge upstream/main -m "Merge upstream nyaruka/rapidpro vX.Y.Z into main"
+git merge upstream/main -m "Merge upstream nyaruka/temba vX.Y.Z into main"
 ```
 
 > [!CAUTION]
