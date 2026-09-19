@@ -8,7 +8,8 @@
 # A transient unit survives a dropped SSH session; it needs HOME set explicitly.
 #   PREFLIGHT_ONLY=1   run every check that can refuse the upgrade, change nothing
 #   ALLOW_DISCARD=ERE  paths whose local changes were verified by hand as disposable
-#   FORK_OWNER=name    GitHub owner whose forks the bench tracks (default: deldesir)
+#   FORK_OWNER=name    GitHub owner whose forks the bench tracks (default: deldesir);
+#                      apps listed in APP_OWNER (payments -> frappe) follow their own upstream
 # The run ends with UPGRADE-OK or UPGRADE-FAILED: <reason> as the last log line.
 #
 # Order: backup -> fetch (fail early, services still up) -> stop web+workers ->
@@ -19,8 +20,11 @@
 set -uo pipefail
 B=/home/frappe/frappe-bench
 SITE=site.local
-APPS="frappe erpnext hrms crm builder webshop pos_next"
+APPS="frappe erpnext hrms crm builder webshop payments pos_next"
 FORK_OWNER=${FORK_OWNER:-deldesir}
+# Apps that are not forks track their upstream directly; name the GitHub owner whose
+# remote to follow. Everything else follows FORK_OWNER.
+declare -A APP_OWNER=( [payments]=frappe )
 # Extra paths (ERE) whose local changes were checked by hand and may be discarded on
 # THIS box, e.g. a hotfix that has since landed in the fork. Empty = none.
 ALLOW_DISCARD=${ALLOW_DISCARD:-}
@@ -37,7 +41,7 @@ start_services() { systemctl start frappe-bench-redis.target frappe-bench-web.ta
 fail() { echo "UPGRADE-FAILED: $*"; [ "$STOPPED" = 1 ] && { echo "restarting services after failure"; start_services; }; exit 1; }
 
 step "pre-state ($(hostname -f 2>/dev/null || hostname))"
-for a in $APPS payments; do printf '%-9s %s\n' "$a" "$(val "git -C apps/$a log -1 --format='%h %cd' --date=short")"; done
+for a in $APPS; do printf '%-9s %s\n' "$a" "$(val "git -C apps/$a log -1 --format='%h %cd' --date=short")"; done
 df -h / | awk 'NR==2{print "disk free:", $4}'; free -m | awk 'NR==2{print "ram avail MB:", $7}'
 
 # PREFLIGHT_ONLY=1: run every check that can refuse the upgrade, change nothing, exit.
@@ -49,8 +53,9 @@ fi
 step "fetch fork heads"
 declare -A TARGET
 for a in $APPS; do
-  remote=$(asf "git -C apps/$a remote -v" | awk -v o="$FORK_OWNER" '$2 ~ o && /fetch/ {print $1; exit}')
-  [ -n "$remote" ] || fail "$a: no remote pointing at $FORK_OWNER"
+  owner=${APP_OWNER[$a]:-$FORK_OWNER}
+  remote=$(asf "git -C apps/$a remote -v" | awk -v o="[/:]$owner/" '$2 ~ o && /fetch/ {print $1; exit}')
+  [ -n "$remote" ] || fail "$a: no remote pointing at $owner"
   if [ "$(val "git -C apps/$a rev-parse --is-shallow-repository")" = true ]; then
     # depth-1 clone (bench get-app): deepen to just before the deployed commit so the
     # ancestry check and the fast-forward below can see how the two commits relate
@@ -137,7 +142,7 @@ start_services; STOPPED=0
 asf "bench --site $SITE clear-cache >/dev/null && bench --site $SITE clear-website-cache >/dev/null" || true
 
 step "post-state"
-for a in $APPS payments; do printf '%-9s %s\n' "$a" "$(val "git -C apps/$a log -1 --format='%h %cd' --date=short")"; done
+for a in $APPS; do printf '%-9s %s\n' "$a" "$(val "git -C apps/$a log -1 --format='%h %cd' --date=short")"; done
 asf "bench version" 2>/dev/null | sed 's/^/  /'
 
 step "wait for web (gunicorn preload can take a few minutes)"
