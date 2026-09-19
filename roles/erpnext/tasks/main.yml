@@ -21,6 +21,11 @@
         - erpnext_install | bool
         - erpnext_installed is undefined
 
+    - name: Keep the Frappe scheduler part of the bench's boot
+      include_tasks: scheduler.yml
+      when:
+        - erpnext_enabled | bool
+
     - name: Sync Storefront if erpnext is enabled
       include_tasks: storefront-sync.yml
       when:
