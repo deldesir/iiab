@@ -134,6 +134,15 @@ ai_gateway_mempalace_backend: "chromadb"
 ai_gateway_siyuan_wiki_enabled: false
 ai_gateway_siyuan_api_url: "http://localhost:6806"
 
+# Contact directory line (docs/contact-sync.md). Both optional, set in
+# local_vars.yml; empty keeps the assistant's own workspace and channel.
+# API token of the directory workspace when the directory lives in its own
+# RapidPro workspace; empty = same workspace as the assistant.
+ai_gateway_contact_sync_rapidpro_token: ""
+# UUID or number of the directory line's WhatsApp channel; contact cards are
+# sent from it; empty = the assistant's channel.
+ai_gateway_contact_sync_wuzapi_channel: ""
+
 # Talk sync: Organized weekend schedule → talkmaster revisions (nightly 03:45).
 # Set talk_sync_speaker in local_vars.yml (substring of the speaker's display
 # name in Organized) to enable; without it the job aborts loudly.

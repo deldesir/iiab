@@ -61,6 +61,9 @@ cp -a /opt/iiab/ai-gateway/data/access_grants.json "$DEST/$STAMP/access_grants.j
 # import kit, RapidPro flow exports, naming standard) when it exists.
 cp -a /opt/iiab/ai-gateway/data/function_catalog.json "$DEST/$STAMP/function_catalog.json" 2>/dev/null \
     && echo "function catalog ok" || echo "note: no function_catalog.json"
+# ICT help-desk texts the directory line answers with (operator-edited, not in git).
+cp -a /opt/iiab/ai-gateway/data/ict_help.json "$DEST/$STAMP/ict_help.json" 2>/dev/null \
+    && echo "ict help ok" || echo "note: no ict_help.json"
 if [ -d /opt/iiab/msf-gonaives ]; then
     tar -czf "$DEST/$STAMP/directory-folder.tar.gz" -C /opt/iiab msf-gonaives \
         && echo "directory folder ok" || echo "WARN: directory folder backup failed" >&2

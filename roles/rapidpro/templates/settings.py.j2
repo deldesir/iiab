@@ -46,6 +46,14 @@ HOSTNAME = "{{ rapidpro_hostname }}"
 BRAND["domain"] = "{{ rapidpro_hostname }}"
 BRAND["hosts"] = ["{{ rapidpro_hostname }}", "localhost", "127.0.0.1", "box.lan"]
 
+# ── Signup hardening ──────────────────────────────────────────────────────────
+# Open self-signup lets anyone create a user and a workspace. Removing the
+# "signups" brand feature closes both signup surfaces (accounts/signup and
+# org/signup); invitation links still work (the allauth adapter honours invite
+# secrets regardless), and with the console email backend the invitation mail
+# lands in the journal for manual delivery.
+BRAND["features"] = [f for f in BRAND.get("features", []) if f != "signups"]
+
 # ----------------------------------------------------------------------------------
 # Databases
 # ----------------------------------------------------------------------------------
