@@ -56,6 +56,16 @@ cp -a /opt/iiab/ai-gateway/.env "$DEST/$STAMP/ai-gateway.env"
 cp -a /opt/iiab/ai-gateway/data/access_grants.json "$DEST/$STAMP/access_grants.json" 2>/dev/null \
     && echo "access grants ok" || echo "WARN: access_grants.json missing" >&2
 
+# Contact directory: the function catalog the gateway titles contacts with
+# (operator data, not in git), and the operator's directory folder (grids,
+# import kit, RapidPro flow exports, naming standard) when it exists.
+cp -a /opt/iiab/ai-gateway/data/function_catalog.json "$DEST/$STAMP/function_catalog.json" 2>/dev/null \
+    && echo "function catalog ok" || echo "note: no function_catalog.json"
+if [ -d /opt/iiab/msf-gonaives ]; then
+    tar -czf "$DEST/$STAMP/directory-folder.tar.gz" -C /opt/iiab msf-gonaives \
+        && echo "directory folder ok" || echo "WARN: directory folder backup failed" >&2
+fi
+
 # Operator quick-capture log — one-line jots (tickets, notes, people, pioneer
 # hours) that feed the deliverable jobs and the shepherd/KG bridge. Nowhere else.
 cp -a /opt/iiab/ai-gateway/data/captures.jsonl "$DEST/$STAMP/captures.jsonl" 2>/dev/null \
