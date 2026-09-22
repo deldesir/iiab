@@ -38,6 +38,10 @@ wuzapi_port: 8095
 
 wuzapi_admintoken: ""
 rapidpro_secret_key: ""
+# temba v26.3.107+: shared secret for the internal-only API under /ti/ (system
+# check requires it). Set a distinct value in local_vars.yml; empty falls back
+# to rapidpro_secret_key.
+rapidpro_internal_auth_token: ""
 custom_ai_admin_token: ""
 
 # AWS mode: set to false to disable S3 + DynamoDB and use local storage only
