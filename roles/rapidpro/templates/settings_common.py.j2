@@ -29,7 +29,12 @@ SECRET_KEY = "{{ rapidpro_secret_key }}"
 # v26.3.x (a Django system check errors if it is empty). This box does not run the
 # realtime server, so it defaults to the secret key just to satisfy the check; set
 # rapidpro_websockets_auth_secret in local_vars to match a real Centrifugo server.
-WEBSOCKETS_AUTH_SECRET = "{{ rapidpro_websockets_auth_secret | default(rapidpro_secret_key, true) }}"
+# temba v26.3.107: the internet/internal port split. Behind nginx on one port
+# both stay None (the port check is then skipped); the internal-only API under
+# /ti/ still requires INTERNAL_AUTH_TOKEN, and nginx does not forward /ti/.
+INTERNET_PORT = None
+INTERNAL_PORT = None
+INTERNAL_AUTH_TOKEN = "{{ rapidpro_internal_auth_token | default(rapidpro_secret_key, true) }}"
 
 # XOR mask values used to obfuscate IDs (e.g., contact IDs) in anonymous workspaces
 # Provides a simple way to hide sequential IDs without full encryption

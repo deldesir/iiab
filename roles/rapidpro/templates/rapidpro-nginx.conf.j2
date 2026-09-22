@@ -2,6 +2,12 @@ location = {{ rapidpro_url }} {
     return 301 {{ rapidpro_url }}/;
 }
 
+# temba v26.3.107: the internal-only API (/ti/) is for services on the box,
+# never for the public entry. ^~ so no regex location below can catch it.
+location ^~ {{ rapidpro_url }}/ti/ {
+    return 404;
+}
+
 location {{ rapidpro_url }}/static/ {
     alias {{ rapidpro_dir }}/sitestatic/;
 }
