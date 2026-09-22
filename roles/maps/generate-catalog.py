@@ -56,8 +56,10 @@ def add_file_sizes(tiles):
             file["size"] = humanize.naturalsize(response.headers["Content-Length"])
 
 vector_tiles = {
+  "title": "Vector",
+  "setting_name": "maps_vector_zoom",
   "details": fix_multiline_spacing("""
-    Map features in a vector format from OpenStreetMap or Natural Earth. Maximum zoom level available is 14.
+    Map features in a vector format from OpenStreetMap or Natural Earth.  Maximum zoom level available is 14.
   """),
   "tiles": dict_with_order({
     14: {
@@ -97,38 +99,66 @@ vector_tiles = {
 }
 
 satellite_tiles = {
+  "title": "Satellite",
+  "setting_name": "maps_satellite_zoom",
   "details": fix_multiline_spacing("""
-    Satellite imagery from s2maps. Maximum zoom level available is 13.
+    Satellite imagery from s2maps or IIAB.  Maximum zoom level available is 13.
   """),
   "tiles": dict_with_order({
     7: {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z07.pmtiles",
       "details": fix_multiline_spacing("""
-        Low quality satellite, up to zoom level 7
+        Low quality "s2maps" satellite, up to zoom level 7
+
+        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
+      """)
+    },
+    "7-iiab": {
+      "url": "https://iiab.io/content/iiab-sentinel2.2026-07-25.z00-z07.pmtiles",
+      "details": fix_multiline_spacing("""
+        Low quality "IIAB" satellite, up to zoom level 7
+
+        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) IIAB
       """)
     },
     9: {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z09.pmtiles",
       "details": fix_multiline_spacing("""
-        Moderately high quality satellite, up to zoom level 9
+        Moderately high quality "s2maps" satellite, up to zoom level 9
+
+        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
+      """)
+    },
+    "9-iiab": {
+      "url": "https://iiab.io/content/iiab-sentinel2.2026-07-25.z00-z09.pmtiles",
+      "details": fix_multiline_spacing("""
+        Moderately high quality "IIAB" satellite, up to zoom level 9
+
+        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) IIAB
       """)
     },
     11: {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z11.pmtiles",
       "details": fix_multiline_spacing("""
-        Pretty high quality satellite, up to zoom level 11
+        Pretty high quality "s2maps" satellite, up to zoom level 11
+
+        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
       """)
     },
     12: {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z12.pmtiles",
       "details": fix_multiline_spacing("""
-        Pretty high quality satellite, up to zoom level 12
+        Pretty high quality "s2maps" satellite, up to zoom level 12
+
+        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
       """)
     },
     13: {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z13.pmtiles",
       "details": fix_multiline_spacing("""
-        Highest available quality satellite, up to zoom level 13
+        Highest available quality "s2maps" satellite, up to zoom level 13
+
+        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
       """)
     },
     "none": {
@@ -143,13 +173,25 @@ satellite_tiles = {
       "details": fix_multiline_spacing("""
         FOR TESTING ONLY
 
-        Super-low quality satellite, up to zoom level 4
+        Super-low quality "s2maps" satellite, up to zoom level 4
+
+        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
       """)
     },
-  }, ["none", "4-ci", 7, 9, 11, 12, 13]),
+    "13-iiab": {
+      "url": "https://iiab.io/content/iiab-sentinel2.2026-07-25.z00-z13.pmtiles",
+      "details": fix_multiline_spacing("""
+        Highest available quality "IIAB" satellite, up to zoom level 13
+
+        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) IIAB
+      """)
+    },
+  }, ["none", "4-ci", 7, "7-iiab", 9, "9-iiab", 11, 12, 13, "13-iiab"]),
 }
 
 terrain_tiles = {
+  "title": "Terrain",
+  "setting_name": "maps_terrain_zoom",
   "details": fix_multiline_spacing("""
     Terrain (i.e. elevation) data from Terrarium. Maximum zoom level available is 10.
   """),
@@ -173,7 +215,7 @@ terrain_tiles = {
     10: {
       "url": f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z10.pmtiles",
       "details": fix_multiline_spacing("""
-        (This is the highest quality that maps.black offers in pmtiles format. They offer 11, 12, and 13 in squashfs format, but they are massive files.)
+        (This is the highest quality that maps.black offers in pmtiles format.  They offer 11, 12, and 13 in squashfs format, but they are massive files.)
       """)
     },
     "0-none": {
@@ -187,6 +229,8 @@ terrain_tiles = {
 
 # Mostly colors, topography (as an image, not an elevation map), etc.
 naturalearth6_tiles = {
+  "title": "Natural Earth 6",
+  "setting_name": "maps_ne6_zoom",
   "details": fix_multiline_spacing("""
     Backdrop imagery in raster format, used in conjunction with vector maps in some styles.
   """),
@@ -207,8 +251,10 @@ naturalearth6_tiles = {
 }
 
 static_search_data = {
+  "title": "Static Search",
+  "setting_name": "maps_search_static_db",
   "details": fix_multiline_spacing("""
-    Search database for the statically hosted search engine. Requires `maps_search_engine: static`.
+    Search database for the statically hosted search engine.  Requires `maps_search_engine: static`.
   """),
   "tiles": dict_with_order({
     "pop-1k-cities": {
@@ -231,8 +277,10 @@ static_search_data = {
 
 # Keeping nominatim on maps_slow_data_date until we actually update it again
 nominatim_data = {
+  "title": "Nominatim",
+  "setting_name": "maps_search_nominatim_db",
   "details": fix_multiline_spacing("""
-    Search database for the Nominatim search engine. Requires `maps_search_engine: nominatim`.
+    Search database for the Nominatim search engine.  Requires `maps_search_engine: nominatim`.
   """),
   "tiles": dict_with_order({
     # TODO - Make a basic small whole-world map
@@ -262,7 +310,7 @@ Raw file listing: https://iiab.switnet.org/maps/2/
 
 MAPS_CATALOG_DETAILS_README = """
 This guide is for [`maps-catalog.json`](https://github.com/iiab/iiab/blob/master/roles/maps/maps-catalog.json),
-which is the catalog of the latest data available for IIAB Maps. The only truly valid version of this
+which is the catalog of the latest data available for IIAB Maps.  The only truly valid version of this
 guide is is [here](https://github.com/iiab/iiab/blob/master/roles/maps/MAPS_CATALOG_DETAILS.md).
 ASSUME ALL OTHER COPIES (INCLUDING THE ONE ON YOUR IIAB) ARE STALE (OUT OF DATE!)
 
@@ -282,15 +330,6 @@ catalog = {
 for map_type in catalog:
     add_file_sizes(catalog[map_type]["tiles"])
 
-setting_name = {
-    "satellite": "maps_satellite_zoom",
-    "terrain": "maps_terrain_zoom",
-    "vector": "maps_vector_zoom",
-    "naturalearth6": "maps_ne6_zoom",
-    "static_search": "maps_search_static_db",
-    "nominatim": "maps_search_nominatim_db",
-}
-
 open("maps-catalog.json", "w").write(json.dumps(
     {
         "README": json_comment(JSON_README),
@@ -305,7 +344,7 @@ open("maps-catalog.json", "w").write(json.dumps(
 with open("MAPS_CATALOG_DETAILS.md", "w") as f:
     f.write(MAPS_CATALOG_DETAILS_README + "\n\n")
     for map_type in catalog:
-        f.write(f"# {map_type}\n\n{catalog[map_type]['details']}\n\n")
+        f.write(f"# {catalog[map_type]['title']}\n{catalog[map_type]['details']}\n\n---\n\n")
         for zoom, file in catalog[map_type]["tiles"].items():
             file_size = f" ({file['size']})" if 'size' in file else ""
-            f.write(f"## `{setting_name[map_type]}: {zoom}`{file_size}\n\n{file['details']}\n\n")
+            f.write(f"## `{catalog[map_type]['setting_name']}: {zoom}`{file_size}\n{file['details']}\n\n---\n\n")
