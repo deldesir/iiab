@@ -99,16 +99,10 @@
   become: yes
   become_user: "{{ ai_update_gateway_user }}"
 
-- name: Install the front-end URL patch script
-  template:
-    src: /opt/iiab/iiab/roles/rapidpro/templates/patch_frontend_urls.py.j2
-    dest: /usr/local/sbin/rapidpro-patch-frontend-urls
-    mode: '0755'
-  become: yes
-
-- name: Patch the built front-end for the sub-path
-  command: python3 /usr/local/sbin/rapidpro-patch-frontend-urls
-  become_user: "{{ ai_update_gateway_user }}"
+- name: Remove the retired front-end URL patch script
+  file:
+    path: /usr/local/sbin/rapidpro-patch-frontend-urls
+    state: absent
   become: yes
 
 - name: Purge Django cache

@@ -42,8 +42,8 @@ Order matters; each step is safe to stop after.
      account policy) now come from there.
    - `manage.py check`; `manage.py showmigrations --plan | grep '\[ \]'` to see
      what will run; `migrate`; `manage.py nanorp_indexes` (the Postgres search
-     indexes, idempotent); `collectstatic --noinput`;
-     `python3 /usr/local/sbin/rapidpro-patch-frontend-urls`.
+     indexes, idempotent); `collectstatic --noinput` (the front-end resolves
+     its URLs against the sub-path at runtime, nothing patches the bundles).
    - `chgrp www-data run && chmod 0770 run`; restart `rapidpro-gunicorn` and
      `rapidpro-celery`.
 5. Install the courier/mailroom binaries (`install-release-binary.sh`) and
