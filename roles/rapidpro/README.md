@@ -82,3 +82,37 @@ rapidpro_aws_enabled: false
 - Sets up systemd services for RapidPro, Courier, and Mailroom
 - If `rapidpro_aws_enabled: true`: creates DynamoDB tables, requires Elasticsearch, and configures S3.
 - If `rapidpro_aws_enabled: false`: automatically bypasses Elasticsearch and DynamoDB, purging legacy spools and falling back to native high-performance GIN PostgreSQL deployments using hyper-compressed UPX binaries.
+
+### Realtime sockets (Centrifugo)
+
+temba's live pages — the ticket inbox, contact chat, typing indicators, in-app
+notifications, flow-editor activity and the webchat widget — connect to
+`wss://<host>/ws/connect`, which must be a [Centrifugo](https://centrifugal.dev)
+server. Without one those pages only change on reload. The role can run a
+native, loopback-only Centrifugo (systemd unit `centrifugo`, config in
+`/etc/centrifugo/config.json`, stateless so nothing to back up):
+
+```yaml
+rapidpro_centrifugo_enabled: true
+rapidpro_centrifugo_api_key: "<openssl rand -hex 32>"   # shared with mailroom
+# optional:
+rapidpro_centrifugo_allowed_origins: ["*"]   # narrow if you never embed webchat elsewhere
+rapidpro_centrifugo_port: 8092
+rapidpro_internal_http_port: 8093            # loopback nginx listener for temba's /ti/ API
+```
+
+How the pieces connect: nginx proxies `/ws/connect` to Centrifugo; Centrifugo
+proxies every connect, refresh, subscribe and sub_refresh to temba's internal
+`/ti/websockets/` API through a loopback nginx listener (session cookie and
+Origin forwarded, `INTERNAL_AUTH_TOKEN` added); mailroom publishes events to
+Centrifugo's HTTP API with the shared key; agent typing publications are
+proxied to mailroom's internal server. Everything in this section is tagged
+`centrifugo`, so it can be (re)applied on its own:
+
+```bash
+cd /opt/iiab/iiab && ansible-playbook -i ansible_hosts run-one-role.yml --connection=local \
+  --extra-vars '{"role_to_run":"rapidpro"}' --tags centrifugo
+```
+
+Quick checks: `curl -s localhost:8092/health` answers `{}`, and an open desk
+page logs `GET /ws/connect` with status 101 in the nginx access log.

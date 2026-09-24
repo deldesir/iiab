@@ -1,0 +1,77 @@
+{#
+  Centrifugo config for RapidPro's live sockets. Managed by the rapidpro role
+  (roles/rapidpro/templates/centrifugo-config.json.j2) — set rapidpro_centrifugo_*
+  in /etc/iiab/local_vars.yml rather than editing /etc/centrifugo/config.json.
+
+  A browser connects with its temba session cookie (or none, for webchat
+  visitors). Every connect, refresh, subscribe and sub_refresh is proxied to
+  temba's internal /ti/websockets/ API through the loopback nginx listener:
+  the Cookie and Origin headers travel with it and the static Authorization
+  header carries INTERNAL_AUTH_TOKEN. temba writes a presence key per live
+  subscription into valkey, which is how mailroom knows whom to publish to;
+  Centrifugo needs no presence of its own. Agent typing publications on
+  history:* sockets are proxied to mailroom's internal server, which forwards
+  them to the contact's channel.
+
+  Socket names are namespace:uuid[:uuid] and every namespace temba's subscribe
+  proxy knows must exist here, or subscribing fails with "unknown channel".
+#}
+{% set ti_base = "http://127.0.0.1:" ~ rapidpro_internal_http_port ~ rapidpro_url ~ "/ti/websockets" %}
+{% set ti_auth = {"Authorization": "Token " ~ (rapidpro_internal_auth_token | default(rapidpro_secret_key, true))} %}
+{% set temba_authorized = {"subscribe_proxy_enabled": true, "subscribe_proxy_name": "temba_subscribe",
+                           "sub_refresh_proxy_enabled": true, "sub_refresh_proxy_name": "temba_sub_refresh"} %}
+{% set agent_publish = {"publish_proxy_enabled": true, "publish_proxy_name": "mailroom_publish"} %}
+{
+  "http_server": {"address": "127.0.0.1", "port": {{ rapidpro_centrifugo_port }}},
+  "log": {"level": {{ rapidpro_centrifugo_log_level | to_json }}},
+  "health": {"enabled": true},
+  "http_api": {"key": {{ rapidpro_centrifugo_api_key | to_json }}},
+  "client": {
+    "allowed_origins": {{ rapidpro_centrifugo_allowed_origins | to_json }},
+    "proxy": {
+      "connect": {
+        "enabled": true,
+        "endpoint": "{{ ti_base }}/connect",
+        "timeout": "5s",
+        "http_headers": ["Cookie", "Origin", "User-Agent"],
+        "http": {"static_headers": {{ ti_auth | to_json }}}
+      },
+      "refresh": {
+        "enabled": true,
+        "endpoint": "{{ ti_base }}/refresh",
+        "timeout": "5s",
+        "http_headers": ["Cookie", "Origin"],
+        "http": {"static_headers": {{ ti_auth | to_json }}}
+      }
+    }
+  },
+  "proxies": [
+    {
+      "name": "temba_subscribe",
+      "endpoint": "{{ ti_base }}/subscribe",
+      "timeout": "5s",
+      "http_headers": ["Cookie", "Origin"],
+      "http": {"static_headers": {{ ti_auth | to_json }}}
+    },
+    {
+      "name": "temba_sub_refresh",
+      "endpoint": "{{ ti_base }}/sub_refresh",
+      "timeout": "5s",
+      "http_headers": ["Cookie", "Origin"],
+      "http": {"static_headers": {{ ti_auth | to_json }}}
+    },
+    {
+      "name": "mailroom_publish",
+      "endpoint": "http://127.0.0.1:8091/mi/socket/publish",
+      "timeout": "5s",
+      "include_connection_meta": true
+    }
+  ],
+  "channel": {
+    "namespaces": [
+{% for ns in ["notifications", "org", "flow", "chat", "history"] %}
+      {{ ({"name": ns} | combine(temba_authorized) | combine(agent_publish if ns == "history" else {})) | to_json }}{{ "," if not loop.last }}
+{% endfor %}
+    ]
+  }
+}

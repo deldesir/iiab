@@ -1,0 +1,21 @@
+# Managed by the rapidpro role (roles/rapidpro/templates/rapidpro-internal-nginx.conf.j2).
+#
+# Loopback-only listener for temba's internal API ({{ rapidpro_url }}/ti/), which
+# the public server refuses. Only services on this box reach it — Centrifugo's
+# connect/refresh/subscribe/sub_refresh proxies — and temba still demands
+# INTERNAL_AUTH_TOKEN on every call, so a stray local client gets a 403.
+server {
+    listen 127.0.0.1:{{ rapidpro_internal_http_port }};
+    access_log /var/log/nginx/rapidpro-internal.log;
+
+    location ^~ {{ rapidpro_url }}/ti/ {
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header SCRIPT_NAME {{ rapidpro_url }};
+        proxy_pass http://unix:{{ rapidpro_dir }}/run/gunicorn.sock;
+    }
+
+    location / {
+        return 404;
+    }
+}

@@ -25,10 +25,10 @@ OUTGOING_REQUEST_HEADERS = {"User-agent": "RapidPro"}
 # secure secret key and never commit it to version control.
 SECRET_KEY = "{{ rapidpro_secret_key }}"
 
-# Shared secret for the websockets/realtime (Centrifugo) API, required since rapidpro
-# v26.3.x (a Django system check errors if it is empty). This box does not run the
-# realtime server, so it defaults to the secret key just to satisfy the check; set
-# rapidpro_websockets_auth_secret in local_vars to match a real Centrifugo server.
+# Realtime sockets (Centrifugo) need no setting here: the realtime server
+# authenticates to temba's /ti/websockets/ proxies with INTERNAL_AUTH_TOKEN
+# below, and mailroom holds the Centrifugo API key (rapidpro_centrifugo_* vars,
+# tasks/centrifugo.yml).
 # temba v26.3.107: the internet/internal port split. Behind nginx on one port
 # both stay None (the port check is then skipped); the internal-only API under
 # /ti/ still requires INTERNAL_AUTH_TOKEN, and nginx does not forward /ti/.

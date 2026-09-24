@@ -38,6 +38,32 @@ location /api/v2/ {
     proxy_pass http://unix:{{ rapidpro_dir }}/run/gunicorn.sock;
 }
 
+{% if rapidpro_centrifugo_enabled %}
+# Realtime socket: temba-components' SocketService opens wss://<host>/ws/connect
+# (a root path, not under {{ rapidpro_url }}). Exact match, so a /ws prefix
+# location elsewhere (SiYuan's) never catches it. Centrifugo checks Origin
+# itself; nginx passes the browser's headers through.
+location = /ws/connect {
+    proxy_pass http://127.0.0.1:{{ rapidpro_centrifugo_port }}/connection/websocket;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+    proxy_buffering off;
+}
+{% else %}
+# No realtime server: answer the desk's socket attempts with a quiet 404 rather
+# than letting a stricter /ws prefix location fill the error log with 403s.
+location = /ws/connect {
+    return 404;
+}
+{% endif %}
+
 # Catch-all for RapidPro SPA paths — temba-components constructs URLs
 # without the {{ rapidpro_url }} subpath prefix for all these top-level routes
 location ~ ^/(flow|contact|msg|ticket|trigger|campaign|org|settings|staff|accounts|relayers|android|c|broadcast|channels|notification|globals|jsi18n|user)/ {

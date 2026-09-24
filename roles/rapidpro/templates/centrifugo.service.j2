@@ -1,0 +1,26 @@
+# Managed by the rapidpro role (roles/rapidpro/templates/centrifugo.service.j2).
+[Unit]
+Description=Centrifugo realtime server (RapidPro live sockets)
+Documentation=https://centrifugal.dev/docs
+OnFailure=notify-failure@%n.service
+After=network.target
+
+[Service]
+Type=simple
+User=centrifugo
+Group=centrifugo
+ExecStart=/usr/local/bin/centrifugo -c /etc/centrifugo/config.json
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+# Stateless: needs its config and the loopback network, nothing else.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

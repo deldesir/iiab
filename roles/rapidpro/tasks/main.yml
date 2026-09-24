@@ -6,9 +6,14 @@
   include_tasks: install.yml
   when: rapidpro_enabled
 
+# The `centrifugo` tag on these includes lets `--tags centrifugo` reach the
+# tasks inside them that carry it (the mailroom unit, the nginx files) —
+# include_tasks does not pass its own tags down, so everything else in the
+# included files still needs a full run.
 - name: Run Configuration Tasks
   include_tasks: configure.yml
   when: rapidpro_enabled
+  tags: [centrifugo]
 
 - name: Ensure Services are Started
   include_tasks: service.yml
@@ -17,6 +22,15 @@
 - name: Configure Nginx
   include_tasks: nginx.yml
   when: rapidpro_enabled
+  tags: [centrifugo]
+
+- name: Realtime sockets (Centrifugo)
+  include_tasks:
+    file: centrifugo.yml
+    apply:
+      tags: [centrifugo]
+  when: rapidpro_enabled
+  tags: [centrifugo]
 
 - name: Mark RapidPro as Installed
   lineinfile:
