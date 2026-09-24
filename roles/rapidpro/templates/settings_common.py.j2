@@ -177,16 +177,13 @@ PROJECT_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)))
 LOCALE_PATHS = (os.path.join(PROJECT_DIR, "../locale"),)  # Translation files
 RESOURCES_DIR = os.path.join(PROJECT_DIR, "../resources")
 FIXTURE_DIRS = (os.path.join(PROJECT_DIR, "../fixtures"),)  # Test fixtures
-TESTFILES_DIR = os.path.join(PROJECT_DIR, "../testfiles")
+TESTDATA_DIR = os.path.join(PROJECT_DIR, "../test-data")
 
 # the components/ project, whose build output is served by temba.utils.staticfiles.ComponentsFinder
 COMPONENTS_DIR = os.path.join(PROJECT_DIR, "../components")
 
 # Additional directories to search for static files
-STATICFILES_DIRS = (
-    os.path.join(PROJECT_DIR, "../static"),  # Main static assets
-    os.path.join(PROJECT_DIR, "../media"),  # Media files
-)
+STATICFILES_DIRS = (os.path.join(PROJECT_DIR, "../static"),)  # media/ is uploads, served by nginx at /media/
 
 STATIC_ROOT = os.path.join(PROJECT_DIR, "../sitestatic")  # Where collected static files are stored
 STATIC_URL = "/sitestatic/"  # URL prefix for static files
@@ -325,7 +322,6 @@ INSTALLED_APPS = (
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
-    "django.contrib.gis",
     "django.contrib.sitemaps",
     "django.contrib.postgres",
     "django.forms",
@@ -964,6 +960,10 @@ LLM_TYPES = {
     "temba.ai.types.anthropic.type.AnthropicType": {
         # model id -> max output tokens
         "models": {
+            "claude-fable-5-1": 128_000,
+            "claude-fable-5": 128_000,
+            "claude-opus-5-5": 128_000,
+            "claude-opus-5": 128_000,
             "claude-opus-4-8": 128_000,
             "claude-opus-4-7": 128_000,
             "claude-opus-4-5-20251101": 64_000,
@@ -972,16 +972,11 @@ LLM_TYPES = {
             "claude-haiku-4-5-20251001": 64_000,
         },
     },
-    "temba.ai.types.google.type.GoogleType": {
-        "models": {
-            "gemini-3.6-flash": 65_536,
-            "gemini-3.5-flash": 65_536,
-            "gemini-3.5-flash-lite": 65_536,
-            "gemini-2.5-flash": 65_536,
-        },
-    },
     "temba.ai.types.openai.type.OpenAIType": {
         "models": {
+            "gpt-6-astra": 128_000,
+            "gpt-6-sol": 128_000,
+            "gpt-6-luna": 128_000,
             "gpt-5.6-sol": 128_000,
             "gpt-5.6-terra": 128_000,
             "gpt-5.6-luna": 128_000,
@@ -990,10 +985,8 @@ LLM_TYPES = {
             "gpt-5.4-mini": 128_000,
             "gpt-4.1": 32_768,
             "gpt-4.1-mini": 32_768,
-            "gpt-4.1-nano": 32_768,
             "gpt-4o": 16_384,
             "gpt-4o-mini": 16_384,
-            "gpt-3.5-turbo": 4_096,
         },
     },
     "temba.ai.types.custom_ai.type.CustomAIType": {
@@ -1011,6 +1004,17 @@ NON_ISO6391_LANGUAGES = {"mul", "und"}
 # ===============================================================================
 
 # Mailroom is RapidPro's flow engine service (external Go service)
+# -----------------------------------------------------------------------------------
+# Help sites (the service that serves them on their own domains, and renders the app's previews of them)
+# -----------------------------------------------------------------------------------
+
+HELPSITES_URL = None
+HELPSITES_AUTH_TOKEN = None  # what it requires in the Authorization header of requests to its internal endpoints
+
+# The host an org points its help site's domain at by CNAME - the help sites service, which gets certificates for
+# the domains it serves on demand. Unset, the domain dialog shows the app's own domain.
+HELPSITE_CNAME_TARGET = None
+
 MAILROOM_URL = None  # URL to mailroom service (set in production)
 MAILROOM_AUTH_TOKEN = None  # Auth token for mailroom (set in production)
 

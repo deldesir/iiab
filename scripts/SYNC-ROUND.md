@@ -41,6 +41,15 @@ Order matters; each step is safe to stop after.
      `rapidpro-celery`.
 5. Install the courier/mailroom binaries (`install-release-binary.sh`) and
    restart `rapidpro-courier`, `rapidpro-mailroom`.
+6. Realtime sockets (when `rapidpro_centrifugo_enabled`): if the round touched
+   `roles/rapidpro/templates/centrifugo-config.json.j2` or the mailroom unit,
+   re-apply `--tags centrifugo`. Then confirm a signed-in desk tab still holds
+   live subscriptions — `POST http://127.0.0.1:<centrifugo port>/api` with
+   `{"method":"channels","params":{}}` and `Authorization: apikey <key>` lists
+   them — and that `/var/log/nginx/rapidpro-internal.log` shows the proxy
+   calls answering 200. The socket contract (temba `/ti/websockets/*`,
+   mailroom `/mi/socket/publish`, the socket namespaces) is where an upstream
+   change would first show; read both changelogs for it.
 
 Or simply `./runrole ai-update`, which does steps 3-5 in that order. Use the
 manual path when the render/compare step needs a human eye (new settings).
@@ -82,8 +91,9 @@ next. `PREFLIGHT_ONLY=1` on a box first when a fork jumped far.
 
 ## 5. Known noise
 
-- New courier and mailroom log one `centrifugo not reachable` error at startup:
-  that port is closed by design; not a fault.
+- With `rapidpro_centrifugo_enabled` off, courier and mailroom log one
+  `centrifugo not reachable` error at startup: that port is closed by design;
+  not a fault. With it on, that line means Centrifugo is down — check it.
 - `bench-upgrade.sh` may retry `migrate` once (metadata-lock wait); a clean
   retry is normal.
 - The Error Log count in `bench-smoke.sh` is site-local time; pass `since` in
