@@ -55,6 +55,10 @@ BRAND["hosts"] = ["{{ rapidpro_hostname }}", "localhost", "127.0.0.1", "box.lan"
 BRAND["features"] = []  # no self-signup, no SSO
 BRAND["emails"] = {"notifications": "support@{{ rapidpro_hostname }}"}
 
+# flow starts and broadcasts: "skip contacts currently in a flow" starts unchecked on this box, where most contacts
+# sit in the assistant's flow all day and would otherwise be skipped by every start
+DEFAULT_EXCLUSIONS = {"in_a_flow": False}
+
 # temba v26.3.107: the internet/internal port split. Behind nginx on one port both stay None (the port check is
 # then skipped); the internal-only API under /ti/ still requires INTERNAL_AUTH_TOKEN, which nginx only forwards on
 # the loopback listener the realtime server uses.

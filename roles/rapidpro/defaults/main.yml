@@ -30,6 +30,11 @@ rapidpro_url: /rp
 # must reach courier on the box's IP.
 rapidpro_public_bind_address: "127.0.0.1"
 
+# mailroom's public server (its default port); nginx forwards the flow editor's completion docs to it
+rapidpro_mailroom_port: 8090
+# the mailroom source checkout: its go.mod names the goflow release whose docs mailroom serves
+rapidpro_mailroom_src_dir: /opt/iiab/mailroom
+
 rapidpro_drop_db_on_reinstall: false
 rapidpro_force_drop_db: false
 

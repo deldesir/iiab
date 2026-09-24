@@ -127,36 +127,62 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-  when: rapidpro_git_clone.changed or rapidpro_settings.changed
+  register: rapidpro_collectstatic
+  # the clone result only exists on a full run; a tagged run (settings) still rebuilds when the settings changed
+  when: (rapidpro_git_clone | default({})).changed | default(false) or rapidpro_settings.changed
 
-- name: Fix missing editor.json localization (Wuzapi Regression Fix)
-  shell: |
-    mkdir -p /opt/iiab/rapidpro/sitestatic/@nyaruka/temba-components/static/mr/docs/fr
-    ln -sf ../en-us/editor.json /opt/iiab/rapidpro/sitestatic/@nyaruka/temba-components/static/mr/docs/fr/editor.json
-  become: yes
-
-# the compiled front-end assumes it lives at the root; this rewrites the built bundles for the sub-path. It is a
-# deployment tool, so it lives outside the checkout.
-- name: Install the front-end URL patch script
-  template:
-    src: patch_frontend_urls.py.j2
-    dest: /usr/local/sbin/rapidpro-patch-frontend-urls
-    mode: '0755'
-  become: yes
-
-- name: Patch the built front-end for the sub-path
-  command: python3 /usr/local/sbin/rapidpro-patch-frontend-urls
-  become_user: "{{ iiab_admin_user }}"
-  become: yes
-  register: execute_frontend_patch_script
-  when: rapidpro_git_clone.changed or rapidpro_settings.changed
-
-- name: Symlink mr directory for temba-store
+# the front-end resolves its own URLs against the sub-path (window.URLS.root, published by the app's frame), so
+# nothing rewrites the built bundles any more; a script from the days when it did is removed
+- name: Remove the retired front-end URL patch script
   file:
-    src: "{{ rapidpro_dir }}/sitestatic/@nyaruka/temba-components/static/mr"
-    dest: "{{ rapidpro_dir }}/sitestatic/mr"
-    state: link
-  become_user: "{{ iiab_admin_user }}"
+    path: /usr/local/sbin/rapidpro-patch-frontend-urls
+    state: absent
+  become: yes
+
+# the flow editor's completion docs: mailroom serves docs/ under its working directory, and upstream fills that
+# from the goflow release mailroom is built against, so this does the same and remembers which one it fetched
+- name: Read the goflow version mailroom is built against
+  command: awk '/github.com\/nyaruka\/goflow /{print $2}' {{ rapidpro_mailroom_src_dir }}/go.mod
+  register: rapidpro_goflow_version
+  changed_when: false
+  tags: [mailroom-docs]
+
+- name: Read which goflow docs are installed
+  command: cat {{ rapidpro_dir }}/docs/.goflow-version
+  register: rapidpro_goflow_docs_installed
+  changed_when: false
+  failed_when: false
+  tags: [mailroom-docs]
+
+- name: Fetch the goflow docs mailroom serves
+  unarchive:
+    src: "https://github.com/nyaruka/goflow/releases/download/{{ rapidpro_goflow_version.stdout }}/docs.tar.gz"
+    dest: "{{ rapidpro_dir }}"
+    remote_src: yes
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+  become: yes
+  when: rapidpro_goflow_docs_installed.stdout | default('') != rapidpro_goflow_version.stdout
+  tags: [mailroom-docs]
+
+- name: Record which goflow docs are installed
+  copy:
+    content: "{{ rapidpro_goflow_version.stdout }}"
+    dest: "{{ rapidpro_dir }}/docs/.goflow-version"
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+    mode: '0644'
+  become: yes
+  tags: [mailroom-docs]
+
+# the docs used to be served from a stale copy of the components package through a symlink; both go
+- name: Remove the legacy components copy and the editor docs symlink
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ rapidpro_dir }}/sitestatic/mr"
+    - "{{ rapidpro_dir }}/sitestatic/@nyaruka"
   become: yes
 
 - name: Enforce Nginx traverse/read permissions over dynamically compiled static assets
@@ -290,17 +316,21 @@
   become: yes
   when: not is_proot
 
-- name: Restart RapidPro Gunicorn if code changed
+# collectstatic ran, so the code or the settings changed: the app and its workers pick both up on restart
+- name: Restart RapidPro Gunicorn and Celery if code or settings changed
   systemd:
-    name: rapidpro-gunicorn
+    name: "{{ item }}"
     state: restarted
+  loop:
+    - rapidpro-gunicorn
+    - rapidpro-celery
   become: yes
-  when: execute_frontend_patch_script.changed and not is_proot
+  when: rapidpro_collectstatic is changed and not is_proot
 
-- name: Restart RapidPro Gunicorn if code changed (Android)
+- name: Restart RapidPro Gunicorn if code or settings changed (Android)
   shell: /usr/local/bin/pdsm restart rapidpro-server
   become: yes
-  when: execute_frontend_patch_script.changed and is_proot
+  when: rapidpro_collectstatic is changed and is_proot
 
 - name: Start RapidPro Watchdog (Android) ensures services stay running
   shell: /usr/local/bin/pdsm start rapidpro-watchdog

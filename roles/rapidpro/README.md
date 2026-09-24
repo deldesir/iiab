@@ -103,6 +103,18 @@ rapidpro_aws_enabled: false
 - If `rapidpro_aws_enabled: true`: creates DynamoDB tables, requires Elasticsearch, and configures S3.
 - If `rapidpro_aws_enabled: false`: automatically bypasses Elasticsearch and DynamoDB, purging legacy spools and falling back to native high-performance GIN PostgreSQL deployments using hyper-compressed UPX binaries.
 
+### Sub-path and the front-end
+
+The desk is served under `rapidpro_url` (`/rp` by default). The app's frame
+publishes the root in `window.URLS.root`, and the components and the frame's own
+scripts resolve every root-absolute app path against it, so nothing rewrites
+the built bundles at deploy time and nginx carries no root-level catch-all for
+the desk's paths; `/api/v2/` at the host root stays as an alias for
+integrations. The flow editor's completion docs come from mailroom, which
+serves the goflow docs the role fetches for the release named in mailroom's
+`go.mod` (`--tags mailroom-docs` refreshes them; `--tags nginx` re-renders and
+reloads the site config alone).
+
 ### Realtime sockets (Centrifugo)
 
 temba's live pages — the ticket inbox, contact chat, typing indicators, in-app
