@@ -1,0 +1,132 @@
+---
+# Centrifugo — the realtime messaging server behind temba's live sockets
+# (ticket inbox, contact chat, typing, notifications, flow activity, webchat).
+# templates/centrifugo-config.json.j2 explains the wiring. main.yml applies
+# the `centrifugo` tag to everything here, and configure.yml/nginx.yml carry
+# it on the mailroom unit and nginx tasks, so the whole feature can be
+# (re)applied with `--tags centrifugo` without touching the rest of RapidPro.
+
+- name: Gather platform facts when this is a tag-filtered run (rapidpro_go_arch reads ansible_facts.machine)
+  setup:
+    gather_subset:
+      - min
+  when: ansible_facts.machine is not defined
+
+- name: Refuse to enable Centrifugo without an API key
+  fail:
+    msg: "rapidpro_centrifugo_enabled is true but rapidpro_centrifugo_api_key is empty — set it in /etc/iiab/local_vars.yml (e.g. from `openssl rand -hex 32`)"
+  when: rapidpro_centrifugo_enabled and not rapidpro_centrifugo_api_key
+
+- name: Install & configure Centrifugo
+  when: rapidpro_centrifugo_enabled and not is_proot
+  become: yes
+  block:
+    - name: Create 'centrifugo' system user
+      user:
+        name: centrifugo
+        system: yes
+        shell: /usr/sbin/nologin
+        create_home: no
+        home: /nonexistent
+
+    - name: Download Centrifugo {{ rapidpro_centrifugo_version }} (verified against the release's checksums file)
+      get_url:
+        url: "{{ rapidpro_centrifugo_download_url }}"
+        dest: "{{ downloads_dir }}/centrifugo_{{ rapidpro_centrifugo_version }}_linux_{{ rapidpro_go_arch }}.tar.gz"
+        checksum: "sha256:{{ rapidpro_centrifugo_checksums_url }}"
+        mode: '0644'
+        timeout: "{{ download_timeout }}"
+
+    - name: Create {{ downloads_dir }}/centrifugo-{{ rapidpro_centrifugo_version }}
+      file:
+        path: "{{ downloads_dir }}/centrifugo-{{ rapidpro_centrifugo_version }}"
+        state: directory
+        mode: '0755'
+
+    - name: Unpack the centrifugo binary from the release
+      unarchive:
+        src: "{{ downloads_dir }}/centrifugo_{{ rapidpro_centrifugo_version }}_linux_{{ rapidpro_go_arch }}.tar.gz"
+        dest: "{{ downloads_dir }}/centrifugo-{{ rapidpro_centrifugo_version }}"
+        remote_src: yes
+        include:
+          - centrifugo
+
+    # copy with remote_src stages and renames, so a running service keeps its
+    # old inode instead of failing with "text file busy"
+    - name: Install /usr/local/bin/centrifugo
+      copy:
+        src: "{{ downloads_dir }}/centrifugo-{{ rapidpro_centrifugo_version }}/centrifugo"
+        dest: /usr/local/bin/centrifugo
+        remote_src: yes
+        owner: root
+        group: root
+        mode: '0755'
+      register: centrifugo_binary
+
+    - name: Create /etc/centrifugo
+      file:
+        path: /etc/centrifugo
+        state: directory
+        owner: root
+        group: centrifugo
+        mode: '0750'
+
+    # `validate` runs checkconfig on the rendered file before it replaces the live one
+    - name: Render /etc/centrifugo/config.json from template
+      template:
+        src: centrifugo-config.json.j2
+        dest: /etc/centrifugo/config.json
+        owner: root
+        group: centrifugo
+        mode: '0640'
+        validate: /usr/local/bin/centrifugo checkconfig -c %s
+      register: centrifugo_config
+
+    - name: Install centrifugo.service unit from template
+      template:
+        src: centrifugo.service.j2
+        dest: /etc/systemd/system/centrifugo.service
+        mode: '0644'
+      register: centrifugo_unit
+
+    - name: Enable & start 'centrifugo' systemd service
+      systemd:
+        name: centrifugo
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+    - name: Restart 'centrifugo' after a binary, config or unit change
+      systemd:
+        name: centrifugo
+        state: restarted
+        daemon_reload: yes
+      when: centrifugo_binary.changed or centrifugo_config.changed or centrifugo_unit.changed
+
+    - name: Wait for Centrifugo's health endpoint
+      uri:
+        url: "http://127.0.0.1:{{ rapidpro_centrifugo_port }}/health"
+        status_code: 200
+      register: centrifugo_health
+      retries: 15
+      delay: 2
+      until: centrifugo_health.status == 200
+
+# The mailroom unit is rendered in configure.yml (tagged centrifugo too); a
+# full role run restarts mailroom in service.yml, a tag-filtered run does not.
+- name: Restart 'rapidpro-mailroom' so it publishes to the new endpoint
+  systemd:
+    name: rapidpro-mailroom
+    state: restarted
+    daemon_reload: yes
+  become: yes
+  when: rapidpro_mailroom_unit is defined and rapidpro_mailroom_unit.changed and not is_proot
+
+- name: Stop & disable 'centrifugo' when not rapidpro_centrifugo_enabled
+  systemd:
+    name: centrifugo
+    state: stopped
+    enabled: no
+  become: yes
+  failed_when: false    # the unit may never have been installed
+  when: not rapidpro_centrifugo_enabled and not is_proot

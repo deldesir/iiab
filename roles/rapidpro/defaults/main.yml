@@ -67,3 +67,25 @@ rapidpro_arch_dict:
   aarch64: arm64
 
 rapidpro_go_arch: "{{ rapidpro_arch_dict.get(ansible_facts.machine, 'unsupported') }}"
+
+# --- Realtime sockets (Centrifugo) ------------------------------------------
+# temba's live UI — ticket inbox, contact chat, typing indicators, in-app
+# notifications, flow-editor activity and the webchat widget — talks to a
+# Centrifugo server at wss://<host>/ws/connect. Without it those pages only
+# update on reload. Off by default: enabling needs rapidpro_centrifugo_api_key
+# in local_vars.yml (e.g. `openssl rand -hex 32`); the role refuses to enable
+# without one. Loopback-only, stateless (memory engine), nothing to back up.
+# Systemd hosts only (no pdsm/Android path yet).
+rapidpro_centrifugo_enabled: false
+rapidpro_centrifugo_version: "6.9.6"
+rapidpro_centrifugo_port: 8092            # Centrifugo itself; nginx fronts /ws/connect
+rapidpro_internal_http_port: 8093         # loopback nginx listener for temba's /ti/ API
+rapidpro_centrifugo_api_key: ""           # shared with mailroom (MAILROOM_CENTRIFUGO_KEY)
+rapidpro_centrifugo_log_level: "info"
+# Browser origins Centrifugo accepts. temba strips session identity from any
+# origin it doesn't serve itself, so "*" is safe for the desk and is what lets
+# the webchat widget be embedded on other sites. Narrow it (e.g.
+# ["https://box.lan"]) if you never embed webchat elsewhere.
+rapidpro_centrifugo_allowed_origins: ["*"]
+rapidpro_centrifugo_download_url: "https://github.com/centrifugal/centrifugo/releases/download/v{{ rapidpro_centrifugo_version }}/centrifugo_{{ rapidpro_centrifugo_version }}_linux_{{ rapidpro_go_arch }}.tar.gz"
+rapidpro_centrifugo_checksums_url: "https://github.com/centrifugal/centrifugo/releases/download/v{{ rapidpro_centrifugo_version }}/centrifugo_{{ rapidpro_centrifugo_version }}_checksums.txt"

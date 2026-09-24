@@ -10,11 +10,18 @@ WorkingDirectory={{ rapidpro_dir }}
 
 Environment='MAILROOM_DB=postgres://{{ rapidpro_db_user }}:{{ rapidpro_db_pass }}@localhost/{{ rapidpro_db_name }}?sslmode=disable'
 Environment='MAILROOM_VALKEY=valkey://localhost:6379/0'
+{% if rapidpro_centrifugo_enabled %}
+# Realtime publishes go to the local Centrifugo (tasks/centrifugo.yml). The
+# endpoint is its API base; mailroom's client posts method-style commands to it.
+Environment='MAILROOM_CENTRIFUGO_ENDPOINT=http://127.0.0.1:{{ rapidpro_centrifugo_port }}/api'
+Environment='MAILROOM_CENTRIFUGO_KEY={{ rapidpro_centrifugo_api_key }}'
+{% else %}
 # Mailroom's compiled default CentrifugoEndpoint is localhost:8000/api —
-# which on this box is Frappe web. Realtime notifications are not
-# deployed; point at a closed local port so publishes fail fast instead
-# of posting the centrifugo auth key at another service.
+# which on this box is Frappe web. No realtime server is deployed; point at
+# a closed local port so publishes fail fast instead of posting the
+# centrifugo auth key at another service.
 Environment='MAILROOM_CENTRIFUGO_ENDPOINT=http://127.0.0.1:9/api'
+{% endif %}
 Environment='MAILROOM_SPOOL_DIR={{ rapidpro_dir }}/spool/mailroom'
 Environment='MAILROOM_ELASTIC='
 # knowledge-base embeddings served by the local AI gateway (minilm, 384-dim,
@@ -39,9 +46,11 @@ Environment='MAILROOM_S3_ATTACHMENTS_BUCKET={{ rapidpro_s3_bucket_prefix }}-atta
 Environment='MAILROOM_DYNAMO_TABLE_PREFIX={{ rapidpro_dynamo_table_prefix }}'
 {% else %}
 # Local-first mode: DynamoDB and S3 disabled (empty prefix/bucket skip the
-# AWS clients entirely — no SDK credential resolution, no IMDS probe)
+# AWS clients entirely — no SDK credential resolution, no IMDS probe), and
+# flow sessions live in Postgres rather than S3 (validator: db|s3).
 Environment='MAILROOM_DYNAMO_TABLE_PREFIX='
 Environment='MAILROOM_S3_ATTACHMENTS_BUCKET='
+Environment='MAILROOM_SESSION_STORAGE=db'
 {% endif %}
 
 # ADR-010: Allow localhost webhooks for CRM ops flows (Finding 1)

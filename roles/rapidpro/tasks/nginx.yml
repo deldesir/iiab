@@ -1,9 +1,13 @@
+# Every task here carries the `centrifugo` tag: a tag-filtered run must
+# evaluate all of them, since the reload condition reads their results.
+
 - name: Enable http://box{{ rapidpro_url }} via NGINX, by installing {{ nginx_conf_dir }}/rapidpro-nginx.conf from template    # http://box/rp
   template:
     src: rapidpro-nginx.conf.j2
     dest: "{{ nginx_conf_dir }}/rapidpro-nginx.conf"    # /etc/nginx/conf.d
   when: rapidpro_enabled
   register: rapidpro_nginx_conf
+  tags: [centrifugo]
 
 - name: Disable http://box{{ rapidpro_url }} via NGINX, by removing {{ nginx_conf_dir }}/rapidpro-nginx.conf    # http://box/rp
   file:
@@ -11,14 +15,42 @@
     state: absent
   when: not rapidpro_enabled
   register: rapidpro_nginx_conf_removed
+  tags: [centrifugo]
 
-- name: Restart 'nginx' systemd service
+# temba's internal API (/ti/) is refused by the public server; Centrifugo's
+# auth proxies reach it through this loopback-only listener instead.
+- name: Install the loopback listener for temba's internal API, /etc/nginx/sites-enabled/rapidpro-internal.conf from template
+  template:
+    src: rapidpro-internal-nginx.conf.j2
+    dest: /etc/nginx/sites-enabled/rapidpro-internal.conf
+  when: rapidpro_enabled and rapidpro_centrifugo_enabled
+  register: rapidpro_internal_nginx_conf
+  tags: [centrifugo]
+
+- name: Remove the loopback listener when RapidPro or Centrifugo is disabled
+  file:
+    path: /etc/nginx/sites-enabled/rapidpro-internal.conf
+    state: absent
+  when: not rapidpro_enabled or not rapidpro_centrifugo_enabled
+  register: rapidpro_internal_nginx_conf_removed
+  tags: [centrifugo]
+
+- name: Set whether NGINX needs reloading
+  set_fact:
+    rapidpro_nginx_changed: "{{ rapidpro_nginx_conf.changed or rapidpro_nginx_conf_removed.changed or rapidpro_internal_nginx_conf.changed or rapidpro_internal_nginx_conf_removed.changed }}"
+  tags: [centrifugo]
+
+# reload rather than restart: nginx keeps serving on the old config if the new
+# one fails its check, and open websocket connections survive
+- name: Reload 'nginx' systemd service
   systemd:
     name: nginx
-    state: restarted
-  when: (rapidpro_nginx_conf.changed or rapidpro_nginx_conf_removed.changed) and not is_proot
+    state: reloaded
+  when: rapidpro_nginx_changed and not is_proot
+  tags: [centrifugo]
 
 - name: Reload 'nginx' (Android)
   command: nginx -s reload
   become: yes
-  when: (rapidpro_nginx_conf.changed or rapidpro_nginx_conf_removed.changed) and is_proot
+  when: rapidpro_nginx_changed and is_proot
+  tags: [centrifugo]

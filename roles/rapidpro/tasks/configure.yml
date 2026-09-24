@@ -231,10 +231,12 @@
   stat:
     path: /lib/systemd/system/valkey-server.service
   register: valkey_service
+  tags: [centrifugo]    # the mailroom unit template needs valkey_service_name
 
 - name: Set valkey service name
   set_fact:
     valkey_service_name: "{{ 'valkey-server.service' if valkey_service.stat.exists else 'redis-server.service' }}"
+  tags: [centrifugo]
 
 - name: Create Gunicorn systemd service
   template:
@@ -253,6 +255,8 @@
     dest: /etc/systemd/system/rapidpro-mailroom.service
     mode: '0600'
   become: yes
+  register: rapidpro_mailroom_unit    # centrifugo.yml restarts mailroom on change in a tag-filtered run
+  tags: [centrifugo]
 
 - name: Create Courier systemd service
   template:
