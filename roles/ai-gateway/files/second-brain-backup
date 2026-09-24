@@ -49,6 +49,13 @@ tar -czf "$DEST/$STAMP/mempalace-palace.tar.gz" \
     -C /opt/iiab/ai-gateway/data palace 2>/dev/null
 echo "palace ok"
 
+# RapidPro media: contact/attachment uploads and, without S3, the inbound
+# WhatsApp attachments courier stores here. The database alone can't rebuild
+# these.
+tar -czf "$DEST/$STAMP/rapidpro-media.tar.gz" \
+    -C /opt/iiab/rapidpro media 2>/dev/null
+echo "rapidpro media ok"
+
 # Gateway persona/config env (secrets — kept 0600 via dir perms)
 cp -a /opt/iiab/ai-gateway/.env "$DEST/$STAMP/ai-gateway.env"
 

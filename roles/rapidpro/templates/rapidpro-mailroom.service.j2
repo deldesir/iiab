@@ -23,7 +23,6 @@ Environment='MAILROOM_CENTRIFUGO_KEY={{ rapidpro_centrifugo_api_key }}'
 Environment='MAILROOM_CENTRIFUGO_ENDPOINT=http://127.0.0.1:9/api'
 {% endif %}
 Environment='MAILROOM_SPOOL_DIR={{ rapidpro_dir }}/spool/mailroom'
-Environment='MAILROOM_ELASTIC='
 # knowledge-base embeddings served by the local AI gateway (minilm, 384-dim,
 # matching the knowledge schema's VectorField); empty disables the feature
 Environment='MAILROOM_EMBEDDINGS_ENDPOINT={{ rapidpro_embeddings_endpoint | default("http://127.0.0.1:8086/v1") }}'
@@ -45,13 +44,18 @@ Environment='MAILROOM_S3_ENDPOINT=https://s3.{{ rapidpro_aws_region }}.amazonaws
 Environment='MAILROOM_S3_ATTACHMENTS_BUCKET={{ rapidpro_s3_bucket_prefix }}-attachments'
 Environment='MAILROOM_DYNAMO_TABLE_PREFIX={{ rapidpro_dynamo_table_prefix }}'
 {% else %}
-# Local-first mode: DynamoDB and S3 disabled (empty prefix/bucket skip the
-# AWS clients entirely — no SDK credential resolution, no IMDS probe), and
-# flow sessions live in Postgres rather than S3 (validator: db|s3).
-Environment='MAILROOM_DYNAMO_TABLE_PREFIX='
-Environment='MAILROOM_S3_ATTACHMENTS_BUCKET='
-Environment='MAILROOM_SESSION_STORAGE=db'
+# Local-first mode: no DynamoDB, no S3, no Elasticsearch. The config loader
+# ignores empty environment values, so each service is switched off with the
+# explicit "off" sentinel the fork's config understands; searches then run in
+# Postgres and history stays in the database.
+Environment='MAILROOM_DYNAMO_TABLE_PREFIX=off'
+Environment='MAILROOM_S3_ATTACHMENTS_BUCKET=off'
+Environment='MAILROOM_ELASTIC_ENDPOINT=off'
 {% endif %}
+
+# the host attachment URLs are written with, so they resolve for the phones
+# and bridges that fetch them
+Environment='MAILROOM_ATTACHMENT_DOMAIN={{ rapidpro_media_domain }}'
 
 # ADR-010: Allow localhost webhooks for CRM ops flows (Finding 1)
 # Keeps RFC1918 blocking but allows 127.0.0.1 for call_webhook → localhost/api/v2

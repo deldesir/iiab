@@ -1,11 +1,9 @@
 ---
 # RapidPro post-update: backup DB, run migrations, collectstatic, re-patch URLs.
 #
-# settings.py and url_tags.py are NOT re-deployed here (they carry
-# device-local drift and only change with local_vars.yml). settings_common.py
-# IS re-rendered: since v26.3.48 its content tracks the upstream version
-# (INSTALLED_APPS, celery scheduler, staticfiles finders), so new code needs
-# the current template.
+# settings.py is NOT re-rendered here (it carries device-local values and only
+# changes with local_vars.yml - run the rapidpro role with --tags settings for
+# that). settings_common.py is tracked in the fork and arrives with the code.
 
 - name: Ensure PostgreSQL is running before RapidPro update
   systemd:
@@ -23,10 +21,9 @@
   become: yes
   changed_when: false
 
-# The settings template and the pgvector/bun tasks need the rapidpro role's
-# defaults, but include_vars OUTRANKS local_vars.yml: loading the defaults file
-# blanked every operator value whose default is "" (SECRET_KEY, the websockets
-# secret, the wuzapi and custom_ai tokens) in the re-rendered settings.
+# The pgvector/bun tasks need the rapidpro role's defaults, but include_vars
+# OUTRANKS local_vars.yml: loading the defaults file would blank every operator
+# value whose default is "".
 # So: remember every value that is already defined, load the defaults (lazily,
 # they reference each other), then put the remembered values back with
 # set_fact, which outranks include_vars.
@@ -37,7 +34,7 @@
   when: lookup('vars', item, default='__undefined__') != '__undefined__'
   no_log: true
 
-- name: Load rapidpro role defaults (settings template + pgvector vars)
+- name: Load rapidpro role defaults (pgvector + bun vars)
   include_vars: /opt/iiab/iiab/roles/rapidpro/defaults/main.yml
 
 - name: Put the already-defined values back on top of the role defaults
@@ -48,30 +45,11 @@
     label: "{{ item.key }}"
   no_log: true
 
-# A settings file rendered with an empty SECRET_KEY takes the web app down on
-# the next worker recycle. Refuse to write one.
-- name: Refuse to render settings without the operator's secret key
-  assert:
-    that:
-      - rapidpro_secret_key | default('') | length > 0
-    fail_msg: "rapidpro_secret_key is empty - set it in local_vars.yml; refusing to re-render settings_common.py"
-    quiet: true
-
 - name: Ensure pgvector for the knowledge app
   include_tasks: /opt/iiab/iiab/roles/rapidpro/tasks/pgvector.yml
 
 - name: Ensure bun for the components build
   include_tasks: /opt/iiab/iiab/roles/rapidpro/tasks/bun.yml
-
-- name: Re-render RapidPro common settings from the current template
-  template:
-    src: /opt/iiab/iiab/roles/rapidpro/templates/settings_common.py.j2
-    dest: "{{ ai_update_rapidpro_dir }}/temba/settings_common.py"
-    backup: yes
-    owner: "{{ ai_update_gateway_user }}"
-    group: "{{ ai_update_gateway_user }}"
-    mode: '0600'
-  become: yes
 
 # Django 6.1 (RapidPro v26.3.55+) refuses to boot when the legacy EMAIL_* settings
 # coexist with the MAILERS dict that settings_common.py now defines. settings.py is
@@ -102,6 +80,16 @@
   become: yes
   become_user: "{{ ai_update_gateway_user }}"
 
+- name: Create the Postgres search indexes
+  shell: |
+    export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
+    uv run python manage.py nanorp_indexes
+  args:
+    chdir: "{{ ai_update_rapidpro_dir }}"
+  become: yes
+  become_user: "{{ ai_update_gateway_user }}"
+  when: not (rapidpro_aws_enabled | default(false))
+
 - name: Collect static files
   shell: |
     export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
@@ -111,11 +99,17 @@
   become: yes
   become_user: "{{ ai_update_gateway_user }}"
 
-- name: Execute frontend patch script
-  command: python3 {{ ai_update_rapidpro_dir }}/patch_urls.py
+- name: Install the front-end URL patch script
+  template:
+    src: /opt/iiab/iiab/roles/rapidpro/templates/patch_frontend_urls.py.j2
+    dest: /usr/local/sbin/rapidpro-patch-frontend-urls
+    mode: '0755'
+  become: yes
+
+- name: Patch the built front-end for the sub-path
+  command: python3 /usr/local/sbin/rapidpro-patch-frontend-urls
   become_user: "{{ ai_update_gateway_user }}"
   become: yes
-  ignore_errors: yes
 
 - name: Purge Django cache
   shell: |

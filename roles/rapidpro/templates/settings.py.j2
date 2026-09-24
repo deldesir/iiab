@@ -52,7 +52,32 @@ BRAND["hosts"] = ["{{ rapidpro_hostname }}", "localhost", "127.0.0.1", "box.lan"
 # org/signup); invitation links still work (the allauth adapter honours invite
 # secrets regardless), and with the console email backend the invitation mail
 # lands in the journal for manual delivery.
-BRAND["features"] = [f for f in BRAND.get("features", []) if f != "signups"]
+BRAND["features"] = []  # no self-signup, no SSO
+BRAND["emails"] = {"notifications": "support@{{ rapidpro_hostname }}"}
+
+# temba v26.3.107: the internet/internal port split. Behind nginx on one port both stay None (the port check is
+# then skipped); the internal-only API under /ti/ still requires INTERNAL_AUTH_TOKEN, which nginx only forwards on
+# the loopback listener the realtime server uses.
+INTERNET_PORT = None
+INTERNAL_PORT = None
+INTERNAL_AUTH_TOKEN = "{{ rapidpro_internal_auth_token | default(rapidpro_secret_key, true) }}"
+
+# the WhatsApp bridge next door: the claim page creates bridge users with the admin token, and the bridge posts
+# inbound webhooks to courier on this host
+WUZAPI_URL = "http://127.0.0.1:{{ wuzapi_port }}"
+WUZAPI_ADMIN_TOKEN = "{{ wuzapi_admintoken }}" or None
+WUZAPI_COURIER_URL = "http://127.0.0.1:8080"
+
+# there's no SMTP relay on the box: mail the app sends itself lands in the gunicorn journal, and nothing is
+# verified or notified by email
+MAILERS = {
+    "default": {"BACKEND": "django.core.mail.backends.console.EmailBackend"},
+    "custom_smtp": MAILERS["custom_smtp"],
+}
+ACCOUNT_EMAIL_VERIFICATION = "none"
+ACCOUNT_EMAIL_NOTIFICATIONS = False
+ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = False
+ACCOUNT_CONFIRM_EMAIL_ON_GET = False
 
 # ----------------------------------------------------------------------------------
 # Databases

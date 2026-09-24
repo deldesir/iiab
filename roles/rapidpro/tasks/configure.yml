@@ -28,19 +28,9 @@
   become: yes
   become_user: postgres
 
-# Both settings files carry live secrets (SECRET_KEY, DB password,
-# WEBSOCKETS_AUTH_SECRET) — keep them readable by the service user only,
-# not by every local account.
-- name: Configure RapidPro common settings
-  template:
-    src: settings_common.py.j2
-    dest: "{{ rapidpro_dir }}/temba/settings_common.py"
-    owner: "{{ iiab_admin_user }}"
-    group: "{{ iiab_admin_user }}"
-    mode: '0600'
-  become: yes
-  register: rapidpro_settings_common
-
+# settings_common.py is tracked in the fork and comes with the code; everything deployment-specific - the secret
+# key, the DB password, tokens, hosts, the sub-path - is rendered here into the ignored settings.py, readable by
+# the service user only. Tagged so it can be re-rendered alone after a local_vars.yml change.
 - name: Configure RapidPro settings
   template:
     src: settings.py.j2
@@ -50,6 +40,7 @@
     mode: '0600'
   become: yes
   register: rapidpro_settings
+  tags: [settings]
 
 - name: Ensure RapidPro log directory permissions (Hardening)
   file:
@@ -101,6 +92,18 @@
   become: yes
   become_user: "{{ iiab_admin_user }}"
 
+# the Postgres indexes contact and message search use without Elasticsearch; idempotent, kept out of the
+# migration graph so they never collide with upstream's numbering
+- name: Create the Postgres search indexes
+  shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    uv run python manage.py nanorp_indexes
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: yes
+  become_user: "{{ iiab_admin_user }}"
+  when: not rapidpro_aws_enabled
+
 - name: Run DynamoDB migrations (create tables)
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
@@ -124,7 +127,7 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-  when: rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_settings.changed
 
 - name: Fix missing editor.json localization (Wuzapi Regression Fix)
   shell: |
@@ -132,22 +135,21 @@
     ln -sf ../en-us/editor.json /opt/iiab/rapidpro/sitestatic/@nyaruka/temba-components/static/mr/docs/fr/editor.json
   become: yes
 
-- name: Create frontend patch script
+# the compiled front-end assumes it lives at the root; this rewrites the built bundles for the sub-path. It is a
+# deployment tool, so it lives outside the checkout.
+- name: Install the front-end URL patch script
   template:
     src: patch_frontend_urls.py.j2
-    dest: "{{ rapidpro_dir }}/patch_urls.py"
-    owner: "{{ iiab_admin_user }}"
+    dest: /usr/local/sbin/rapidpro-patch-frontend-urls
     mode: '0755'
-  become_user: "{{ iiab_admin_user }}"
   become: yes
-  when: rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
 
-- name: Execute frontend patch script
-  command: python3 {{ rapidpro_dir }}/patch_urls.py
+- name: Patch the built front-end for the sub-path
+  command: python3 /usr/local/sbin/rapidpro-patch-frontend-urls
   become_user: "{{ iiab_admin_user }}"
   become: yes
   register: execute_frontend_patch_script
-  when: rapidpro_git_clone.changed or rapidpro_settings_common.changed or rapidpro_settings.changed
+  when: rapidpro_git_clone.changed or rapidpro_settings.changed
 
 - name: Symlink mr directory for temba-store
   file:
@@ -169,54 +171,40 @@
     chdir: "{{ rapidpro_dir }}"
   become: yes
 
-- name: Create custom url_tags.py
-  template:
-    src: url_tags.py.j2
-    dest: "{{ rapidpro_dir }}/temba/utils/templatetags/url_tags.py"
-
-
-
-- name: Copy superuser scripts
-  copy:
-    src: "{{ item }}"
-    dest: "{{ rapidpro_dir }}/{{ item }}"
-    owner: "{{ iiab_admin_user }}"
-    group: "{{ iiab_admin_user }}"
-    mode: "0755"
-  become: yes
-  loop:
-    - create_superuser.py
-    - check_superuser.py
-
-- name: Check if admin user exists
+# the first admin, created with Django's own command; without a password in local_vars.yml no user is created,
+# rather than one with a guessable password
+- name: Check whether the admin user exists
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    export DJANGO_SUPERUSER_EMAIL="{{ admin_email | default('admin@example.com') }}"
-    uv run python manage.py shell < check_superuser.py
+    uv run python manage.py shell -c "from temba.users.models import User; print('EXISTS' if User.objects.filter(email__iexact='{{ admin_email }}').exists() else 'MISSING')"
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-  environment:
-    DJANGO_SETTINGS_MODULE: temba.settings
   register: superuser_check
   changed_when: false
 
-- name: Create admin user
+- name: Refuse to create the admin user without rapidpro_admin_password
+  assert:
+    that:
+      - rapidpro_admin_password | default('') | length > 0
+    fail_msg: "rapidpro_admin_password is empty - set it in /etc/iiab/local_vars.yml before the admin user can be created"
+    quiet: true
+  when: "'MISSING' in superuser_check.stdout"
+
+- name: Create the admin user
   shell: |
     export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    export DJANGO_SUPERUSER_EMAIL="{{ admin_email | default('admin@example.com') }}"
-    export DJANGO_SUPERUSER_PASSWORD="{{ rapidpro_admin_password | default('changeme') }}"
-    uv run python manage.py shell < create_superuser.py
+    uv run python manage.py createsuperuser --noinput
   args:
     chdir: "{{ rapidpro_dir }}"
+  environment:
+    DJANGO_SUPERUSER_EMAIL: "{{ admin_email }}"
+    DJANGO_SUPERUSER_PASSWORD: "{{ rapidpro_admin_password }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
-  environment:
-    DJANGO_SETTINGS_MODULE: temba.settings
-  when: "'EXISTS' not in superuser_check.stdout"
-  changed_when: "'Superuser created successfully!' in create_superuser_output.stdout"
-  register: create_superuser_output
+  when: "'MISSING' in superuser_check.stdout"
+  no_log: true
 
 - name: Create gunicorn run directory
   file:
