@@ -47,7 +47,9 @@ Order matters; each step is safe to stop after.
    - `chgrp www-data run && chmod 0770 run`; restart `rapidpro-gunicorn` and
      `rapidpro-celery`.
 5. Install the courier/mailroom binaries (`install-release-binary.sh`) and
-   restart `rapidpro-courier`, `rapidpro-mailroom`. If the round changed how the
+   restart `rapidpro-courier`, `rapidpro-mailroom`. If the round moved mailroom
+   to a new goflow release (`go.mod`), re-apply `--tags mailroom-docs` so the
+   flow editor's completion docs match. If the round changed how the
    bridge reaches courier (`WUZAPI_COURIER_URL`, the signing key), run
    `manage.py wuzapi_webhooks` so every WhatsApp channel is re-registered.
 6. Realtime sockets (when `rapidpro_centrifugo_enabled`): if the round touched

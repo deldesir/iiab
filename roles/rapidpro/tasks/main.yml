@@ -13,7 +13,7 @@
 - name: Run Configuration Tasks
   include_tasks: configure.yml
   when: rapidpro_enabled
-  tags: [centrifugo, settings]
+  tags: [centrifugo, settings, mailroom-docs]
 
 - name: Ensure Services are Started
   include_tasks: service.yml
@@ -22,7 +22,7 @@
 - name: Configure Nginx
   include_tasks: nginx.yml
   when: rapidpro_enabled
-  tags: [centrifugo]
+  tags: [centrifugo, nginx]
 
 - name: Realtime sockets (Centrifugo)
   include_tasks:
