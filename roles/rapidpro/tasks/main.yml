@@ -13,7 +13,7 @@
 - name: Run Configuration Tasks
   include_tasks: configure.yml
   when: rapidpro_enabled
-  tags: [centrifugo]
+  tags: [centrifugo, settings]
 
 - name: Ensure Services are Started
   include_tasks: service.yml

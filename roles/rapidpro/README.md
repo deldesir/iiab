@@ -3,6 +3,26 @@
 Installs [RapidPro](https://github.com/deldesir/rapidpro) flow engine,
 Courier message transport, and Mailroom background worker.
 
+## Settings
+
+`temba/settings_common.py` is tracked in the fork and arrives with the code, so
+an upstream release's settings changes merge like any other file. Everything
+that belongs to one deployment - the secret key, the database password, the
+bridge and internal-API tokens, hostnames, storage, mail policy, the sub-path -
+is rendered by this role into the ignored `temba/settings.py` from
+`settings.py.j2`. After changing one of those values in `local_vars.yml`,
+re-render that file alone with the `settings` tag:
+
+```bash
+cd /opt/iiab/iiab && ansible-playbook -i ansible_hosts run-one-role.yml --connection=local \
+  --extra-vars '{"role_to_run":"rapidpro"}' --tags settings
+```
+
+Two management commands the role runs for you, and that you can run by hand:
+`nanorp_indexes` creates the Postgres indexes contact and message search use
+without Elasticsearch (idempotent, after every migrate), and `wuzapi_webhooks`
+re-registers every WhatsApp channel's webhook and signing key with the bridge.
+
 ## `local_vars.yml` Configuration
 
 ```yaml

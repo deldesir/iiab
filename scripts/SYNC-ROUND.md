@@ -27,20 +27,29 @@ Order matters; each step is safe to stop after.
 4. temba — **every git command as the service user** (`sudo -u iiab-admin`).
    Root-run git leaves root-owned files; the later `chown` strips the
    `www-data` group from `run/` and gunicorn answers 502.
-   - `git checkout -- pyproject.toml uv.lock templates/tickets/ticket_list.html`
-     first: these are the ai-update role's standing patches (python constraint
-     widening, URL-prefix patch); the role re-applies them.
-   - `git pull --ff-only`, then `uv sync`.
-   - Render + compare settings BEFORE anything restarts:
-     `render-rapidpro-settings.py roles/rapidpro/templates/settings_common.py.j2 /root/sc.py --compare /opt/iiab/rapidpro/temba/settings_common.py`
-     (same for `settings.py.j2`). Secrets must report SAME; read the diff.
-     Install the rendered files with mode 0600, then `shred -u` the copies.
+   - `git checkout -- pyproject.toml uv.lock` first: these are the ai-update
+     role's standing patches (python constraint widening); the role re-applies
+     them. `temba/settings_common.py` is tracked in the fork, so a round's
+     settings changes arrive with the pull and show in `git diff` like any
+     other file; only `temba/settings.py` is rendered, by the rapidpro role's
+     `settings` tag (`render-rapidpro-settings.py` on `settings.py.j2` when a
+     new deployment value needs a human eye first).
+   - `git pull --ff-only`, then `uv sync`. One-time, on the first pull that
+     brings the tracked `temba/settings_common.py`: delete the untracked copy
+     the role used to render (`rm temba/settings_common.py`) before pulling,
+     and render `settings.py` with the `settings` tag right after, since the
+     values that lived in the old copy (internal token, bridge token, mail and
+     account policy) now come from there.
    - `manage.py check`; `manage.py showmigrations --plan | grep '\[ \]'` to see
-     what will run; `migrate`; `collectstatic --noinput`; `patch_urls.py`.
+     what will run; `migrate`; `manage.py nanorp_indexes` (the Postgres search
+     indexes, idempotent); `collectstatic --noinput`;
+     `python3 /usr/local/sbin/rapidpro-patch-frontend-urls`.
    - `chgrp www-data run && chmod 0770 run`; restart `rapidpro-gunicorn` and
      `rapidpro-celery`.
 5. Install the courier/mailroom binaries (`install-release-binary.sh`) and
-   restart `rapidpro-courier`, `rapidpro-mailroom`.
+   restart `rapidpro-courier`, `rapidpro-mailroom`. If the round changed how the
+   bridge reaches courier (`WUZAPI_COURIER_URL`, the signing key), run
+   `manage.py wuzapi_webhooks` so every WhatsApp channel is re-registered.
 6. Realtime sockets (when `rapidpro_centrifugo_enabled`): if the round touched
    `roles/rapidpro/templates/centrifugo-config.json.j2` or the mailroom unit,
    re-apply `--tags centrifugo`. Then confirm a signed-in desk tab still holds

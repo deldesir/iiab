@@ -14,7 +14,7 @@ elif SUBPATH.endswith("/"):
 # regex array that maps LLM model names to brand icons:
 #   wu = [[/claude|anthropic/i,"anthropic"],[/gpt|openai|o1|o3|o4/i,"openai"],...]
 # If a provider's model name doesn't match any entry, it's silently excluded
-# from the "Call AI" dropdown.  Our Custom AI (LiteLLM proxy) uses the slug
+# from the "Call AI" dropdown.  Our custom AI type (a local gateway) uses the slug
 # "custom_ai" which matches nothing, so we inject an extra entry here.
 CUSTOM_AI_LLM_PATCH_BEFORE = '[/deepseek/i,"deepseek"]]'
 CUSTOM_AI_LLM_PATCH_AFTER  = '[/deepseek/i,"deepseek"],[/custom_ai/i,"openai"]]'
@@ -158,11 +158,6 @@ if __name__ == "__main__":
                 if name.endswith(".js") and "jquery" not in name:
                     patch_file(os.path.join(root, name))
                     
-        # Also patch specific templates that have hardcoded URLs
-        TEMPLATES_DIR = "{{ rapidpro_dir }}/templates"
-        TICKET_LIST = os.path.join(TEMPLATES_DIR, "tickets/ticket_list.html")
-        if os.path.exists(TICKET_LIST):
-            patch_file(TICKET_LIST)
 
         # Inject custom_ai into the flow editor's LLM icon-mapping array.
         patch_custom_ai_llm()

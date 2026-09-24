@@ -42,13 +42,14 @@ rapidpro_secret_key: ""
 # check requires it). Set a distinct value in local_vars.yml; empty falls back
 # to rapidpro_secret_key.
 rapidpro_internal_auth_token: ""
-custom_ai_admin_token: ""
 
 # AWS mode: set to false to disable S3 + DynamoDB and use local storage only
 rapidpro_aws_enabled: false
 
 # Domain for courier (used in attachment URLs)
 rapidpro_domain: "{{ rapidpro_hostname }}"
+# the host written into attachment URLs: the site's public name when TLS is set up, the box otherwise
+rapidpro_media_domain: "{{ iiab_ssl_domain | default(rapidpro_domain, true) }}"
 
 # AWS Configuration (S3 + DynamoDB) — used when rapidpro_aws_enabled is true
 rapidpro_aws_access_key_id: ""
