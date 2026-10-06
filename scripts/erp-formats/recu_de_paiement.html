@@ -41,9 +41,8 @@
 				<th>Document</th>
 				<th>Date d'échéance</th>
 				<th class="r">Montant</th>
-				<th class="r">Restait dû</th>
 				<th class="r">Affecté</th>
-				<th class="r">Reste dû</th>
+				<th class="r">Reste dû à ce jour</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -52,15 +51,16 @@
 				<td><span class="code">{{ ref.reference_name }}</span><div class="desc">{{ ref.reference_doctype }}</div></td>
 				<td>{{ frappe.format(ref.due_date, {"fieldtype": "Date"}) if ref.due_date else "—" }}</td>
 				<td class="r amt">{{ frappe.format(ref.total_amount, {"fieldtype": "Currency"}, currency=currency) }}</td>
-				<td class="r amt">{{ frappe.format(ref.outstanding_amount, {"fieldtype": "Currency"}, currency=currency) }}</td>
 				<td class="r amt">{{ frappe.format(ref.allocated_amount, {"fieldtype": "Currency"}, currency=currency) }}</td>
-				<td class="r amt"><strong>{{ frappe.format((ref.outstanding_amount or 0) - (ref.allocated_amount or 0), {"fieldtype": "Currency"}, currency=currency) }}</strong></td>
+				{#- the reference row's own outstanding is rewritten by later reconciliations; the document itself knows what is still due -#}
+				{%- set due_now = frappe.db.get_value(ref.reference_doctype, ref.reference_name, "outstanding_amount") if ref.reference_doctype in ("Sales Invoice", "Purchase Invoice") else None -%}
+				<td class="r amt"><strong>{{ frappe.format(due_now, {"fieldtype": "Currency"}, currency=currency) if due_now is not none else "—" }}</strong></td>
 			</tr>
 		{%- endfor -%}
 		</tbody>
 		<tfoot>
 			<tr>
-				<td colspan="4" class="r"><strong>Total affecté</strong></td>
+				<td colspan="3" class="r"><strong>Total affecté</strong></td>
 				<td class="r amt"><strong>{{ frappe.format(doc.total_allocated_amount, {"fieldtype": "Currency"}, currency=currency) }}</strong></td>
 				<td></td>
 			</tr>
