@@ -176,8 +176,9 @@ location ^~ /api/v2/method/ {
 # ── Bounce-back redirects (SPA navigation safety net) ──────────────────────────
 location = /desk  { return 302 /erp/desk; }
 location ^~ /desk/ { return 302 /erp$request_uri; }
-location = /app   { return 302 /erp/app; }
-location ^~ /app/  { return 302 /erp$request_uri; }
+# legacy desk route: frappe moved /app to /desk, send it straight to the new one
+location = /app   { return 302 /erp/desk; }
+location ^~ /app/  { rewrite ^/app/(.*)$ /erp/desk/$1 redirect; }
 location = /apps  { return 307 /erp/apps; }
 location ^~ /apps/ { return 307 /erp$request_uri; }
 # /hr/ is served by Frappe when hrms is installed — proxy through /erp/ mount
