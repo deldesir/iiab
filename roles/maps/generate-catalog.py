@@ -1,7 +1,6 @@
 #!/usr/bin/python3
-import humanize, requests, json
+import json, humanize, requests, os, xml, xmltodict
 
-import os
 os.chdir(os.path.dirname(__file__))
 
 # This file is for generating:
@@ -15,13 +14,21 @@ iiab_map_host_url = "https://iiab.switnet.org/maps/2"
 
 # "data dates" refer to how recent a certain type of data is
 
-maps_vector_data_date = "2026-07-01"
+maps_vector_data_date = "2026-09-01"
 maps_satellite_data_date = "2025-12-10"
 maps_static_search_data_date = "2026-04-22"
 
 # `maps_slow_data_date` is for data that changes rarely if ever
 # naturalearth, naturalearth6, terrain, nominatim search [for now!]
 maps_slow_data_date = "2025-12-10"
+
+CC_BY_NC_SA_MAPS_DOT_BLACK = """
+"[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2023)"
+(see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
+""".strip().replace("\n", " ")
+
+CC_BY_NC_SA_IIAB = "[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): IIAB Satellite (Contains modified Copernicus Sentinel data 2025)"
+
 
 # The order that makes sense for explanation in this file may not make as much
 # sense in the generated file. So here, we can reorder it before it gets generated.
@@ -44,6 +51,24 @@ def url_only(tiles):
         if "url" in file
     }
 
+def confirm_meta4(content_url):
+    """
+    The original content url (as listed in the catalog) should be somewhere in the list of mirrors.
+    """
+
+    meta4 = xmltodict.parse(requests.get(content_url + ".meta4").content, force_list=('url',))
+    urls = [url['#text'] for url in meta4['metalink']['file']['url']]
+    assert content_url in urls, f"meta4 does not contain main url for {content_url}"
+
+def confirm_torrent(content_url):
+    """
+    The content url should be somewhere in the torrent, which is otherwise binary.
+    Just do a quick sanity check to confirm it.
+    """
+
+    torrent = requests.get(content_url + ".torrent").content
+    assert content_url.encode('utf-8') in torrent, f"torrent does not contain url for {content_url}"
+
 def add_file_sizes(tiles):
     for (zoom, file) in tiles.items():
         if "url" in file:
@@ -55,8 +80,11 @@ def add_file_sizes(tiles):
 
             file["size"] = humanize.naturalsize(response.headers["Content-Length"])
 
+            confirm_meta4(url)
+            confirm_torrent(url)
+
 vector_tiles = {
-  "title": "Vector",
+  "title": "Vector (OSM)",
   "setting_name": "maps_vector_zoom",
   "details": fix_multiline_spacing("""
     Map features in a vector format from OpenStreetMap or Natural Earth.  Maximum zoom level available is 14.
@@ -109,64 +137,63 @@ satellite_tiles = {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z07.pmtiles",
       "details": fix_multiline_spacing("""
         Low quality "s2maps" satellite, up to zoom level 7
-
-        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
-      """)
+      """),
+      "license": CC_BY_NC_SA_MAPS_DOT_BLACK,
     },
     "7-iiab": {
       "url": "https://iiab.io/content/iiab-sentinel2.2026-07-25.z00-z07.pmtiles",
       "details": fix_multiline_spacing("""
         Low quality "IIAB" satellite, up to zoom level 7
 
-        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) IIAB
-      """)
+        NOTE: `maps_satellite_zoom: 7-iiab` has tiles that are twice as wide (and twice as tall) as `maps_satellite_zoom: 7`,
+        making it equivalent (in resolution) to `maps_satellite_zoom: 8`.
+      """),
+      "license": CC_BY_NC_SA_IIAB,
     },
     9: {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z09.pmtiles",
       "details": fix_multiline_spacing("""
         Moderately high quality "s2maps" satellite, up to zoom level 9
-
-        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
-      """)
+      """),
+      "license": CC_BY_NC_SA_MAPS_DOT_BLACK,
     },
     "9-iiab": {
       "url": "https://iiab.io/content/iiab-sentinel2.2026-07-25.z00-z09.pmtiles",
       "details": fix_multiline_spacing("""
         Moderately high quality "IIAB" satellite, up to zoom level 9
 
-        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) IIAB
-      """)
+        NOTE: `maps_satellite_zoom: 9-iiab` has tiles that are twice as wide (and twice as tall) as `maps_satellite_zoom: 9`,
+        making it equivalent (in resolution) to `maps_satellite_zoom: 10`.
+      """),
+      "license": CC_BY_NC_SA_IIAB,
     },
     11: {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z11.pmtiles",
       "details": fix_multiline_spacing("""
         Pretty high quality "s2maps" satellite, up to zoom level 11
-
-        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
-      """)
+      """),
+      "license": CC_BY_NC_SA_MAPS_DOT_BLACK,
     },
     12: {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z12.pmtiles",
       "details": fix_multiline_spacing("""
         Pretty high quality "s2maps" satellite, up to zoom level 12
-
-        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
-      """)
+      """),
+      "license": CC_BY_NC_SA_MAPS_DOT_BLACK,
     },
     13: {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z13.pmtiles",
       "details": fix_multiline_spacing("""
         Highest available quality "s2maps" satellite, up to zoom level 13
-
-        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
-      """)
+      """),
+      "license": CC_BY_NC_SA_MAPS_DOT_BLACK,
     },
     "none": {
       "details": fix_multiline_spacing("""
         Disable satellite. There is no URL associated with this option because it doesn't download anything.
 
         NOTE: This will not necessarily delete any satellite files you have downloaded previously.
-      """)
+      """),
     },
     "4-ci": {
       "url": f"{iiab_map_host_url}/s2maps-sentinel2-2023.{maps_satellite_data_date}.z00-z04.pmtiles",
@@ -174,17 +201,18 @@ satellite_tiles = {
         FOR TESTING ONLY
 
         Super-low quality "s2maps" satellite, up to zoom level 4
-
-        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) s2maps (see more [here](https://maps.black/#data) and [here](https://maps.black/#licenses))
-      """)
+      """),
+      "license": CC_BY_NC_SA_MAPS_DOT_BLACK,
     },
     "13-iiab": {
       "url": "https://iiab.io/content/iiab-sentinel2.2026-07-25.z00-z13.pmtiles",
       "details": fix_multiline_spacing("""
         Highest available quality "IIAB" satellite, up to zoom level 13
 
-        [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) IIAB
-      """)
+        NOTE: `maps_satellite_zoom: 13-iiab` has tiles that are twice as wide (and twice as tall) as `maps_satellite_zoom: 13`,
+        making it equivalent (in resolution) to a hypothetical `maps_satellite_zoom: 14`.
+      """),
+      "license": CC_BY_NC_SA_IIAB,
     },
   }, ["none", "4-ci", 7, "7-iiab", 9, "9-iiab", 11, 12, 13, "13-iiab"]),
 }
@@ -200,29 +228,29 @@ terrain_tiles = {
       "url": f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z07.pmtiles",
       "details": fix_multiline_spacing("""
         Low quality terrain, up to zoom level 7
-      """)
+      """),
     },
     8: {
       "url": f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z08.pmtiles",
       "details": fix_multiline_spacing("""
-      """)
+      """),
     },
     9: {
       "url": f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z09.pmtiles",
       "details": fix_multiline_spacing("""
-      """)
+      """),
     },
     10: {
       "url": f"{iiab_map_host_url}/terrarium.{maps_slow_data_date}.z00-z10.pmtiles",
       "details": fix_multiline_spacing("""
         (This is the highest quality that maps.black offers in pmtiles format.  They offer 11, 12, and 13 in squashfs format, but they are massive files.)
-      """)
+      """),
     },
     "0-none": {
       "url": f"{iiab_map_host_url}/terrarium-none.pmtiles",
       "details": fix_multiline_spacing("""
         A 'dummy' maxzoom=0 world map terrain file to fill a role that maps.black/maplibre needs if we have FQRs and the user enables terrain.
-      """)
+      """),
     },
   }, ["0-none", 7, 8, 9, 10]),
 }
@@ -239,13 +267,13 @@ naturalearth6_tiles = {
       "url": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z06.pmtiles",
       "details": fix_multiline_spacing("""
         Normal, default value
-      """)
+      """),
     },
     "4-ci": {
       "url": f"{iiab_map_host_url}/naturalearth6-NE2_HR_SR_W_DR-WEBP.{maps_slow_data_date}.z00-z04.pmtiles",
       "details": fix_multiline_spacing("""
         FOR TESTING ONLY
-      """)
+      """),
     },
   }, ["4-ci", 6]),
 }
@@ -261,7 +289,7 @@ static_search_data = {
       "url": f"{iiab_map_host_url}/static-search.{maps_static_search_data_date}.pop-1k-cities.tar.gz",
       "details": fix_multiline_spacing("""
         Cities-only static database
-      """)
+      """),
     },
 
     "pop-100k-cities": {
@@ -270,7 +298,7 @@ static_search_data = {
         FOR TESTING ONLY
 
         Large cities-only static database
-      """)
+      """),
     },
   }, ["pop-1k-cities", "pop-100k-cities"])
 }
@@ -280,6 +308,8 @@ nominatim_data = {
   "title": "Nominatim",
   "setting_name": "maps_search_nominatim_db",
   "details": fix_multiline_spacing("""
+    EXPERIMENTAL
+
     Search database for the Nominatim search engine.  Requires `maps_search_engine: nominatim`.
   """),
   "tiles": dict_with_order({
@@ -288,13 +318,13 @@ nominatim_data = {
       "url": f"{iiab_map_host_url}/nominatim.{maps_slow_data_date}.basic.sqlite",
       "details": fix_multiline_spacing("""
         Basic nominatim database. (California admin+natural for now.)
-      """)
+      """),
     },
     "full": {
       "url": f"{iiab_map_host_url}/nominatim.{maps_slow_data_date}.full.sqlite",
       "details": fix_multiline_spacing("""
         Full nominatim database
-      """)
+      """),
     },
   }, ["basic", "full"])
 }
@@ -319,9 +349,9 @@ ASSUME ALL OTHER COPIES (INCLUDING THE ONE ON YOUR IIAB) ARE STALE (OUT OF DATE!
 """
 
 catalog = {
+    "vector": vector_tiles,
     "satellite": satellite_tiles,
     "terrain": terrain_tiles,
-    "vector": vector_tiles,
     "naturalearth6": naturalearth6_tiles,
     "static_search": static_search_data,
     "nominatim": nominatim_data,
@@ -347,4 +377,7 @@ with open("MAPS_CATALOG_DETAILS.md", "w") as f:
         f.write(f"# {catalog[map_type]['title']}\n{catalog[map_type]['details']}\n\n---\n\n")
         for zoom, file in catalog[map_type]["tiles"].items():
             file_size = f" ({file['size']})" if 'size' in file else ""
-            f.write(f"## `{catalog[map_type]['setting_name']}: {zoom}`{file_size}\n{file['details']}\n\n---\n\n")
+            f.write(f"## `{catalog[map_type]['setting_name']}: {zoom}`{file_size}\n{file['details']}\n\n")
+            if 'license' in file:
+                f.write(f"{file['license']}\n\n")
+            f.write("---\n\n")
