@@ -1,0 +1,103 @@
+{#- Stock Entry on a normal printer: bon de transfert / de sortie / de réception, French labels. -#}
+{%- set titles = {"Material Transfer": "Bon de transfert", "Material Issue": "Bon de sortie", "Material Receipt": "Bon de réception",
+                  "Material Transfer for Manufacture": "Bon de transfert (fabrication)", "Manufacture": "Bon de fabrication",
+                  "Repack": "Bon de reconditionnement", "Send to Subcontractor": "Bon d'envoi (sous-traitance)",
+                  "Material Consumption for Manufacture": "Bon de consommation (fabrication)", "Disassemble": "Bon de démontage"} -%}
+{%- set purpose = doc.purpose or doc.stock_entry_type -%}
+{%- set has_lots = doc.items | selectattr("batch_no") | list | length or doc.items | selectattr("serial_no") | list | length -%}
+{%- set requests = doc.items | map(attribute="material_request") | select | unique | list -%}
+<div class="ef">
+	{% if letter_head and not no_letterhead %}<div class="ef-letterhead">{{ letter_head }}</div>{% endif %}
+
+	<div class="ef-head">
+		<div>
+			<h1>{{ titles.get(purpose, "Mouvement de stock") }}{% if doc.docstatus == 0 %}<span class="ef-draft">Brouillon</span>{% elif doc.docstatus == 2 %}<span class="ef-draft">Annulé</span>{% endif %}</h1>
+			<div class="ef-sub">{{ doc.stock_entry_type }}{% if doc.stock_entry_type != purpose %} &middot; {{ purpose }}{% endif %}</div>
+		</div>
+		<table class="ef-meta">
+			<tr><th>N°</th><td>{{ doc.name }}</td></tr>
+			<tr><th>Date</th><td>{{ frappe.format(doc.posting_date, {"fieldtype": "Date"}) }} {{ frappe.format(doc.posting_time, {"fieldtype": "Time"}) }}</td></tr>
+			{% if requests %}<tr><th>Demande(s)</th><td>{{ requests | join(", ") }}</td></tr>{% endif %}
+			{% if doc.purchase_receipt_no %}<tr><th>Réception</th><td>{{ doc.purchase_receipt_no }}</td></tr>{% endif %}
+			{% if doc.delivery_note_no %}<tr><th>Livraison</th><td>{{ doc.delivery_note_no }}</td></tr>{% endif %}
+		</table>
+	</div>
+
+	<table class="ef-info">
+		<tr>
+			<th>Société</th><td>{{ doc.company }}</td>
+			<th>Préparé par</th><td>{{ frappe.db.get_value("User", doc.owner, "full_name") or doc.owner }}</td>
+		</tr>
+		<tr>
+			<th>Entrepôt source</th><td>{{ doc.from_warehouse or "selon lignes" }}</td>
+			<th>Entrepôt destination</th><td>{{ doc.to_warehouse or "selon lignes" }}</td>
+		</tr>
+		{% if doc.supplier_name or doc.project %}
+		<tr>
+			<th>Fournisseur</th><td>{{ doc.supplier_name or "—" }}</td>
+			<th>Projet</th><td>{{ doc.project or "—" }}</td>
+		</tr>
+		{% endif %}
+	</table>
+
+	<table class="ef-items">
+		<thead>
+			<tr>
+				<th class="c">#</th>
+				<th>Code</th>
+				<th>Désignation</th>
+				<th class="r">Quantité</th>
+				<th>Unité</th>
+				<th>De</th>
+				<th>Vers</th>
+				{% if has_lots %}<th>Lot / N° série</th>{% endif %}
+			</tr>
+		</thead>
+		<tbody>
+		{%- set ns = namespace(total_qty=0) -%}
+		{%- for row in doc.items -%}
+			{%- set ns.total_qty = ns.total_qty + row.qty -%}
+			<tr>
+				<td class="c">{{ loop.index }}</td>
+				<td class="code">{{ row.item_code }}</td>
+				<td>
+					<div class="name">{{ row.item_name }}</div>
+					{%- if row.description and row.description.strip() and row.description.strip() != row.item_name -%}
+						<div class="desc">{{ row.description }}</div>
+					{%- endif -%}
+				</td>
+				<td class="r qty">{{ frappe.format(row.qty, {"fieldtype": "Float"}) }}</td>
+				<td>{{ row.uom }}{% if row.uom != row.stock_uom and row.conversion_factor and row.conversion_factor != 1 %}<div class="desc">= {{ frappe.format(row.transfer_qty, {"fieldtype": "Float"}) }} {{ row.stock_uom }}</div>{% endif %}</td>
+				<td>{{ row.s_warehouse or "—" }}</td>
+				<td>{{ row.t_warehouse or "—" }}</td>
+				{% if has_lots %}<td class="code">{{ row.batch_no or "" }}{% if row.serial_no %}<div class="desc">{{ row.serial_no | replace("\n", ", ") }}</div>{% endif %}</td>{% endif %}
+			</tr>
+		{%- endfor -%}
+		</tbody>
+		<tfoot>
+			<tr>
+				<td colspan="3" class="r"><strong>{{ doc.items | length }} ligne{{ "s" if doc.items | length > 1 else "" }}</strong></td>
+				<td class="r qty"><strong>{{ frappe.format(ns.total_qty, {"fieldtype": "Float"}) }}</strong></td>
+				<td colspan="{{ 4 if has_lots else 3 }}"></td>
+			</tr>
+		</tfoot>
+	</table>
+
+	{% if doc.remarks %}
+	<div class="ef-box">
+		<h2>Remarques</h2>
+		<div>{{ doc.remarks }}</div>
+	</div>
+	{% endif %}
+
+	<table class="ef-sign">
+		<tr>
+			<td><div class="label">Préparé par</div><div class="line"></div><div class="hint">Nom, date et signature</div></td>
+			<td><div class="label">{{ "Reçu par" if purpose == "Material Receipt" else "Remis par" }}</div><div class="line"></div><div class="hint">Nom, date et signature</div></td>
+			<td><div class="label">{{ "Vérifié par" if purpose == "Material Receipt" else ("Autorisé par" if purpose == "Material Issue" else "Reçu par") }}</div><div class="line"></div><div class="hint">Nom, date et signature</div></td>
+		</tr>
+	</table>
+
+	<div class="ef-foot">{{ doc.name }} &middot; imprimé le {{ frappe.format(frappe.utils.now_datetime(), {"fieldtype": "Datetime"}) }}</div>
+	{% if footer and not no_letterhead %}<div class="ef-letterfoot">{{ footer }}</div>{% endif %}
+</div>

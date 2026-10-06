@@ -1,0 +1,91 @@
+{#- Payment Entry on a normal printer: reçu de paiement (encaissement) / bon de décaissement, French labels. -#}
+{%- set titles = {"Receive": "Reçu de paiement", "Pay": "Bon de décaissement", "Internal Transfer": "Transfert interne"} -%}
+{%- set parties = {"Customer": "Client", "Supplier": "Fournisseur", "Employee": "Employé", "Shareholder": "Actionnaire"} -%}
+{%- set currency = doc.paid_to_account_currency if doc.payment_type == "Receive" else doc.paid_from_account_currency -%}
+{%- set amount = doc.received_amount if doc.payment_type == "Receive" else doc.paid_amount -%}
+<div class="ef">
+	{% if letter_head and not no_letterhead %}<div class="ef-letterhead">{{ letter_head }}</div>{% endif %}
+
+	<div class="ef-head">
+		<div>
+			<h1>{{ titles.get(doc.payment_type, doc.payment_type) }}{% if doc.docstatus == 0 %}<span class="ef-draft">Brouillon</span>{% elif doc.docstatus == 2 %}<span class="ef-draft">Annulé</span>{% endif %}</h1>
+			<div class="ef-sub">{{ doc.mode_of_payment or "" }}{% if doc.reference_no %} &middot; réf. {{ doc.reference_no }}{% if doc.reference_date %} du {{ frappe.format(doc.reference_date, {"fieldtype": "Date"}) }}{% endif %}{% endif %}</div>
+		</div>
+		<table class="ef-meta">
+			<tr><th>N°</th><td>{{ doc.name }}</td></tr>
+			<tr><th>Date</th><td>{{ frappe.format(doc.posting_date, {"fieldtype": "Date"}) }}</td></tr>
+			<tr><th>Société</th><td>{{ doc.company }}</td></tr>
+		</table>
+	</div>
+
+	<table class="ef-info">
+		<tr>
+			<th>{{ "Reçu de" if doc.payment_type == "Receive" else "Payé à" }}</th><td><strong>{{ doc.party_name or doc.party or "—" }}</strong>{% if doc.party_type %}<div class="desc">{{ parties.get(doc.party_type, doc.party_type) }}{% if doc.party and doc.party != doc.party_name %} &middot; {{ doc.party }}{% endif %}</div>{% endif %}</td>
+			<th>{{ "Encaissé sur" if doc.payment_type == "Receive" else "Décaissé de" }}</th><td>{{ doc.paid_to if doc.payment_type == "Receive" else doc.paid_from }}</td>
+		</tr>
+		<tr>
+			<th>Reçu par</th><td>{{ frappe.db.get_value("User", doc.owner, "full_name") or doc.owner }}</td>
+			<th>Mode</th><td>{{ doc.mode_of_payment or "—" }}</td>
+		</tr>
+	</table>
+
+	<div class="ef-amount">
+		<div><div class="desc">Montant</div><div class="big">{{ frappe.format(amount, {"fieldtype": "Currency"}, currency=currency) }}</div></div>
+		<div class="words">{{ frappe.utils.money_in_words(amount, currency) }}</div>
+	</div>
+
+	{% if doc.references %}
+	<table class="ef-items">
+		<thead>
+			<tr>
+				<th>Document</th>
+				<th>Date d'échéance</th>
+				<th class="r">Montant</th>
+				<th class="r">Affecté</th>
+				<th class="r">Reste dû à ce jour</th>
+			</tr>
+		</thead>
+		<tbody>
+		{%- for ref in doc.references -%}
+			<tr>
+				<td><span class="code">{{ ref.reference_name }}</span><div class="desc">{{ ref.reference_doctype }}</div></td>
+				<td>{{ frappe.format(ref.due_date, {"fieldtype": "Date"}) if ref.due_date else "—" }}</td>
+				<td class="r amt">{{ frappe.format(ref.total_amount, {"fieldtype": "Currency"}, currency=currency) }}</td>
+				<td class="r amt">{{ frappe.format(ref.allocated_amount, {"fieldtype": "Currency"}, currency=currency) }}</td>
+				{#- the reference row's own outstanding is rewritten by later reconciliations; the document itself knows what is still due -#}
+				{%- set due_now = frappe.db.get_value(ref.reference_doctype, ref.reference_name, "outstanding_amount") if ref.reference_doctype in ("Sales Invoice", "Purchase Invoice") else None -%}
+				<td class="r amt"><strong>{{ frappe.format(due_now, {"fieldtype": "Currency"}, currency=currency) if due_now is not none else "—" }}</strong></td>
+			</tr>
+		{%- endfor -%}
+		</tbody>
+		<tfoot>
+			<tr>
+				<td colspan="3" class="r"><strong>Total affecté</strong></td>
+				<td class="r amt"><strong>{{ frappe.format(doc.total_allocated_amount, {"fieldtype": "Currency"}, currency=currency) }}</strong></td>
+				<td></td>
+			</tr>
+		</tfoot>
+	</table>
+	{% endif %}
+
+	{% if doc.unallocated_amount %}
+	<div class="ef-box"><strong>Acompte non affecté :</strong> {{ frappe.format(doc.unallocated_amount, {"fieldtype": "Currency"}, currency=currency) }} — porté au crédit du compte {{ parties.get(doc.party_type, doc.party_type) | lower }}.</div>
+	{% endif %}
+	{% if doc.deductions %}
+	<div class="ef-box"><h2>Écarts</h2>{% for d in doc.deductions %}<div>{{ d.account }} : {{ frappe.format(d.amount, {"fieldtype": "Currency"}, currency=currency) }}</div>{% endfor %}</div>
+	{% endif %}
+	{% if doc.remarks and doc.custom_remarks %}
+	<div class="ef-box"><h2>Remarques</h2><div>{{ doc.remarks }}</div></div>
+	{% endif %}
+
+	<table class="ef-sign">
+		<tr>
+			<td><div class="label">{{ "Caissier / Reçu par" if doc.payment_type == "Receive" else "Préparé par" }}</div><div class="line"></div><div class="hint">Nom, date et signature</div></td>
+			<td><div class="label">{{ parties.get(doc.party_type, "Partie") }}</div><div class="line"></div><div class="hint">Nom, date et signature</div></td>
+			<td><div class="label">{{ "Approuvé par" if doc.payment_type == "Pay" else "Cachet" }}</div><div class="line"></div><div class="hint">&nbsp;</div></td>
+		</tr>
+	</table>
+
+	<div class="ef-foot">{{ doc.name }} &middot; imprimé le {{ frappe.format(frappe.utils.now_datetime(), {"fieldtype": "Datetime"}) }}</div>
+	{% if footer and not no_letterhead %}<div class="ef-letterfoot">{{ footer }}</div>{% endif %}
+</div>

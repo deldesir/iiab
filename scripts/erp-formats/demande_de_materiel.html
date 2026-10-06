@@ -5,15 +5,15 @@
                     "Partially Ordered": "Partiellement commandée", "Partially Received": "Partiellement reçue", "Ordered": "Commandée",
                     "Issued": "Émise", "Transferred": "Transférée", "Received": "Reçue", "Manufactured": "Fabriquée"} -%}
 {%- set is_transfer = doc.material_request_type == "Material Transfer" -%}
-<div class="dm">
-	{% if letter_head and not no_letterhead %}<div class="dm-letterhead">{{ letter_head }}</div>{% endif %}
+<div class="ef">
+	{% if letter_head and not no_letterhead %}<div class="ef-letterhead">{{ letter_head }}</div>{% endif %}
 
-	<div class="dm-head">
+	<div class="ef-head">
 		<div>
 			<h1>Demande de matériel</h1>
-			<div class="dm-type">{{ types.get(doc.material_request_type, doc.material_request_type) }}{% if doc.title and doc.title != doc.name %} &middot; {{ doc.title }}{% endif %}</div>
+			<div class="ef-sub">{{ types.get(doc.material_request_type, doc.material_request_type) }}{% if doc.title and doc.title != doc.name %} &middot; {{ doc.title }}{% endif %}</div>
 		</div>
-		<table class="dm-meta">
+		<table class="ef-meta">
 			<tr><th>N°</th><td>{{ doc.name }}</td></tr>
 			<tr><th>Date</th><td>{{ frappe.format(doc.transaction_date, {"fieldtype": "Date"}) }}</td></tr>
 			<tr><th>Requis pour le</th><td>{{ frappe.format(doc.schedule_date, {"fieldtype": "Date"}) if doc.schedule_date else "—" }}</td></tr>
@@ -21,7 +21,7 @@
 		</table>
 	</div>
 
-	<table class="dm-info">
+	<table class="ef-info">
 		<tr>
 			<th>Société</th><td>{{ doc.company }}</td>
 			<th>Demandé par</th><td>{{ frappe.db.get_value("User", doc.owner, "full_name") or doc.owner }}</td>
@@ -37,7 +37,7 @@
 		</tr>
 	</table>
 
-	<table class="dm-items">
+	<table class="ef-items">
 		<thead>
 			<tr>
 				<th class="c">#</th>
@@ -84,13 +84,13 @@
 	</table>
 
 	{% if doc.terms %}
-	<div class="dm-terms">
+	<div class="ef-box">
 		<h2>Remarques</h2>
 		<div>{{ doc.terms }}</div>
 	</div>
 	{% endif %}
 
-	<table class="dm-sign">
+	<table class="ef-sign">
 		<tr>
 			<td><div class="label">Demandeur</div><div class="line"></div><div class="hint">Nom, date et signature</div></td>
 			<td><div class="label">Approuvé par</div><div class="line"></div><div class="hint">Nom, date et signature</div></td>
@@ -98,6 +98,6 @@
 		</tr>
 	</table>
 
-	<div class="dm-foot">{{ doc.name }} &middot; imprimé le {{ frappe.format(frappe.utils.now_datetime(), {"fieldtype": "Datetime"}) }}</div>
-	{% if footer and not no_letterhead %}<div class="dm-letterfoot">{{ footer }}</div>{% endif %}
+	<div class="ef-foot">{{ doc.name }} &middot; imprimé le {{ frappe.format(frappe.utils.now_datetime(), {"fieldtype": "Datetime"}) }}</div>
+	{% if footer and not no_letterhead %}<div class="ef-letterfoot">{{ footer }}</div>{% endif %}
 </div>
