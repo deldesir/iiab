@@ -9,7 +9,7 @@
 #   PREFLIGHT_ONLY=1   run every check that can refuse the upgrade, change nothing
 #   ALLOW_DISCARD=ERE  paths whose local changes were verified by hand as disposable
 #   FORK_OWNER=name    GitHub owner whose forks the bench tracks (default: deldesir);
-#                      apps listed in APP_OWNER (payments -> frappe) follow their own upstream
+#                      apps listed in APP_OWNER (payments, whatsapp -> frappe) follow their own upstream
 # The run ends with UPGRADE-OK or UPGRADE-FAILED: <reason> as the last log line.
 #
 # Order: backup -> fetch (fail early, services still up) -> stop web+workers ->
@@ -20,11 +20,11 @@
 set -uo pipefail
 B=/home/frappe/frappe-bench
 SITE=site.local
-APPS="frappe erpnext hrms crm builder webshop payments pos_next"
+APPS="frappe erpnext hrms whatsapp crm builder webshop payments pos_next"
 FORK_OWNER=${FORK_OWNER:-deldesir}
 # Apps that are not forks track their upstream directly; name the GitHub owner whose
 # remote to follow. Everything else follows FORK_OWNER.
-declare -A APP_OWNER=( [payments]=frappe )
+declare -A APP_OWNER=( [payments]=frappe [whatsapp]=frappe )
 # Extra paths (ERE) whose local changes were checked by hand and may be discarded on
 # THIS box, e.g. a hotfix that has since landed in the fork. Empty = none.
 ALLOW_DISCARD=${ALLOW_DISCARD:-}
