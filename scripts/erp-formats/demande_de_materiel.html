@@ -1,0 +1,103 @@
+{#- Demande de matériel: Material Request on a normal (Letter/A4) printer, French labels. -#}
+{%- set types = {"Purchase": "Achat", "Material Transfer": "Transfert de stock", "Material Issue": "Sortie de stock",
+                 "Manufacture": "Fabrication", "Customer Provided": "Fourni par le client", "Subcontracting": "Sous-traitance"} -%}
+{%- set statuses = {"Draft": "Brouillon", "Submitted": "Soumise", "Stopped": "Arrêtée", "Cancelled": "Annulée", "Pending": "En attente",
+                    "Partially Ordered": "Partiellement commandée", "Partially Received": "Partiellement reçue", "Ordered": "Commandée",
+                    "Issued": "Émise", "Transferred": "Transférée", "Received": "Reçue", "Manufactured": "Fabriquée"} -%}
+{%- set is_transfer = doc.material_request_type == "Material Transfer" -%}
+<div class="dm">
+	{% if letter_head and not no_letterhead %}<div class="dm-letterhead">{{ letter_head }}</div>{% endif %}
+
+	<div class="dm-head">
+		<div>
+			<h1>Demande de matériel</h1>
+			<div class="dm-type">{{ types.get(doc.material_request_type, doc.material_request_type) }}{% if doc.title and doc.title != doc.name %} &middot; {{ doc.title }}{% endif %}</div>
+		</div>
+		<table class="dm-meta">
+			<tr><th>N°</th><td>{{ doc.name }}</td></tr>
+			<tr><th>Date</th><td>{{ frappe.format(doc.transaction_date, {"fieldtype": "Date"}) }}</td></tr>
+			<tr><th>Requis pour le</th><td>{{ frappe.format(doc.schedule_date, {"fieldtype": "Date"}) if doc.schedule_date else "—" }}</td></tr>
+			<tr><th>Statut</th><td>{{ statuses.get(doc.status, doc.status) }}{% if doc.docstatus == 0 %} (non soumise){% endif %}</td></tr>
+		</table>
+	</div>
+
+	<table class="dm-info">
+		<tr>
+			<th>Société</th><td>{{ doc.company }}</td>
+			<th>Demandé par</th><td>{{ frappe.db.get_value("User", doc.owner, "full_name") or doc.owner }}</td>
+		</tr>
+		<tr>
+			{% if is_transfer %}
+			<th>Entrepôt source</th><td>{{ doc.set_from_warehouse or "selon lignes" }}</td>
+			<th>Entrepôt destination</th><td>{{ doc.set_warehouse or "selon lignes" }}</td>
+			{% else %}
+			<th>Entrepôt</th><td>{{ doc.set_warehouse or "selon lignes" }}</td>
+			<th>Client</th><td>{{ doc.customer or "—" }}</td>
+			{% endif %}
+		</tr>
+	</table>
+
+	<table class="dm-items">
+		<thead>
+			<tr>
+				<th class="c">#</th>
+				<th>Code</th>
+				<th>Désignation</th>
+				<th class="r">Quantité</th>
+				<th>Unité</th>
+				{% if is_transfer %}<th>De</th><th>Vers</th>{% else %}<th>Entrepôt</th>{% endif %}
+				<th>Requis le</th>
+			</tr>
+		</thead>
+		<tbody>
+		{%- set ns = namespace(total_qty=0) -%}
+		{%- for row in doc.items -%}
+			{%- set ns.total_qty = ns.total_qty + row.qty -%}
+			<tr>
+				<td class="c">{{ loop.index }}</td>
+				<td class="code">{{ row.item_code }}</td>
+				<td>
+					<div class="name">{{ row.item_name }}</div>
+					{%- if row.description and row.description.strip() and row.description.strip() != row.item_name -%}
+						<div class="desc">{{ row.description }}</div>
+					{%- endif -%}
+				</td>
+				<td class="r qty">{{ frappe.format(row.qty, {"fieldtype": "Float"}) }}</td>
+				<td>{{ row.uom }}{% if row.uom != row.stock_uom and row.conversion_factor and row.conversion_factor != 1 %}<div class="desc">= {{ frappe.format(row.stock_qty, {"fieldtype": "Float"}) }} {{ row.stock_uom }}</div>{% endif %}</td>
+				{% if is_transfer %}
+				<td>{{ row.from_warehouse or doc.set_from_warehouse or "—" }}</td>
+				<td>{{ row.warehouse or doc.set_warehouse or "—" }}</td>
+				{% else %}
+				<td>{{ row.warehouse or doc.set_warehouse or "—" }}</td>
+				{% endif %}
+				<td>{{ frappe.format(row.schedule_date, {"fieldtype": "Date"}) if row.schedule_date else "—" }}</td>
+			</tr>
+		{%- endfor -%}
+		</tbody>
+		<tfoot>
+			<tr>
+				<td colspan="3" class="r"><strong>{{ doc.items | length }} ligne{{ "s" if doc.items | length > 1 else "" }}</strong></td>
+				<td class="r qty"><strong>{{ frappe.format(ns.total_qty, {"fieldtype": "Float"}) }}</strong></td>
+				<td colspan="{{ 4 if is_transfer else 3 }}"></td>
+			</tr>
+		</tfoot>
+	</table>
+
+	{% if doc.terms %}
+	<div class="dm-terms">
+		<h2>Remarques</h2>
+		<div>{{ doc.terms }}</div>
+	</div>
+	{% endif %}
+
+	<table class="dm-sign">
+		<tr>
+			<td><div class="label">Demandeur</div><div class="line"></div><div class="hint">Nom, date et signature</div></td>
+			<td><div class="label">Approuvé par</div><div class="line"></div><div class="hint">Nom, date et signature</div></td>
+			<td><div class="label">{{ "Magasinier (remise)" if is_transfer or doc.material_request_type == "Material Issue" else "Reçu par" }}</div><div class="line"></div><div class="hint">Nom, date et signature</div></td>
+		</tr>
+	</table>
+
+	<div class="dm-foot">{{ doc.name }} &middot; imprimé le {{ frappe.format(frappe.utils.now_datetime(), {"fieldtype": "Datetime"}) }}</div>
+	{% if footer and not no_letterhead %}<div class="dm-letterfoot">{{ footer }}</div>{% endif %}
+</div>
