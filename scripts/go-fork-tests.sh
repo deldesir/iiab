@@ -17,9 +17,9 @@
 #     clones it per test. The dump runs CREATE EXTENSION vector, and pgvector isn't a trusted extension, so the role
 #     has to be SUPERUSER - exactly as mailroom's own CI grants it. courier: role courier_test/temba owning database
 #     courier_test, which the suite resets from testsuite/testdata/schema.sql.
-#   - Valkey at host "valkey" (an /etc/hosts alias of 127.0.0.2). The suites FLUSHDB databases 0 and 16-31, so
+#   - Valkey at host "valkey" (an /etc/hosts alias of 127.0.0.2). The suites claim databases from a pool coordinated on database 16 (17-63), so
 #     they must never see the live instance on 127.0.0.1 (16 databases): a dedicated instance runs on 127.0.0.2:6379
-#     with 32 databases as the transient unit go-test-valkey, nothing persisted.
+#     with 64 databases as the transient unit go-test-valkey, nothing persisted.
 #   - Elasticsearch, DynamoDB and S3 are not deployed here. The forks' test suites run without them when
 #     MAILROOM_TEST_NANORP / COURIER_TEST_NANORP is set: searches go to Postgres (the fork's mode), tests that
 #     assert on what those services hold are skipped, and mailroom's template gets the fork's nanorp_indexes
@@ -82,18 +82,18 @@ ensure_host_alias() { # ip name comment
 	printf '%s %s   # %s\n' "$1" "$2" "$3" >> /etc/hosts
 }
 ensure_host_alias 127.0.0.1 postgres "Go test suites"
-ensure_host_alias $TEST_VALKEY_IP valkey "Go test suites (dedicated test instance, 32 databases)"
+ensure_host_alias $TEST_VALKEY_IP valkey "Go test suites (dedicated test instance, 64 databases)"
 
 # --- dedicated test Valkey ---------------------------------------------------------------------------------------
 if ! systemctl is-active --quiet $TEST_VALKEY_UNIT; then
 	log "starting $TEST_VALKEY_UNIT on $TEST_VALKEY_IP:6379"
 	systemd-run --unit=$TEST_VALKEY_UNIT --collect --quiet \
-		--description="Valkey for the Go fork test suites ($TEST_VALKEY_IP:6379, 32 databases)" \
-		/usr/bin/valkey-server --bind $TEST_VALKEY_IP --port 6379 --databases 32 --save "" --appendonly no --dir /var/tmp --loglevel warning \
+		--description="Valkey for the Go fork test suites ($TEST_VALKEY_IP:6379, 64 databases)" \
+		/usr/bin/valkey-server --bind $TEST_VALKEY_IP --port 6379 --databases 64 --save "" --appendonly no --dir /var/tmp --loglevel warning \
 		|| die "could not start $TEST_VALKEY_UNIT"
 	sleep 1
 fi
-[[ $(valkey-cli -h $TEST_VALKEY_IP -p 6379 CONFIG GET databases | tail -1) == 32 ]] || die "test valkey on $TEST_VALKEY_IP:6379 doesn't have 32 databases"
+[[ $(valkey-cli -h $TEST_VALKEY_IP -p 6379 CONFIG GET databases | tail -1) == 64 ]] || die "test valkey on $TEST_VALKEY_IP:6379 doesn't have 64 databases (stop the go-test-valkey unit and rerun)"
 
 # --- Postgres roles and databases --------------------------------------------------------------------------------
 psql_admin -c "SELECT 1" >/dev/null || die "postgresql-iiab not reachable on :5432"
