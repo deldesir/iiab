@@ -20,6 +20,8 @@ erpnext_host_name: "{% if iiab_ssl_enabled | default(False) %}https://{{ iiab_ss
 # Each entry needs: name (pip/git name), branch, and app_name (bench install-app name).
 erpnext_extra_apps:
   - { name: "https://github.com/deldesir/hrms.git",    branch: "develop", app_name: "hrms" }
+  # crm (develop) hard-requires the whatsapp app: it must be installed before crm
+  - { name: "whatsapp",   branch: "develop", app_name: "whatsapp" }
   - { name: "https://github.com/deldesir/crm.git",     branch: "develop", app_name: "crm" }
   - { name: "https://github.com/deldesir/builder.git",  branch: "develop", app_name: "builder" }
   - { name: "payments",   branch: "develop", app_name: "payments" }
