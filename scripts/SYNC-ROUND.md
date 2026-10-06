@@ -100,7 +100,32 @@ Order: canary box first; the idle boxes in parallel; the live tills one at a
 time inside their closed window. `bench-smoke.sh` after each box, before the
 next. `PREFLIGHT_ONLY=1` on a box first when a fork jumped far.
 
-## 5. Known noise
+## 5. Frappe apps: what the 2026-10 round taught
+
+- `crm` (develop) hard-requires the `whatsapp` app (`required_apps`, a linked
+  `@whatsapp/ui` package, patches importing `whatsapp.*`). The erpnext role
+  installs it before crm; an existing bench needs a one-time
+  `bench get-app whatsapp --branch develop` + `bench --site <site> install-app
+  whatsapp`, and `bench-upgrade.sh` fast-forwards it from upstream like payments.
+- `install-app` on a running bench leaves the web workers with the old app list:
+  the site answers 500 until the `frappe-bench-*` units (minus redis) are
+  restarted. `bench-upgrade.sh` restarts them itself; restart by hand after an
+  install done ahead of it.
+- `POS Settings` exists in both erpnext and pos_next; pos_next syncs last and
+  wins, so ERPNext's own fields live in pos_next's DocType JSON (POSNext#32).
+- The desk under the sub-path: upstream code keeps adding bare `/desk` and
+  `/app` spellings. The fork spells the prefix at the source (frappe#11:
+  `frappe.boot.subpath_prefix`, the router's `desk_path`, `subpath.js` edge
+  net). After a frappe sync, drive the desk in a headless browser on one box and
+  check that `location.pathname` keeps the prefix after `frappe.set_route(...)`
+  (a list, a workspace, a form, a cross-shell route), that no `a[href^="/desk"]`
+  is left on the page, and that no 30x hops are seen for `/api/method` or
+  `/website_script.js` during a desk session. Builder page data scripts run in
+  Builder's own sandbox (no `frappe.call`); the storefront's `/store` script
+  uses the sandbox helpers and lives in the storefront repo as
+  `data_script.py`.
+
+## 6. Known noise
 
 - With `rapidpro_centrifugo_enabled` off, courier and mailroom log one
   `centrifugo not reachable` error at startup: that port is closed by design;
