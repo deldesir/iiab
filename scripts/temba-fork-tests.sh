@@ -27,6 +27,16 @@ if [ ! -f temba/settings.py ]; then
   exit 1
 fi
 
+# the test runner claims one valkey database per process from a pool coordinated on database 16 (17-63, see
+# temba/testrunner.py and TEST_VALKEY_POOL), which the live instance's 16 databases cannot hold: tests use the
+# dedicated 64-database instance that scripts/go-fork-tests.sh starts (transient unit go-test-valkey on 127.0.0.2)
+TEST_VALKEY_IP="${TEST_VALKEY_IP:-127.0.0.2}"
+_dbs=$(valkey-cli -h "$TEST_VALKEY_IP" -p 6379 CONFIG GET databases 2>/dev/null | tail -1)
+if [ "${_dbs:-0}" -lt 64 ] 2>/dev/null || [ -z "$_dbs" ]; then
+  echo "no 64-database test valkey on ${TEST_VALKEY_IP}:6379 (got '${_dbs:-none}'); as root: SETUP_ONLY=1 scripts/go-fork-tests.sh" >&2
+  exit 1
+fi
+
 # the database password lives in the rendered settings; the test settings never repeat it
 DB_PASSWORD=$(python3 - <<'PY'
 import re, pathlib
@@ -44,7 +54,7 @@ _db = DATABASES["default"]
 _db.update({"HOST": "127.0.0.1", "PORT": "5432", "PASSWORD": "${DB_PASSWORD}"})
 DATABASES = {"default": _db, "readonly": _db.copy()}
 
-_valkey = "redis://127.0.0.1:6379/10"
+_valkey = "redis://${TEST_VALKEY_IP}:6379/10"
 CACHES["default"]["LOCATION"] = _valkey
 CELERY_BROKER_URL = _valkey
 
