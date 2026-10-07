@@ -1,0 +1,125 @@
+{#- Purchase Receipt on a normal printer: bon de réception fournisseur (or retour fournisseur), French labels. -#}
+{%- set statuses = {"Draft": "Brouillon", "To Bill": "À facturer", "Completed": "Terminée", "Return Issued": "Retour émis", "Cancelled": "Annulée", "Closed": "Clôturée"} -%}
+{%- set has_rejected = doc.items | selectattr("rejected_qty") | list | length -%}
+{%- set has_lots = doc.items | selectattr("batch_no") | list | length or doc.items | selectattr("serial_no") | list | length -%}
+{%- set orders = doc.items | map(attribute="purchase_order") | select | unique | list -%}
+{%- set show_amounts = doc.grand_total and doc.grand_total != 0 -%}
+<div class="ef">
+	{% if letter_head and not no_letterhead %}<div class="ef-letterhead">{{ letter_head }}</div>{% endif %}
+
+	<div class="ef-head">
+		<div>
+			<h1>{{ "Retour fournisseur" if doc.is_return else "Bon de réception" }}{% if doc.docstatus == 0 %}<span class="ef-draft">Brouillon</span>{% elif doc.docstatus == 2 %}<span class="ef-draft">Annulé</span>{% endif %}</h1>
+			<div class="ef-sub">{{ statuses.get(doc.status, doc.status) }}{% if doc.is_return and doc.return_against %} &middot; contre {{ doc.return_against }}{% endif %}</div>
+		</div>
+		<table class="ef-meta">
+			<tr><th>N°</th><td>{{ doc.name }}</td></tr>
+			<tr><th>Date</th><td>{{ frappe.format(doc.posting_date, {"fieldtype": "Date"}) }} {{ frappe.format(doc.posting_time, {"fieldtype": "Time"}) }}</td></tr>
+			{% if orders %}<tr><th>Commande(s)</th><td>{{ orders | join(", ") }}</td></tr>{% endif %}
+			{% if doc.supplier_delivery_note %}<tr><th>Bon de livraison</th><td>{{ doc.supplier_delivery_note }}</td></tr>{% endif %}
+		</table>
+	</div>
+
+	<table class="ef-info">
+		<tr>
+			<th>Fournisseur</th><td><strong>{{ doc.supplier_name or doc.supplier }}</strong>{% if doc.supplier and doc.supplier != doc.supplier_name %}<div class="desc">{{ doc.supplier }}</div>{% endif %}</td>
+			<th>Réceptionné par</th><td>{{ frappe.db.get_value("User", doc.owner, "full_name") or doc.owner }}</td>
+		</tr>
+		<tr>
+			<th>Société</th><td>{{ doc.company }}</td>
+			<th>Entrepôt</th><td>{{ doc.set_warehouse or "selon lignes" }}{% if has_rejected and doc.rejected_warehouse %}<div class="desc">Rejets : {{ doc.rejected_warehouse }}</div>{% endif %}</td>
+		</tr>
+		{% if doc.transporter_name or doc.lr_no %}
+		<tr>
+			<th>Transporteur</th><td>{{ doc.transporter_name or "—" }}</td>
+			<th>Réf. transport</th><td>{{ doc.lr_no or "—" }}{% if doc.lr_date %} du {{ frappe.format(doc.lr_date, {"fieldtype": "Date"}) }}{% endif %}</td>
+		</tr>
+		{% endif %}
+	</table>
+
+	<table class="ef-items">
+		<thead>
+			<tr>
+				<th class="c">#</th>
+				<th>Code</th>
+				<th>Désignation</th>
+				<th class="r">Reçue</th>
+				{% if has_rejected %}<th class="r">Acceptée</th><th class="r">Rejetée</th>{% endif %}
+				<th>Unité</th>
+				<th>Entrepôt</th>
+				{% if has_lots %}<th>Lot / N° série</th>{% endif %}
+				{% if show_amounts %}<th class="r">Prix unitaire</th><th class="r">Montant</th>{% endif %}
+			</tr>
+		</thead>
+		<tbody>
+		{%- set ns = namespace(received=0, accepted=0, rejected=0) -%}
+		{%- for row in doc.items -%}
+			{%- set ns.received = ns.received + (row.received_qty or row.qty) -%}
+			{%- set ns.accepted = ns.accepted + row.qty -%}
+			{%- set ns.rejected = ns.rejected + (row.rejected_qty or 0) -%}
+			<tr>
+				<td class="c">{{ loop.index }}</td>
+				<td class="code">{{ row.item_code }}</td>
+				<td>
+					<div class="name">{{ row.item_name }}</div>
+					{%- if row.description and row.description.strip() and row.description.strip() != row.item_name -%}
+						<div class="desc">{{ row.description }}</div>
+					{%- endif -%}
+				</td>
+				<td class="r qty">{{ frappe.format(row.received_qty or row.qty, {"fieldtype": "Float"}) }}</td>
+				{% if has_rejected %}
+				<td class="r qty">{{ frappe.format(row.qty, {"fieldtype": "Float"}) }}</td>
+				<td class="r qty">{{ frappe.format(row.rejected_qty or 0, {"fieldtype": "Float"}) }}</td>
+				{% endif %}
+				<td>{{ row.uom }}{% if row.uom != row.stock_uom and row.conversion_factor and row.conversion_factor != 1 %}<div class="desc">= {{ frappe.format(row.stock_qty, {"fieldtype": "Float"}) }} {{ row.stock_uom }}</div>{% endif %}</td>
+				<td>{{ row.warehouse or doc.set_warehouse or "—" }}</td>
+				{% if has_lots %}<td class="code">{{ row.batch_no or "" }}{% if row.serial_no %}<div class="desc">{{ row.serial_no | replace("\n", ", ") }}</div>{% endif %}</td>{% endif %}
+				{% if show_amounts %}
+				<td class="r amt">{{ frappe.format(row.rate, {"fieldtype": "Currency"}, currency=doc.currency) }}</td>
+				<td class="r amt">{{ frappe.format(row.amount, {"fieldtype": "Currency"}, currency=doc.currency) }}</td>
+				{% endif %}
+			</tr>
+		{%- endfor -%}
+		</tbody>
+		<tfoot>
+			<tr>
+				<td colspan="3" class="r"><strong>{{ doc.items | length }} ligne{{ "s" if doc.items | length > 1 else "" }}</strong></td>
+				<td class="r qty"><strong>{{ frappe.format(ns.received, {"fieldtype": "Float"}) }}</strong></td>
+				{% if has_rejected %}<td class="r qty"><strong>{{ frappe.format(ns.accepted, {"fieldtype": "Float"}) }}</strong></td><td class="r qty"><strong>{{ frappe.format(ns.rejected, {"fieldtype": "Float"}) }}</strong></td>{% endif %}
+				<td colspan="{{ 2 + (1 if has_lots else 0) }}"></td>
+				{% if show_amounts %}<td class="r"><strong>Total</strong></td><td class="r amt"><strong>{{ frappe.format(doc.total, {"fieldtype": "Currency"}, currency=doc.currency) }}</strong></td>{% endif %}
+			</tr>
+			{% if show_amounts and doc.total_taxes_and_charges %}
+			<tr>
+				<td colspan="{{ 6 + (2 if has_rejected else 0) + (1 if has_lots else 0) }}" class="r">Taxes et frais</td>
+				<td class="r amt">{{ frappe.format(doc.total_taxes_and_charges, {"fieldtype": "Currency"}, currency=doc.currency) }}</td>
+			</tr>
+			{% endif %}
+			{% if show_amounts and doc.grand_total != doc.total %}
+			<tr>
+				<td colspan="{{ 6 + (2 if has_rejected else 0) + (1 if has_lots else 0) }}" class="r"><strong>Total général</strong></td>
+				<td class="r amt"><strong>{{ frappe.format(doc.rounded_total if (doc.rounded_total and not doc.disable_rounded_total) else doc.grand_total, {"fieldtype": "Currency"}, currency=doc.currency) }}</strong></td>
+			</tr>
+			{% endif %}
+		</tfoot>
+	</table>
+
+	{% if doc.remarks or doc.terms %}
+	<div class="ef-box">
+		<h2>Remarques</h2>
+		{% if doc.remarks %}<div>{{ doc.remarks }}</div>{% endif %}
+		{% if doc.terms %}<div class="desc">{{ doc.terms }}</div>{% endif %}
+	</div>
+	{% endif %}
+
+	<table class="ef-sign">
+		<tr>
+			<td><div class="label">Réceptionné par</div><div class="line"></div><div class="hint">Nom, date et signature</div></td>
+			<td><div class="label">Vérifié par</div><div class="line"></div><div class="hint">Nom, date et signature</div></td>
+			<td><div class="label">Livreur / Fournisseur</div><div class="line"></div><div class="hint">Nom, date et signature</div></td>
+		</tr>
+	</table>
+
+	<div class="ef-foot">{{ doc.name }} &middot; imprimé le {{ frappe.format(frappe.utils.now_datetime(), {"fieldtype": "Datetime"}) }}</div>
+	{% if footer and not no_letterhead %}<div class="ef-letterfoot">{{ footer }}</div>{% endif %}
+</div>
