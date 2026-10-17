@@ -166,5 +166,10 @@ next. `PREFLIGHT_ONLY=1` on a box first when a fork jumped far.
 - mempalace 3.11 records the embedder that built a palace and refuses a
   mismatch; a palace with no recorded model opens with the configured one
   (`MEMPALACE_EMBEDDING_MODEL=minilm` here) and warns. Its test suite needs
-  `hypothesis`, which the gateway venv does not carry: supply it with
-  `uv pip install --target <dir> hypothesis` and `PYTHONPATH=<worktree>:<dir>`.
+  `hypothesis` and `scipy`, which the gateway venv does not carry, and
+  `mempalace/__init__.py` strips every `PYTHONPATH` entry from `sys.path`, so
+  the environment variable is useless: `uv pip install --python <venv python>
+  --target <dir> hypothesis scipy` (then delete the `numpy*` it drags into
+  `<dir>`, the venv's own must win), make `<dir>` readable by the service user,
+  and run `sudo -u iiab-admin … python -m pytest tests -o "pythonpath=. <dir>"`
+  from the worktree. Four permission-gate tests fail under root by design.
