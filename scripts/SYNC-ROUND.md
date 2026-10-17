@@ -134,3 +134,37 @@ next. `PREFLIGHT_ONLY=1` on a box first when a fork jumped far.
   retry is normal.
 - The Error Log count in `bench-smoke.sh` is site-local time; pass `since` in
   that zone.
+
+## 7. What the 2026-10-18 round taught
+
+- temba `LLM_TYPES` model definitions are dicts since v26.3.144
+  (`{"max_output_tokens": N, "roles": "TGC"}`); a bare integer fails the
+  startup assertion in `temba/ai/types/__init__.py`. The fork's `custom_ai`
+  entry in `temba/settings_common.py` follows the new shape; the rendered
+  `settings.py` does not define `LLM_TYPES`, so nothing to re-render.
+  v26.3.140 dropped the Anthropic LLM type (and the `anthropic` dependency).
+- `users.0024_lowercase_emails` / `orgs.0193_lowercase_invitation_emails`
+  rewrite emails in place: check for pairs that differ only by case before
+  migrating (`select lower(email), count(*) … having count(*) > 1`).
+- Flow spec 14.7.0: temba v26.3.138+ and mailroom on goflow 0.300.0 go out
+  together; the editor refuses revisions from an older minor spec.
+- hermes-agent upstream re-numbered its tags (`v2026.9.24` → `v0.22.x`); the
+  `v0.22.2` tag descends from `v2026.9.24`. Bump the pin only after the staged
+  test (scratch gateway copy, `uv sync` against a worktree of the tag, the 3
+  patches applied, gateway tests green).
+- Running `git` as root inside the service-user checkouts (`/opt/iiab/rapidpro`,
+  `wuzapi`, `hermes-agent`, `mempalace`, `rivebot`) leaves root-owned refs,
+  packs and index files; the next role run or `sudo -u iiab-admin git` then
+  fails with "dubious ownership" or permission errors. Fetch and merge as the
+  owner (`sudo -u iiab-admin git -C …`), and after any root-run git:
+  `chown -R iiab-admin:iiab-admin <repo>/.git`.
+- POSNext upstream renamed the Governorate/District DocTypes to
+  `POS Governorate` / `POS District` (patch `v2_4_0.rename_locations_doctypes`,
+  idempotent, runs at migrate). frappe upstream's new `mobile_nav.js` spells
+  bare `/desk/…` routes; the fork's `subpath.js` edge net prefixes them at
+  runtime, the headless desk check (§5) is what proves it.
+- mempalace 3.11 records the embedder that built a palace and refuses a
+  mismatch; a palace with no recorded model opens with the configured one
+  (`MEMPALACE_EMBEDDING_MODEL=minilm` here) and warns. Its test suite needs
+  `hypothesis`, which the gateway venv does not carry: supply it with
+  `uv pip install --target <dir> hypothesis` and `PYTHONPATH=<worktree>:<dir>`.
