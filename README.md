@@ -10,7 +10,17 @@
 curl https://raw.githubusercontent.com/deldesir/iiab-factory/master/install.txt | bash
 ```
 
-This installs the `deldesir/iiab` fork with all customizations. The installer will prompt you to choose a configuration size and edit `local_vars.yml`.
+This installs the `deldesir/iiab` fork with all customizations. The installer asks what the machine is and prepares `/etc/iiab/local_vars.yml` for it:
+
+| Key | Machine | What it asks |
+|---|---|---|
+| `d` | **Pipeline server**: AI gateway, CRM, ERPNext, SSL, the full ecosystem (`vars/local_vars_deldesir.yml`) | nothing; you edit the file (secrets, domain) |
+| `h` | **Fleet hub**: the control plane for a fleet of boxes, on a home or office computer, tailnet-only (`vars/local_vars_fleet_hub.yml`) | box id, business name |
+| `b` | **Fleet box**: a customer ERPNext / POS / storefront on a public domain with a certificate (`vars/local_vars_fleet_box.yml`) | box id, business name, domain, certificate address |
+| `x` | **Demo box**: throwaway ERPNext / POS / storefront with demo data, Administrator / demo1234 (`vars/local_vars_demo.yml`) | nothing |
+| `1` `2` `3` `m` | upstream IIAB content presets (small, medium, large, medical) | nothing; you edit the file |
+
+The fleet presets generate the two passwords they need and print them once; store them. A fleet machine's box id comes from `fleet onboard` on the control plane (see `scripts/FLEET.md`). Already have a `/etc/iiab/local_vars.yml`? The installer uses it and asks nothing.
 
 ### Optional: Enable SSL (HTTPS)
 
