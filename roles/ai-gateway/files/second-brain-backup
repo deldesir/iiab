@@ -135,6 +135,7 @@ if [ -f /etc/iiab/fleet.yml ]; then
         [ -f "$f" ] && cp -a "$f" "$DEST/$STAMP/fleet/"
     done
     [ -d /etc/iiab/fleet-releases ] && tar -czf "$DEST/$STAMP/fleet/fleet-releases.tar.gz" -C /etc/iiab fleet-releases
+    [ -d /etc/iiab/fleet-vars ] && tar -czf "$DEST/$STAMP/fleet/fleet-vars.tar.gz" -C /etc/iiab fleet-vars
     [ -d /var/lib/fleet ] && tar -czf "$DEST/$STAMP/fleet/fleet-state.tar.gz" --exclude=venv -C /var/lib fleet
     [ -f /library/uptime-kuma/kuma.db ] && backup_sqlite /library/uptime-kuma/kuma.db uptime-kuma.db
     if [ -d /home/frappe/frappe-bench/sites/fleet.local ]; then
@@ -142,6 +143,11 @@ if [ -f /etc/iiab/fleet.yml ]; then
         newest=$(ls -t /home/frappe/frappe-bench/sites/fleet.local/private/backups/*-database.sql.gz 2>/dev/null | head -1)
         [ -n "$newest" ] && cp -a "$newest" "$DEST/$STAMP/fleet/" && echo "fleet site db ok"
         find /home/frappe/frappe-bench/sites/fleet.local/private/backups -type f -mtime +7 -delete 2>/dev/null
+    fi
+    # Semaphore UI (runbook front end): its config (keys + DB password) and its database
+    if [ -f /etc/semaphore/config.json ]; then
+        cp -a /etc/semaphore/config.json "$DEST/$STAMP/fleet/semaphore-config.json"
+        sudo -u postgres pg_dump -Fc semaphore > "$DEST/$STAMP/fleet/semaphore.pgdump" 2>/dev/null && echo "semaphore db ok"
     fi
     echo "fleet control plane ok"
 fi

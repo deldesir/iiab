@@ -1,0 +1,116 @@
+# Fleet service catalog — what a managed box or the hub can provide, generically.
+# A box's inventory record lists the service ids it carries; `fleet check` derives its
+# probes from them and `fleet push` mirrors this catalog into the fleet site (Fleet Service).
+#
+# kind:      box        runs on the customer's box (Frappe apps, local units)
+#            hub        hosted on the hub for the customer (multi-tenant services)
+# maturity:  ready      forked under the fleet owner, builds on the fleet's develop heads,
+#                       has a smoke check and a backup/restore story, has a price
+#            on-request exists in the stack, offered case by case, not yet packaged
+#            candidate  upstream app identified, not forked or tested on the fleet heads
+# probes:    HTTP paths on the box (public: https://<host><path>; tailnet: http://<ip><path>)
+#            critical: true  -> a failure is CRIT (service down); false -> WARN
+# units:     systemd units that must be active (box kind: on the box; hub kind: on the hub)
+version: 1
+services:
+  erp:
+    title: ERP core (Frappe + ERPNext)
+    kind: box
+    maturity: ready
+    apps: [frappe, erpnext]
+    probes:
+      - { path: /erp/api/method/ping, expect: 200, critical: true }
+      - { path: /erp/login, expect: 200, critical: true }
+    billing_item: FLEET-BOX
+  pos:
+    title: Point of sale (POS Next)
+    kind: box
+    maturity: ready
+    apps: [pos_next]
+    probes:
+      - { path: /erp/pos, expect: 200, critical: true }
+    metrics: [open_shifts]
+  storefront:
+    title: Storefront and website (Builder, Webshop, Payments)
+    kind: box
+    maturity: ready
+    apps: [builder, webshop, payments]
+    probes:
+      - { path: /, expect: 200, critical: false }
+  hr:
+    title: HR and payroll (Frappe HR)
+    kind: box
+    maturity: ready
+    apps: [hrms]
+  crm:
+    title: CRM with WhatsApp (Frappe CRM)
+    kind: box
+    maturity: ready
+    apps: [crm, whatsapp]
+  notes:
+    title: Second brain (SiYuan)
+    kind: box
+    maturity: on-request
+    units: [siyuan]
+  whatsapp-assistant:
+    title: WhatsApp AI assistant (cognitive pipeline)
+    kind: hub
+    maturity: on-request
+    units: [ai-gateway, rivebot, rapidpro-mailroom, rapidpro-courier, rapidpro-gunicorn, rapidpro-celery, wuzapi]
+    hub_probes:
+      - { url: http://127.0.0.1:8086/health, expect: 200, critical: true }
+      - { url: http://127.0.0.1:8087/health, expect: 200, critical: true }
+    notes: one RapidPro organisation and one WhatsApp number per customer, hosted on the hub; grants file is the access control
+  email-channel:
+    title: Email channel (bridge to the assistant)
+    kind: hub
+    maturity: on-request
+    units: [email-bridge]
+  offsite-backup:
+    title: Daily encrypted off-box backup, mailed and kept 14 days
+    kind: hub
+    maturity: ready
+    metrics: [hub_backup_age]
+  monitoring:
+    title: Minute-level monitoring, nightly check and digest
+    kind: hub
+    maturity: ready
+    units: [uptime-kuma, fleet-check.timer]
+  education:
+    title: School administration (Frappe Education)
+    kind: box
+    maturity: candidate
+    apps: [education]
+    upstream: https://github.com/frappe/education
+  learning:
+    title: Courses and learning (Frappe Learning)
+    kind: box
+    maturity: candidate
+    apps: [lms]
+    upstream: https://github.com/frappe/lms
+    probes:
+      - { path: /erp/lms, expect: 200, critical: false }
+  helpdesk:
+    title: Support desk (Frappe Helpdesk)
+    kind: box
+    maturity: candidate
+    apps: [helpdesk]
+    upstream: https://github.com/frappe/helpdesk
+  insights:
+    title: Reporting and dashboards (Frappe Insights)
+    kind: box
+    maturity: candidate
+    apps: [insights]
+    upstream: https://github.com/frappe/insights
+  healthcare:
+    title: Clinic management (Marley Health)
+    kind: box
+    maturity: candidate
+    apps: [healthcare]
+    upstream: https://github.com/earthians/marley
+  hospitality:
+    title: Hotel management (hospitality PMS)
+    kind: box
+    maturity: candidate
+    apps: [hospitality_pms]
+    upstream: https://github.com/globcomqatar/hospitality_pms

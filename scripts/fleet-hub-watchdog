@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+"""fleet-hub-watchdog — runs on a box other than the hub; restarts the hub through Contabo
+when it is reported stopped.
+
+Every run: probe the hub's public ping URL. After FAIL_THRESHOLD consecutive failures, if the
+Contabo API credentials are present: get a token, read the instance status, and if it is
+"stopped" send the start action. Everything is logged to /var/lib/fleet/hub-watchdog.log;
+the hub's own `fleet check` reads that log and shows a watchdog restart as a finding.
+Without credentials the watchdog only records the outage. Stdlib only; never prints secrets.
+
+Config: /etc/iiab/fleet-hub-watchdog.conf — HUB_PING_URL, HUB_PUBLIC_HOST, FAIL_THRESHOLD,
+COOLDOWN_MIN, CONTABO_CLIENT_ID, CONTABO_CLIENT_SECRET, CONTABO_API_USER, CONTABO_API_PASSWORD,
+CONTABO_INSTANCE_ID (optional: found by the hub's public IPv4 if empty).
+"""
+import datetime as dt
+import json
+import socket
+import sys
+import urllib.parse
+import urllib.request
+import uuid
+from pathlib import Path
+
+CONF = Path("/etc/iiab/fleet-hub-watchdog.conf")
+STATE = Path("/var/lib/fleet/hub-watchdog.json")
+LOG = Path("/var/lib/fleet/hub-watchdog.log")
+TOKEN_URL = "https://auth.contabo.com/auth/realms/contabo/protocol/openid-connect/token"
+API = "https://api.contabo.com/v1/compute/instances"
+
+
+def conf() -> dict:
+    out = {}
+    for line in CONF.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, _, v = line.partition("=")
+            out[k.strip()] = v.strip().strip('"')
+    return out
+
+
+def log(msg: str) -> None:
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    with open(LOG, "a") as fh:
+        fh.write(f"{dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds')} {msg}\n")
+    print(msg)
+
+
+def probe(url: str) -> bool:
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "fleet-hub-watchdog"}), timeout=20) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def contabo_token(c: dict) -> str:
+    data = urllib.parse.urlencode({"client_id": c["CONTABO_CLIENT_ID"], "client_secret": c["CONTABO_CLIENT_SECRET"],
+                                   "username": c["CONTABO_API_USER"], "password": c["CONTABO_API_PASSWORD"], "grant_type": "password"}).encode()
+    with urllib.request.urlopen(urllib.request.Request(TOKEN_URL, data=data), timeout=30) as r:
+        return json.load(r)["access_token"]
+
+
+def contabo(method: str, path: str, token: str, body: dict | None = None) -> dict:
+    req = urllib.request.Request(API + path, method=method, data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Authorization": f"Bearer {token}", "x-request-id": str(uuid.uuid4()),
+                                          "Content-Type": "application/json", "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r) if r.length != 0 else {}
+
+
+def find_instance(c: dict, token: str) -> tuple[str, str] | tuple[None, None]:
+    if c.get("CONTABO_INSTANCE_ID"):
+        inst = contabo("GET", f"/{c['CONTABO_INSTANCE_ID']}", token)["data"][0]
+        return str(inst["instanceId"]), inst.get("status", "unknown")
+    ip = socket.gethostbyname(c["HUB_PUBLIC_HOST"])
+    page = contabo("GET", "?size=100", token)
+    for inst in page.get("data", []):
+        for ipc in (inst.get("ipConfig") or {}).values():
+            if isinstance(ipc, dict) and ipc.get("ip") == ip:
+                return str(inst["instanceId"]), inst.get("status", "unknown")
+    return None, None
+
+
+def main() -> int:
+    if not CONF.exists():
+        sys.exit(f"{CONF} missing")
+    c = conf()
+    st = json.loads(STATE.read_text()) if STATE.exists() else {"fails": 0, "last_action": None}
+    ok = probe(c["HUB_PING_URL"])
+    if ok:
+        if st["fails"] >= int(c.get("FAIL_THRESHOLD", 3)):
+            log(f"hub reachable again after {st['fails']} failed probes")
+        st["fails"] = 0
+        STATE.write_text(json.dumps(st))
+        if "--once" in sys.argv:
+            print("hub reachable")
+        return 0
+    st["fails"] += 1
+    STATE.write_text(json.dumps(st))
+    log(f"hub probe failed ({st['fails']}/{c.get('FAIL_THRESHOLD', 3)})")
+    if st["fails"] < int(c.get("FAIL_THRESHOLD", 3)):
+        return 0
+    creds = all(c.get(k) for k in ("CONTABO_CLIENT_ID", "CONTABO_CLIENT_SECRET", "CONTABO_API_USER", "CONTABO_API_PASSWORD"))
+    if not creds:
+        log("hub down past the threshold; no Contabo credentials configured, nothing to do")
+        return 1
+    last = st.get("last_action")
+    if last and (dt.datetime.now(dt.timezone.utc) - dt.datetime.fromisoformat(last)).total_seconds() < int(c.get("COOLDOWN_MIN", 30)) * 60:
+        log("hub down; a start was already sent inside the cooldown, waiting")
+        return 1
+    try:
+        token = contabo_token(c)
+        iid, status = find_instance(c, token)
+        if not iid:
+            log("hub down; could not find the instance at Contabo (set CONTABO_INSTANCE_ID)")
+            return 1
+        log(f"contabo instance {iid} status={status}")
+        if status == "stopped":
+            contabo("POST", f"/{iid}/actions/start", token, {})
+            st["last_action"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+            STATE.write_text(json.dumps(st))
+            log(f"START sent to instance {iid}")
+        elif status == "running":
+            log("instance is running at Contabo but the hub does not answer: not a power problem (network or services)")
+        else:
+            log(f"instance status {status}: leaving it to a human")
+    except Exception as e:
+        log(f"contabo call failed: {e.__class__.__name__}: {str(e)[:120]}")
+        return 1
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

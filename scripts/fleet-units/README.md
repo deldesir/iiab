@@ -11,3 +11,12 @@ Copies of the systemd units the hub runs; see `scripts/FLEET.md`.
 
 Install: copy to `/etc/systemd/system/`, `systemctl daemon-reload`,
 `systemctl enable --now fleet-check.timer uptime-kuma`.
+
+## Box-side units (installed by `fleet deploy-agent <id>` / `fleet deploy-watchdog <id>`)
+
+- `fleet-agent.timer` / `.service`: hourly report from an offline (push-mode) box to the fleet site.
+- `fleet-agent-upgrade.timer` / `.service`: daily, the box fetches the current release manifest and
+  upgrades itself inside its maintenance window.
+- `fleet-hub-watchdog.timer` / `.service`: every 5 minutes on a non-hub box; after 3 failed probes
+  of the hub it asks Contabo for the instance status and sends `start` if it is stopped
+  (credentials in `/etc/iiab/fleet-hub-watchdog.conf`, which the operator fills by hand).

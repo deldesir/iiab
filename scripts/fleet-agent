@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""fleet-agent — the box side of the fleet for boxes the hub cannot poll (offline / on-prem).
+
+  fleet-agent report    collect this box's metrics and post them to the fleet site; feed the
+                        box's push monitor if KUMA_PUSH_URL is set
+  fleet-agent upgrade   fetch the current release manifest from the fleet site and, inside
+                        the maintenance window, run /root/bench-upgrade.sh pinned to it
+                        (only when the manifest changed since the last applied one)
+
+Config: /etc/iiab/fleet-agent.conf (FLEET_BOX_ID, FLEET_HUB_URL, FLEET_AGENT_TOKEN, KUMA_PUSH_URL,
+SITE, BENCH, MAINTENANCE_WINDOW, TIMEZONE). Stdlib only. Runs as root. Never prints the token.
+"""
+import datetime as dt
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.parse
+import urllib.request
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+CONF = Path(os.environ.get("FLEET_AGENT_CONF", "/etc/iiab/fleet-agent.conf"))
+STATE = Path(os.environ.get("FLEET_AGENT_STATE", "/var/lib/fleet"))
+TARGETS = ["frappe-bench-frappe-schedule", "frappe-bench-web.target", "frappe-bench-workers.target"]
+
+
+def conf() -> dict:
+    out = {}
+    for line in CONF.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, _, v = line.partition("=")
+            out[k.strip()] = v.strip().strip('"')
+    return out
+
+
+def sh(cmd: str) -> str:
+    try:
+        return subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, timeout=120).stdout.strip()
+    except subprocess.TimeoutExpired:
+        return ""
+
+
+def collect(c: dict) -> dict:
+    bench, site = c.get("BENCH", "/home/frappe/frappe-bench"), c.get("SITE", "site.local")
+    tz = ZoneInfo(c.get("TIMEZONE") or "UTC")
+    since = dt.datetime.now(tz).strftime("%Y-%m-%d 00:00:00")
+    heads = {}
+    for a in sh(f"cat {bench}/sites/apps.txt").split():
+        heads[a] = sh(f"sudo -u frappe git -C {bench}/apps/{a} rev-parse HEAD") or "?"
+    db = sh(f"python3 -c \"import json;print(json.load(open('{bench}/sites/{site}/site_config.json'))['db_name'])\"")
+    raw = {
+        "heads": heads,
+        "targets": sh(f"systemctl is-active {' '.join(TARGETS)} | tr '\\n' ' '"),
+        "failed_units": sh("systemctl --failed --no-legend | wc -l"),
+        "failed_list": sh("systemctl --failed --no-legend --plain | awk '{print $1}' | tr '\\n' ','"),
+        "errorlog_rows_today": sh(f"mysql -N -e \"select count(*) from \\`tabError Log\\` where creation > '{since}'\" {db} 2>/dev/null") or "?",
+        "open_shifts": sh(f"mysql -N -e \"select count(*) from \\`tabPOS Opening Shift\\` where status='Open' and docstatus=1\" {db} 2>/dev/null") or "?",
+        "disk_free_gb": sh("df -BG --output=avail / | awk 'NR==2{print $1+0}'"),
+        "ram_avail_mb": sh("awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo"),
+        "load1": sh("cut -d' ' -f1 /proc/loadavg"),
+        "box_backup_age_h": sh(f"f=$(ls -t {bench}/sites/{site}/private/backups/*-database*.sql.gz 2>/dev/null | head -1); [ -n \"$f\" ] && echo $(( ($(date +%s) - $(stat -c %Y \"$f\")) / 3600 )) || echo '?'"),
+        "maintenance_mode": sh(f"python3 -c \"import json;print(json.load(open('{bench}/sites/{site}/site_config.json')).get('maintenance_mode',0))\""),
+        "uptime_s": sh("cut -d. -f1 /proc/uptime"),
+        "http": {}, "probes": [],
+        "agent": "fleet-agent/1",
+    }
+    for path, critical, svc in (("/api/method/ping", True, "erp"), ("/", False, "storefront")):
+        code = sh(f"curl -s -o /dev/null -m 20 -w '%{{http_code}}' -H 'Host: {site}' http://127.0.0.1:8000{path}") or "000"
+        raw["http"][path] = code
+        raw["probes"].append({"url": f"local{path}", "code": code, "expect": "200", "critical": critical, "service": svc})
+    return raw
+
+
+def post_json(url: str, body: dict, timeout: int = 60) -> dict:
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json", "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r)
+
+
+def get_json(url: str, params: dict, timeout: int = 60) -> dict:
+    req = urllib.request.Request(url + "?" + urllib.parse.urlencode(params), headers={"Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r)
+
+
+def report(c: dict) -> int:
+    raw = collect(c)
+    raw["checked_at"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    raw["status"] = "OK"
+    STATE.mkdir(parents=True, exist_ok=True)
+    (STATE / "agent-last-report.json").write_text(json.dumps(raw, indent=1))
+    try:
+        res = post_json(f"{c['FLEET_HUB_URL'].rstrip('/')}/api/method/fleet_ops.api.report",
+                        {"box_id": c["FLEET_BOX_ID"], "token": c["FLEET_AGENT_TOKEN"], "check": raw})
+        print("reported:", res.get("message"))
+        ok = True
+    except Exception as e:
+        print(f"report failed (will retry next run): {e.__class__.__name__}")
+        ok = False
+    if c.get("KUMA_PUSH_URL"):
+        try:
+            urllib.request.urlopen(c["KUMA_PUSH_URL"] + "?" + urllib.parse.urlencode({"status": "up", "msg": "reported" if ok else "report failed"}), timeout=10)
+        except Exception:
+            pass
+    return 0 if ok else 1
+
+
+def in_window(c: dict) -> bool:
+    m = re.fullmatch(r"(\d\d):(\d\d)-(\d\d):(\d\d)", c.get("MAINTENANCE_WINDOW") or "")
+    if not m:
+        return True
+    now = dt.datetime.now(ZoneInfo(c.get("TIMEZONE") or "UTC")).time()
+    start, end = dt.time(int(m[1]), int(m[2])), dt.time(int(m[3]), int(m[4]))
+    return start <= now <= end if start <= end else (now >= start or now <= end)
+
+
+def upgrade(c: dict) -> int:
+    try:
+        res = get_json(f"{c['FLEET_HUB_URL'].rstrip('/')}/api/method/fleet_ops.api.current_manifest",
+                       {"box_id": c["FLEET_BOX_ID"], "token": c["FLEET_AGENT_TOKEN"]}).get("message") or {}
+    except Exception as e:
+        print(f"manifest fetch failed: {e.__class__.__name__}")
+        return 1
+    rid, text = res.get("release"), res.get("manifest")
+    if not rid:
+        print("no current release on the hub")
+        return 0
+    applied = STATE / "agent-applied-release"
+    if applied.exists() and applied.read_text().strip() == rid:
+        print(f"release {rid} already applied")
+        return 0
+    if not in_window(c):
+        print(f"release {rid} pending; outside the maintenance window {c.get('MAINTENANCE_WINDOW')}")
+        return 0
+    Path("/root/bench-upgrade.manifest").write_text(text)
+    if not Path("/root/bench-upgrade.sh").exists():
+        print("missing /root/bench-upgrade.sh (deploy-agent copies it)")
+        return 1
+    log = f"/root/bench-upgrade-{dt.date.today():%Y-%m-%d}.log"
+    rc = subprocess.run(["bash", "/root/bench-upgrade.sh"], env={**os.environ, "HOME": "/root", "MANIFEST": "/root/bench-upgrade.manifest"}).returncode
+    tail = sh(f"tail -n 1 {log}")
+    print(f"upgrade to {rid}: rc={rc} {tail}")
+    if rc == 0 and tail.startswith("UPGRADE-OK"):
+        applied.write_text(rid + "\n")
+    report(c)
+    return 0 if rc == 0 else 1
+
+
+def main() -> int:
+    if len(sys.argv) < 2 or sys.argv[1] not in ("report", "upgrade"):
+        print(__doc__)
+        return 2
+    if not CONF.exists():
+        sys.exit(f"fleet-agent: {CONF} missing (the hub's `fleet deploy-agent <id>` writes it)")
+    c = conf()
+    return report(c) if sys.argv[1] == "report" else upgrade(c)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

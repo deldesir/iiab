@@ -1,0 +1,9 @@
+[Unit]
+Description=Fleet agent self-upgrade to the current release (inside the maintenance window)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/fleet-agent upgrade
+Environment=HOME=/root
+TimeoutStartSec=2h
