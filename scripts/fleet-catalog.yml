@@ -72,10 +72,16 @@ services:
     maturity: ready
     metrics: [hub_backup_age]
   monitoring:
-    title: Minute-level monitoring, nightly check and digest
+    title: Minute-level monitoring (observer)
     kind: hub
     maturity: ready
-    units: [uptime-kuma, fleet-check.timer]
+    units: [uptime-kuma]
+  control-plane:
+    title: Fleet control plane (nightly check, digest, runbook console, fleet site)
+    kind: hub
+    maturity: ready
+    units: [fleet-check.timer, semaphore]
+    notes: lives on the hub; when the hub is a home machine the observer VPS keeps monitoring
   education:
     title: School administration (Frappe Education)
     kind: box
