@@ -135,6 +135,7 @@ if [ -f /etc/iiab/fleet.yml ]; then
         [ -f "$f" ] && cp -a "$f" "$DEST/$STAMP/fleet/"
     done
     [ -d /etc/iiab/fleet-releases ] && tar -czf "$DEST/$STAMP/fleet/fleet-releases.tar.gz" -C /etc/iiab fleet-releases
+    [ -d /etc/iiab/fleet-vars ] && tar -czf "$DEST/$STAMP/fleet/fleet-vars.tar.gz" -C /etc/iiab fleet-vars
     [ -d /var/lib/fleet ] && tar -czf "$DEST/$STAMP/fleet/fleet-state.tar.gz" --exclude=venv -C /var/lib fleet
     [ -f /library/uptime-kuma/kuma.db ] && backup_sqlite /library/uptime-kuma/kuma.db uptime-kuma.db
     if [ -d /home/frappe/frappe-bench/sites/fleet.local ]; then

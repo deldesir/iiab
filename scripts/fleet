@@ -18,8 +18,9 @@ catalog services it carries (scripts/fleet-catalog.yml). Nothing here edits it e
   fleet agent-token ID                    the stanza for /etc/iiab/fleet-agent.conf on an
                                           offline (push-mode) box
   fleet deploy-agent ID                   install fleet-agent + units on that box (ssh)
-  fleet deploy-watchdog ID                install the hub watchdog (+ a monitor) on a
-                                          non-hub box (ssh)
+  fleet deploy-watchdog ID                install the hub watchdog on a non-hub box (ssh)
+  fleet runrole ID ROLE [--tags T]        run an IIAB role on a box through its own runrole
+  fleet vars pull|diff|show [ID...|--all] private copies of each box's local_vars.yml on the hub
 
 Connectivity: public boxes are probed over https on their host; tailnet boxes over http on
 their tailnet address (no TLS/domain checks); offline boxes are never polled: fleet-agent
@@ -929,6 +930,86 @@ def cmd_deploy_watchdog(a, inv):
     return 0 if rc == 0 else 1
 
 
+# ----------------------------------------------------------------------------- IIAB roles + local_vars store
+
+
+def cmd_runrole(a, inv):
+    """IIAB roles run on the box itself (`runrole` reads the box's /etc/iiab/local_vars.yml);
+    the hub only starts the run and follows its log."""
+    box = select_boxes(inv, [a.id], False)[0]
+    if box["mode"] == "push":
+        sys.exit("fleet: offline box; run the role on the box itself")
+    if not re.fullmatch(r"[a-z0-9_-]+", a.role):
+        sys.exit("fleet: role name must be a plain role directory name")
+    log = f"/opt/iiab/iiab/fleet-runrole-{a.role}-{dt.datetime.now():%Y%m%d-%H%M%S}.log"
+    if a.tags:
+        cmd = (f"cd /opt/iiab/iiab && ANSIBLE_LOG_PATH={log} ansible-playbook -i ansible_hosts run-one-role.yml --connection=local "
+               f"--extra-vars '{{\"role_to_run\":\"{a.role}\"}}' --tags {shlex.quote(a.tags)}")
+    else:
+        cmd = f"/opt/iiab/iiab/runrole {a.role} {log}"
+    unit = f"fleet-runrole-{int(time.time())}"
+    rc, out = run_on(box, f"systemd-run --unit={unit} --collect --setenv=HOME=/root /bin/bash -lc {shlex.quote(cmd)}")
+    if rc != 0:
+        print(out)
+        return 1
+    print(f"== {box['id']}: role {a.role}{' tags ' + a.tags if a.tags else ''} started ({unit}); log {log}")
+    log_action(f"runrole {box['id']} role={a.role} tags={a.tags or '-'} log={log}")
+    seen = 0
+    for _ in range(360):                       # follow for up to 2 h
+        time.sleep(20)
+        rc, out = run_on(box, f"wc -l < {log} 2>/dev/null; systemctl is-active {unit} 2>/dev/null")
+        parts = out.split()
+        n = int(parts[0]) if parts and parts[0].isdigit() else 0
+        active = parts[-1] if parts else "unknown"
+        if n > seen:
+            rc, chunk = run_on(box, f"sed -n '{seen + 1},{n}p' {log}")
+            print(chunk)
+            seen = n
+        if active not in ("active", "activating"):
+            rc, tail = run_on(box, f"tail -n 25 {log}")
+            print(tail)
+            ok = "failed=0" in tail and "unreachable=0" in tail
+            print(f"RUNROLE-{'OK' if ok else 'FAILED'} {box['id']} {a.role}")
+            return 0 if ok else 1
+    print("still running after 2 h; follow the log on the box")
+    return 1
+
+
+def cmd_vars(a, inv):
+    """Keep a private copy of every box's /etc/iiab/local_vars.yml on the hub (pull), show drift
+    (diff). Pushing is deliberate and manual: `fleet vars show <id>` prints the path to copy."""
+    store = Path("/etc/iiab/fleet-vars")
+    store.mkdir(mode=0o700, exist_ok=True)
+    boxes = select_boxes(inv, a.ids, a.all)
+    rc_all = 0
+    for b in boxes:
+        f = store / f"{b['id']}.local_vars.yml"
+        if a.action == "pull":
+            rc, out = run_on(b, "cat /etc/iiab/local_vars.yml")
+            if rc != 0 or not out:
+                print(f"{b['id']}: could not read local_vars.yml")
+                rc_all = 1
+                continue
+            changed = (not f.exists()) or f.read_text() != out + "\n"
+            f.write_text(out + "\n")
+            os.chmod(f, 0o600)
+            print(f"{b['id']}: {'updated' if changed else 'unchanged'} -> {f}")
+        elif a.action == "diff":
+            if not f.exists():
+                print(f"{b['id']}: no copy yet (fleet vars pull {b['id']})")
+                continue
+            rc, out = run_on(b, "cat /etc/iiab/local_vars.yml")
+            import difflib
+            d = list(difflib.unified_diff(f.read_text().splitlines(), (out + "\n").splitlines(), f"hub copy {b['id']}", f"box {b['id']}", lineterm=""))
+            d = [l for l in d if not re.search(r"(password|secret|token|key)\s*:", l, re.I) or l.startswith(("---", "+++", "@@"))]
+            print(f"== {b['id']}: {'in sync' if not d else str(len(d)) + ' diff lines (secret lines hidden)'}")
+            for l in d[:60]:
+                print("   " + l)
+        elif a.action == "show":
+            print(f"{b['id']}: {f if f.exists() else 'no copy yet'}")
+    return rc_all
+
+
 # ----------------------------------------------------------------------------- push (ERPNext mirror)
 
 
@@ -1005,11 +1086,14 @@ def main(argv=None) -> int:
     p = sub.add_parser("agent-token"); p.add_argument("id")
     p = sub.add_parser("deploy-agent"); p.add_argument("id")
     p = sub.add_parser("deploy-watchdog"); p.add_argument("id")
+    p = sub.add_parser("runrole"); p.add_argument("id"); p.add_argument("role"); p.add_argument("--tags")
+    p = sub.add_parser("vars"); p.add_argument("action", choices=["pull", "diff", "show"]); p.add_argument("ids", nargs="*"); p.add_argument("--all", action="store_true")
     a = ap.parse_args(argv)
     inv = load_inventory()
     return {"list": cmd_list, "status": cmd_status, "check": cmd_check, "digest": cmd_digest, "manifest": cmd_manifest,
             "upgrade": cmd_upgrade, "suspend": cmd_suspend, "resume": cmd_resume, "offboard": cmd_offboard, "push": cmd_push,
-            "agent-token": cmd_agent_token, "deploy-agent": cmd_deploy_agent, "deploy-watchdog": cmd_deploy_watchdog}[a.cmd](a, inv)
+            "agent-token": cmd_agent_token, "deploy-agent": cmd_deploy_agent, "deploy-watchdog": cmd_deploy_watchdog,
+            "runrole": cmd_runrole, "vars": cmd_vars}[a.cmd](a, inv)
 
 
 if __name__ == "__main__":
