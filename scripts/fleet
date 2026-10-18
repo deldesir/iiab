@@ -4,7 +4,10 @@
 The inventory (/etc/iiab/fleet.yml) is the source of truth: one record per box with its
 role, owner, plan, status, canary rank, maintenance window, connectivity class and the
 catalog services it carries (scripts/fleet-catalog.yml). Nothing here edits it except
-`suspend`, `resume`, `offboard` (status) and `manifest set-current` (current_release).
+`onboard`, `rename`, `suspend`, `resume`, `offboard` and `manifest set-current`.
+Identity: every box has an id (box-NNN, given once at onboarding, never reused), an alias
+(short slug the people use; may change) and a host (the customer's domain). Commands
+accept id, alias or host; output shows "id alias".
 
   fleet list | status
   fleet check [ID...|--all] [--no-push]   OK / WARN / CRIT / STALE per box with levelled
@@ -23,6 +26,12 @@ catalog services it carries (scripts/fleet-catalog.yml). Nothing here edits it e
   fleet reboot ID|--all [--now]           reboot inside the window, wait, re-check
   fleet backup-pull [--dest DIR]          mirror the observer's backup copies onto this hub
   fleet vars pull|diff|show [ID...|--all] private copies of each box's local_vars.yml on the hub
+  fleet onboard --host H --business B --alias A [--role customer|till|hub|observer] [--owner customer|self]
+                                          [--profile P] [--plan P] [--connectivity C] [--services a,b]
+                                          [--billing E] [--technical E] [--id box-NNN]   register a box
+  fleet rename ID [NEW_ID] [--alias A]    rename everywhere: inventory, history, vars copy, fleet
+                                          site record, monitors (+ push token)
+  fleet hostname ID [--now]               set the box's OS (and tailnet) hostname to its id
 
 Roles: hub (this control plane; may live at home, intermittently online), observer (an
 always-on VPS that runs the monitor, the hub watchdog and fleet-backup-mail), till, customer.
@@ -69,6 +78,8 @@ TARGETS = ["frappe-bench-frappe-schedule", "frappe-bench-web.target", "frappe-be
 KEEP_CHECKS = 90
 HUB_BACKUPS = Path("/library/backups/fleet")
 LEVELS = {"CRIT": 3, "STALE": 2, "WARN": 1, "INFO": 0}
+ID_RE = re.compile(r"^box-\d{3}$")               # box-001 … box-999: given once, never reused
+ALIAS_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,30}$")   # short slug people type; may change
 
 # ----------------------------------------------------------------------------- config
 
@@ -116,6 +127,7 @@ def load_inventory() -> dict:
         b.setdefault("canary_rank", 99)
         b.setdefault("connectivity", "public")
         b.setdefault("services", [])
+        b.setdefault("alias", b["id"])
         reach = dict(b.get("reach") or {})
         reach.setdefault("ssh", b["host"])
         reach.setdefault("http", f"https://{b['host']}" if b["connectivity"] == "public" else f"http://{reach['ssh']}")
@@ -125,9 +137,12 @@ def load_inventory() -> dict:
 
 
 def save_inventory(inv: dict) -> None:
+    """Write the inventory back without the derived/defaulted keys. Works on a deep copy so the
+    records in memory keep their resolved form for the rest of the run."""
+    import copy
     text = INVENTORY.read_text()
     header = "".join(line for line in text.splitlines(keepends=True) if line.startswith("#"))
-    body = {k: v for k, v in inv.items()}
+    body = copy.deepcopy(inv)
     for b in body["boxes"]:
         b.pop("mode", None)
         if b.get("reach") == {"ssh": b["host"], "http": f"https://{b['host']}" if b.get("connectivity", "public") == "public" else f"http://{b['host']}"}:
@@ -137,6 +152,8 @@ def save_inventory(inv: dict) -> None:
                 del b[k]
         if b.get("local") is False:
             del b["local"]
+        if b.get("alias") == b["id"]:
+            del b["alias"]
     tmp = INVENTORY.with_suffix(".tmp")
     tmp.write_text(header + yaml.safe_dump(body, sort_keys=False, allow_unicode=True, width=100))
     os.chmod(tmp, 0o640)
@@ -148,14 +165,20 @@ def select_boxes(inv: dict, ids: list[str], all_: bool) -> list[dict]:
     if all_ or not ids:
         return boxes
     by_id = {b["id"]: b for b in boxes}
+    by_alias = {b["alias"]: b for b in boxes}
     by_host = {b["host"]: b for b in boxes}
     out = []
     for i in ids:
-        b = by_id.get(i) or by_host.get(i)
+        b = by_id.get(i) or by_alias.get(i) or by_host.get(i)
         if not b:
-            sys.exit(f"fleet: unknown box {i!r} (ids: {', '.join(by_id)})")
+            sys.exit(f"fleet: unknown box {i!r} (known: {', '.join(label(b) for b in boxes)})")
         out.append(b)
     return out
+
+
+def label(b: dict) -> str:
+    """How a box is named in output: 'box-003 malianova' (id, then alias when it differs)."""
+    return f"{b['id']} {b['alias']}" if b.get("alias") and b["alias"] != b["id"] else b["id"]
 
 
 # ----------------------------------------------------------------------------- remote exec
@@ -370,8 +393,8 @@ def collect_pull(box: dict, catalog: dict) -> dict:
         svc = catalog["services"].get(sid) or {}
         if svc.get("kind") == "box":
             units += svc.get("units") or []
-        if svc.get("kind") == "hub":
-            units += svc.get("units") or []
+        elif svc.get("kind") == "hub" and box["role"] in ("hub", "observer"):
+            units += svc.get("units") or []     # hub-kind services run on the hub/observer; other boxes only receive them
     units = sorted(set(units))
     units_out = ("$(systemctl is-active " + " ".join(shlex.quote(u) for u in units) + " 2>/dev/null | tr '\\n' ',')") if units else ""
     probe = REMOTE_PROBE.format(bench=box["bench"], site=box["site"], targets=" ".join(TARGETS), since=since, units_out=units_out)
@@ -611,7 +634,7 @@ def build_digest(inv: dict, checks: dict[str, dict]) -> str:
     for b in sorted(inv["boxes"], key=lambda b: (b["canary_rank"], b["id"])):
         c = checks.get(b["id"])
         if not c:
-            lines.append(f"- ?? {b['id']}: never checked")
+            lines.append(f"- ?? {label(b)}: never checked")
             continue
         mark = {"OK": "OK  ", "WARN": "WARN", "STALE": "STAL", "CRIT": "CRIT"}[c["status"]]
         bits = [f"disk {c.get('disk_free_gb', '?')}G", f"bak {fmt_age(c.get('hub_backup_age_h') if b['mode'] == 'pull' else c.get('box_backup_age_h'))}",
@@ -626,7 +649,7 @@ def build_digest(inv: dict, checks: dict[str, dict]) -> str:
             bits.append(f"reported {fmt_age(c.get('stale_h'))} ago")
         if b["status"] != "active":
             bits.append(b["status"].upper())
-        lines.append(f"- {mark} {b['id']} ({b['business']}): " + ", ".join(bits))
+        lines.append(f"- {mark} {label(b)} ({b['business']}): " + ", ".join(bits))
         for x in c.get("findings", []):
             if x["level"] != "INFO" or x["code"] == "rebooted":
                 lines.append(f"    · {x['level']}: {x['message']}")
@@ -681,7 +704,7 @@ def cmd_check(a, inv):
             write_check(r)
     for b in boxes:
         r = results[b["id"]]
-        print(f"== {b['id']} {b['host']} [{b['connectivity']}/{b['mode']}] {r['status']}")
+        print(f"== {label(b)} {b['host']} [{b['connectivity']}/{b['mode']}] {r['status']}")
         if r.get("heads"):
             print("   " + " ".join(f"{k}={v[:7]}" for k, v in sorted(r["heads"].items())))
         if r.get("http"):
@@ -735,19 +758,19 @@ def cmd_digest(a, inv):
 def cmd_status(a, inv):
     checks = latest_checks(inv)
     print(f"release: {inv.get('current_release') or 'none'}   inventory: {INVENTORY}   catalog: {CATALOG}")
-    print(f"{'id':<10} {'host':<22} {'role':<9} {'conn':<8} {'status':<10} {'check':<6} {'when':<17} findings")
+    print(f"{'id':<8} {'alias':<17} {'host':<22} {'role':<9} {'conn':<8} {'status':<10} {'check':<6} {'when':<17} findings")
     for b in sorted(inv["boxes"], key=lambda b: (b["canary_rank"], b["id"])):
         c = checks.get(b["id"], {})
         when = c.get("checked_at", "-")[:16].replace("T", " ")
         fx = "; ".join(f"{x['level']} {x['message']}" for x in c.get("findings", []) if x["level"] != "INFO") or "-"
-        print(f"{b['id']:<10} {b['host']:<22} {b['role']:<9} {b['connectivity']:<8} {b['status']:<10} {c.get('status', '-'):<6} {when:<17} {fx}")
+        print(f"{b['id']:<8} {b['alias']:<17} {b['host']:<22} {b['role']:<9} {b['connectivity']:<8} {b['status']:<10} {c.get('status', '-'):<6} {when:<17} {fx}")
     return 0
 
 
 def cmd_list(a, inv):
-    print(f"{'rank':<4} {'id':<10} {'host':<22} {'business':<24} {'role':<9} {'owner':<9} {'conn':<8} {'plan':<10} {'status':<10} services")
+    print(f"{'rank':<4} {'id':<8} {'alias':<17} {'host':<22} {'business':<24} {'role':<9} {'owner':<9} {'conn':<8} {'plan':<10} {'status':<10} services")
     for b in sorted(inv["boxes"], key=lambda b: (b["canary_rank"], b["id"])):
-        print(f"{b['canary_rank']:<4} {b['id']:<10} {b['host']:<22} {b['business']:<24} {b['role']:<9} {b['owner']:<9} {b['connectivity']:<8} {b.get('plan', ''):<10} {b['status']:<10} {','.join(b['services'])}")
+        print(f"{b['canary_rank']:<4} {b['id']:<8} {b['alias']:<17} {b['host']:<22} {b['business']:<24} {b['role']:<9} {b['owner']:<9} {b['connectivity']:<8} {b.get('plan', ''):<10} {b['status']:<10} {','.join(b['services'])}")
     return 0
 
 
@@ -1163,7 +1186,7 @@ def push(inv: dict, quiet: bool = False) -> int:
     for b in inv["boxes"]:
         c = checks.get(b["id"])
         payload["boxes"].append({
-            "box_id": b["id"], "host": b["host"], "business": b["business"], "role": b["role"], "owner": b["owner"],
+            "box_id": b["id"], "alias": b["alias"], "host": b["host"], "business": b["business"], "role": b["role"], "owner": b["owner"],
             "profile": b.get("profile", ""), "plan": b.get("plan", ""), "status": b["status"], "canary_rank": b["canary_rank"],
             "timezone": b.get("timezone", ""), "maintenance_window": b.get("maintenance_window", ""),
             "connectivity": b["connectivity"], "services": b["services"],
@@ -1184,6 +1207,197 @@ def push(inv: dict, quiet: bool = False) -> int:
 
 def cmd_push(a, inv):
     return push(inv)
+
+
+# ----------------------------------------------------------------------------- identity: onboard, rename, hostname
+
+
+def site_call(method: str, payload: dict, timeout: int = 60) -> tuple[bool, object]:
+    """POST a whitelisted fleet_ops method on the fleet site; (ok, message)."""
+    conf = load_push_conf()
+    if not conf:
+        return False, f"{PUSH_CONF} missing or incomplete"
+    import requests
+    try:
+        r = requests.post(f"{conf['FLEET_SITE_URL'].rstrip('/')}/api/method/{method}", json=payload, timeout=timeout,
+                          headers={"Authorization": f"token {conf['FLEET_API_KEY']}:{conf['FLEET_API_SECRET']}",
+                                   "Host": conf["FLEET_SITE_NAME"], "X-Frappe-Site-Name": conf["FLEET_SITE_NAME"]})
+        r.raise_for_status()
+        return True, r.json().get("message")
+    except Exception as e:
+        return False, str(e)
+
+
+def kuma_seed_path() -> Path:
+    for p in (Path("/usr/local/sbin/fleet-kuma-seed"), SCRIPTS / "fleet-kuma-seed"):
+        if p.exists():
+            return p
+    sys.exit("fleet: fleet-kuma-seed not found")
+
+
+def next_box_id(inv: dict) -> str:
+    """Next free id: one above every id ever used, in the inventory and in the fleet site's registry
+    (offboarded boxes keep their record, so a number is never handed out twice)."""
+    nums = [int(b["id"][4:]) for b in inv["boxes"] if ID_RE.match(b["id"])]
+    conf = load_push_conf()
+    if conf:
+        import requests
+        try:
+            r = requests.get(f"{conf['FLEET_SITE_URL'].rstrip('/')}/api/resource/Managed Box", timeout=30,
+                             params={"fields": '["name"]', "limit_page_length": 1000},
+                             headers={"Authorization": f"token {conf['FLEET_API_KEY']}:{conf['FLEET_API_SECRET']}",
+                                      "Host": conf["FLEET_SITE_NAME"], "X-Frappe-Site-Name": conf["FLEET_SITE_NAME"]})
+            r.raise_for_status()
+            nums += [int(d["name"][4:]) for d in r.json().get("data", []) if ID_RE.match(d["name"])]
+        except Exception as e:
+            print(f"warning: fleet site unreachable ({e}); numbering from the inventory only")
+    return f"box-{(max(nums) + 1) if nums else 1:03d}"
+
+
+def cmd_onboard(a, inv):
+    if not ALIAS_RE.match(a.alias):
+        sys.exit("fleet: alias must be a short lowercase slug (letters, digits, dashes), e.g. malianova")
+    if a.id and not ID_RE.match(a.id):
+        sys.exit("fleet: ids look like box-007")
+    for b in inv["boxes"]:
+        if b["host"] == a.host:
+            sys.exit(f"fleet: host {a.host} is already {label(b)}")
+        if b["alias"] == a.alias:
+            sys.exit(f"fleet: alias {a.alias} is already {label(b)}")
+        if a.id and b["id"] == a.id:
+            sys.exit(f"fleet: id {a.id} is already {label(b)}")
+    new = a.id or next_box_id(inv)
+    rank = a.rank if a.rank is not None else max([b["canary_rank"] for b in inv["boxes"]] + [0]) + 1
+    box = {"id": new, "alias": a.alias, "host": a.host, "business": a.business, "role": a.role, "owner": a.owner,
+           "profile": a.profile, "plan": a.plan or inv["defaults"].get("plan", "standard"), "status": "active",
+           "canary_rank": rank, "contacts": {"billing": a.billing or "", "technical": a.technical or ""}}
+    if a.connectivity:
+        box["connectivity"] = a.connectivity
+    if a.services:
+        box["services"] = [x.strip() for x in a.services.split(",") if x.strip()]
+    if a.timezone:
+        box["timezone"] = a.timezone
+    if a.window:
+        box["maintenance_window"] = a.window
+    inv["boxes"].append(box)
+    save_inventory(inv)
+    inv = load_inventory()
+    box = select_boxes(inv, [new], False)[0]
+    log_action(f"onboard {new} alias={a.alias} host={a.host} business={a.business!r} role={a.role} owner={a.owner}")
+    print(f"registered {label(box)}: {a.business} at {a.host} (role {a.role}, owner {a.owner}, canary rank {rank})")
+    push(inv, quiet=True)
+    r = subprocess.run([str(kuma_seed_path()), "--boxes", new, "--no-notification"], capture_output=True, text=True)
+    print("monitors: " + ("; ".join(l for l in r.stdout.splitlines() if l.startswith(("monitor", "KUMA"))) or r.stderr.strip()[-300:]))
+    rc, _ = run_on(box, "test -r /etc/iiab/local_vars.yml", timeout=30)
+    if rc == 0:
+        import types
+        cmd_vars(types.SimpleNamespace(action="pull", ids=[new], all=False), inv)
+    else:
+        print(f"not reachable yet over ssh ({box['ssh_user']}@{box['reach']['ssh']}): install this machine's key there, then `fleet vars pull {new}`")
+    print(f"\nlocal_vars.yml on the box (before or after its install):\n  iiab_hostname: {new}\n  erpnext_business_name: \"{a.business}\"\n"
+          f"next: fleet check {new}; fleet hostname {new} (inside its window); add {a.host} to BOXES in /etc/iiab/fleet-backup.conf"
+          f" on the box that runs fleet-backup-mail" + (f"; fleet deploy-agent {new} (push mode)" if box["mode"] == "push" else ""))
+    return 0
+
+
+def cmd_rename(a, inv):
+    box = select_boxes(inv, [a.id], False)[0]
+    old, new = box["id"], a.new_id or box["id"]
+    alias = a.alias or (box["alias"] if box["alias"] != old else new)
+    if not ID_RE.match(new):
+        sys.exit(f"fleet: ids look like box-007 (got {new!r})")
+    if not ALIAS_RE.match(alias):
+        sys.exit("fleet: alias must be a short lowercase slug (letters, digits, dashes)")
+    for b in inv["boxes"]:
+        if b is box:
+            continue
+        if b["id"] == new:
+            sys.exit(f"fleet: id {new} is already {label(b)}")
+        if b["alias"] == alias:
+            sys.exit(f"fleet: alias {alias} is already {label(b)}")
+    if (old, box["alias"]) == (new, alias):
+        print("nothing to change")
+        return 0
+    old_alias = box["alias"]
+    # 1. inventory (and the top-level pointers to a box)
+    box["id"], box["alias"] = new, alias
+    for k in ("hub_watchdog_box", "backup_mail_box"):
+        if inv.get(k) == old:
+            inv[k] = new
+    save_inventory(inv)
+    # 2. local state keyed by id: check history (with the id inside each record), vars copy, temp confs
+    if old != new:
+        src, dst = STATE / "checks" / old, STATE / "checks" / new
+        if src.exists():
+            src.rename(dst)
+            for p in dst.glob("*.json"):
+                try:
+                    d = json.loads(p.read_text())
+                    d["id"] = new
+                    p.write_text(json.dumps(d, indent=1))
+                except Exception:
+                    pass
+        v = Path("/etc/iiab/fleet-vars") / f"{old}.local_vars.yml"
+        if v.exists():
+            v.rename(v.with_name(f"{new}.local_vars.yml"))
+        for p in (STATE / f"agent-{old}.conf", STATE / f"watchdog-{old}.conf"):
+            p.unlink(missing_ok=True)
+    # 3. the registry (links from checks and subscriptions follow the rename)
+    ok, msg = site_call("fleet_ops.api.rename_box", {"old": old, "new": new, "alias": alias})
+    print(f"fleet site: {msg if ok else 'FAILED: ' + str(msg)}")
+    push(inv, quiet=True)
+    # 4. monitors: names carry id + alias; the per-box push token derives from the id
+    r = subprocess.run([str(kuma_seed_path()), "--rename", old, new, "--alias", alias], capture_output=True, text=True)
+    print("monitors: " + ("; ".join(l for l in r.stdout.splitlines() if l.startswith(("monitor", "KUMA"))) or r.stderr.strip()[-300:]))
+    log_action(f"rename {old} ({old_alias}) -> {new} ({alias}) site={'ok' if ok else 'failed'} kuma_rc={r.returncode}")
+    print(f"{old} ({old_alias}) is now {new} ({alias})")
+    if box["mode"] == "push":
+        print(f"push-mode box: run `fleet deploy-agent {new}` (its agent token and push URL changed)")
+    if old != new:
+        print(f"inside its window: `fleet hostname {new}` renames the machine itself")
+    return 0 if ok and r.returncode == 0 else 1
+
+
+HOSTNAME_SCRIPT = r"""set -e
+new="$1"; old=$(hostnamectl --static 2>/dev/null || hostname)
+python3 - "$new" <<'PY'
+import re, sys
+new = sys.argv[1]
+lines, out, seen = open("/etc/hosts").read().splitlines(), [], set()
+for l in lines:                      # IIAB appends its line on every run: collapse duplicates
+    k = " ".join(l.split())
+    if k and not l.startswith("#") and k in seen:
+        continue
+    seen.add(k); out.append(l)
+hosts = "\n".join(out).rstrip("\n") + "\n"
+want = f"127.0.0.1 box.lan localhost.localdomain localhost box {new} {new}.lan"
+m = re.search(r"^127\.0\.0\.1\s+.*\bbox\.lan\b.*$", hosts, re.M)
+hosts = hosts.replace(m.group(0), want, 1) if m else hosts + want + "\n"
+open("/etc/hosts", "w").write(hosts)
+PY
+hostnamectl set-hostname "$new"
+grep -q '^iiab_hostname:' /etc/iiab/local_vars.yml && sed -i "s/^iiab_hostname:.*/iiab_hostname: $new/" /etc/iiab/local_vars.yml || true
+if command -v tailscale >/dev/null; then tailscale set --hostname "$new" 2>&1 | head -1 || true; fi
+echo "HOSTNAME-OK $(hostname) (was $old)"
+"""
+
+
+def cmd_hostname(a, inv):
+    """Make the machine's own name match its id: /etc/hosts, hostnamectl, iiab_hostname in
+    local_vars (so IIAB never writes the old name back), and the tailnet hostname."""
+    box = select_boxes(inv, [a.id], False)[0]
+    if not ID_RE.match(box["id"]):
+        sys.exit(f"fleet: {box['id']} is not a box-NNN id yet (fleet rename first)")
+    if not (a.now or box.get("local") or in_window(box)):
+        sys.exit(f"fleet: {label(box)} is outside its maintenance window {box.get('maintenance_window')} ({box.get('timezone')}); use --now")
+    tmp = STATE / f"hostname-{box['id']}.sh"
+    tmp.write_text(HOSTNAME_SCRIPT)
+    scp_to(box, tmp, "/root/fleet-hostname.sh", "0700")
+    rc, out = run_on(box, f"bash /root/fleet-hostname.sh {shlex.quote(box['id'])}; r=$?; rm -f /root/fleet-hostname.sh; exit $r", timeout=120)
+    tmp.unlink(missing_ok=True)
+    print(out[-600:])
+    log_action(f"hostname {box['id']} rc={rc}")
+    return 0 if rc == 0 else 1
 
 
 # ----------------------------------------------------------------------------- main
@@ -1210,12 +1424,20 @@ def main(argv=None) -> int:
     p = sub.add_parser("reboot"); p.add_argument("id", nargs="?"); p.add_argument("--all", action="store_true"); p.add_argument("--now", action="store_true")
     p = sub.add_parser("backup-pull"); p.add_argument("--dest")
     p = sub.add_parser("vars"); p.add_argument("action", choices=["pull", "diff", "show"]); p.add_argument("ids", nargs="*"); p.add_argument("--all", action="store_true")
+    p = sub.add_parser("onboard"); p.add_argument("--host", required=True); p.add_argument("--business", required=True); p.add_argument("--alias", required=True)
+    p.add_argument("--role", default="customer", choices=["customer", "till", "hub", "observer"]); p.add_argument("--owner", default="customer", choices=["customer", "self"])
+    p.add_argument("--profile", default="retail"); p.add_argument("--plan"); p.add_argument("--connectivity", choices=["public", "tailnet", "offline"])
+    p.add_argument("--services"); p.add_argument("--billing"); p.add_argument("--technical"); p.add_argument("--timezone"); p.add_argument("--window")
+    p.add_argument("--rank", type=int); p.add_argument("--id")
+    p = sub.add_parser("rename"); p.add_argument("id"); p.add_argument("new_id", nargs="?"); p.add_argument("--alias")
+    p = sub.add_parser("hostname"); p.add_argument("id"); p.add_argument("--now", action="store_true")
     a = ap.parse_args(argv)
     inv = load_inventory()
     return {"list": cmd_list, "status": cmd_status, "check": cmd_check, "digest": cmd_digest, "manifest": cmd_manifest,
             "upgrade": cmd_upgrade, "suspend": cmd_suspend, "resume": cmd_resume, "offboard": cmd_offboard, "push": cmd_push,
             "agent-token": cmd_agent_token, "deploy-agent": cmd_deploy_agent, "deploy-watchdog": cmd_deploy_watchdog,
-            "runrole": cmd_runrole, "vars": cmd_vars, "reboot": cmd_reboot, "backup-pull": cmd_backup_pull}[a.cmd](a, inv)
+            "runrole": cmd_runrole, "vars": cmd_vars, "reboot": cmd_reboot, "backup-pull": cmd_backup_pull,
+            "onboard": cmd_onboard, "rename": cmd_rename, "hostname": cmd_hostname}[a.cmd](a, inv)
 
 
 if __name__ == "__main__":
