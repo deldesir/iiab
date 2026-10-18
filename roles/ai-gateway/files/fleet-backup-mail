@@ -27,6 +27,9 @@ CONF=${FLEET_BACKUP_CONF:-/etc/iiab/fleet-backup.conf}
 PASSFILE=/etc/iiab/fleet-backup.passphrase
 DEST=/library/backups/fleet
 KEEP_DAYS=14
+RCLONE_REMOTE=""                  # optional object-storage copy of every bundle, e.g. "contabo:my-bucket/fleet"
+RCLONE_KEEP_DAYS=30               # bundles older than this are deleted there (rclone --min-age)
+RCLONE_FLAGS=""                   # extra rclone flags, e.g. "--s3-no-check-bucket"
 STALE_HOURS=12
 PART_BYTES=$((15 * 1024 * 1024))   # Gmail caps a message at 25 MB after base64 (~18 MB raw)
 BRIDGE_URL=http://127.0.0.1:8096/send-file
@@ -172,6 +175,21 @@ backup_box() {
       --pinentry-mode loopback --passphrase-file "$passfile" -o "$bundle" || return 1
   rm -rf "$stage"
   local size; size=$(stat -c %s "$bundle")
+  local offsite=""
+  if [ -n "$RCLONE_REMOTE" ]; then
+    if ! command -v rclone > /dev/null; then echo "  RCLONE_REMOTE is set but rclone is not installed" >&2; return 1; fi
+    if [ "$DRY_RUN" = 1 ]; then
+      echo "  DRY_RUN: would copy $(basename "$bundle") to $RCLONE_REMOTE/$label/"
+    else
+      # shellcheck disable=SC2086
+      rclone copyto $RCLONE_FLAGS "$bundle" "$RCLONE_REMOTE/$label/$(basename "$bundle")" || { echo "  object-storage copy failed ($RCLONE_REMOTE)" >&2; return 1; }
+      # shellcheck disable=SC2086
+      rclone delete $RCLONE_FLAGS --min-age "${RCLONE_KEEP_DAYS}d" "$RCLONE_REMOTE/$label/" 2>/dev/null || true
+      echo "  copied to $RCLONE_REMOTE/$label/ (kept $RCLONE_KEEP_DAYS days there)"
+    fi
+    offsite="
+A copy is also in object storage: $RCLONE_REMOTE/$label/ (kept $RCLONE_KEEP_DAYS days)."
+  fi
   local dbsize; dbsize=$(stat -c %s "$out/$(basename "$db")")
   echo "  $(basename "$db") ($(human "$dbsize"), ${age_h}h old) -> bundle $(human "$size")"
 
@@ -179,7 +197,7 @@ backup_box() {
 
 Decrypt with the backup passphrase (kept on the hub: $passfile):
   gpg -d $(basename "$bundle") | tar x
-then follow RESTORE.txt inside. An off-box copy is also kept on the hub under $DEST/$label/ for $KEEP_DAYS days."
+then follow RESTORE.txt inside. An off-box copy is also kept on the hub under $DEST/$label/ for $KEEP_DAYS days.$offsite"
   if [ "$size" -le "$PART_BYTES" ]; then
     send_mail "$to" "[backup] ${warn}$label $STAMP ($(human "$size"))" "$body" "$bundle" || return 1
   else
