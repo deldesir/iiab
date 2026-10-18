@@ -10,12 +10,14 @@ never printed). Then:
   1. first-run database setup (SQLite) and the admin account, if still needed
   2. server settings: operator timezone, primary base URL, no update checks
   3. one default notification: webhook -> email bridge /send-json -> operator mailbox
-  4. per box: "<id> ERP api" (keyword 'pong' on /erp/api/method/ping, TLS expiry on)
-              "<id> storefront" (HTTP 200 on /)
+  4. per box: "<id> <alias> ERP api" (keyword 'pong' on /erp/api/method/ping, TLS expiry on)
+              "<id> <alias> storefront" (HTTP 200 on /)   (just "<id> …" when alias = id)
   5. one push monitor "fleet-check" that `fleet check` feeds (down = a box failed)
   6. a status page /status/fleet listing the ERP api monitors
 
 Re-running only adds what is missing. Exit 0 on success.
+  --rename OLD NEW [--alias A]: rename one box's monitors (and refresh its push token) and exit;
+  used by `fleet rename`.
 """
 import json
 import os
@@ -67,7 +69,24 @@ def parse_args():
     ap.add_argument("--no-notification", action="store_true", help="do not create the email-bridge webhook notification")
     ap.add_argument("--no-status-page", action="store_true")
     ap.add_argument("--no-push-monitors", action="store_true", help="skip the per-box and fleet-wide push monitors")
+    ap.add_argument("--rename", nargs=2, metavar=("OLD", "NEW"), help="rename one box's monitors (old id -> new id) and exit")
+    ap.add_argument("--alias", help="alias to show in the renamed monitors' names")
     return ap.parse_args()
+
+
+KINDS = ("ERP api", "storefront", "check")
+
+
+def monitor_name(box_id: str, alias: str | None, kind: str) -> str:
+    return f"{box_id} {alias} {kind}" if alias and alias != box_id else f"{box_id} {kind}"
+
+
+def monitor_kind(name: str, box_id: str) -> str | None:
+    """Which kind a monitor named for box_id is ('<id> [alias] <kind>'), else None."""
+    for k in KINDS:
+        if name == f"{box_id} {k}" or (name.startswith(f"{box_id} ") and name.endswith(f" {k}") and " " not in name[len(box_id) + 1:-len(k) - 1]):
+            return k
+    return None
 
 
 def main() -> int:
@@ -153,6 +172,30 @@ def main() -> int:
         sys.exit(f"fleet-kuma-seed: login failed: {res.get('msg')}")
     time.sleep(2)  # the server pushes monitorList / notificationList after login
 
+    if args.rename:
+        for _ in range(50):                     # the monitor list arrives right after login
+            if state["monitors"]:
+                break
+            time.sleep(0.2)
+        old, new = args.rename
+        new_tok = __import__("hmac").new(push_token.encode(), f"box:{new}".encode(), __import__("hashlib").sha256).hexdigest()[:32]
+        n = 0
+        for m in list(state["monitors"].values()):
+            kind = monitor_kind(m.get("name", ""), old)
+            if not kind:
+                continue
+            m = dict(m)
+            m["name"] = monitor_name(new, args.alias, kind)
+            if kind == "check":
+                m["pushToken"] = new_tok
+                m["description"] = f"Fed by the fleet check for {new}: down = CRIT or STALE, or no check for 26 h"
+            r = sio.call("editMonitor", m, timeout=30)
+            print(("monitor renamed: " if r.get("ok") else "monitor rename FAILED: ") + m["name"] + ("" if r.get("ok") else " " + str(r.get("msg"))))
+            n += 1 if r.get("ok") else 0
+        sio.disconnect()
+        print(f"KUMA-RENAME-OK {old} -> {new} ({n} monitors)" if n else f"KUMA-RENAME-NONE {old}")
+        return 0 if n else 1
+
     # 2. settings
     settings = sio.call("getSettings", timeout=20).get("data", {})
     settings.update({"serverTimezone": tz, "primaryBaseURL": url, "checkUpdate": False,
@@ -165,11 +208,11 @@ def main() -> int:
     want_name = "Operator email (bridge)"
     existing = [n for n in state["notifications"] if n.get("name") == want_name]
     notif_id = None
-    if args.no_notification:
-        print("notification: skipped (configure one in the UI: SMTP, Telegram...)")
-    elif existing:
+    if existing:
         notif_id = existing[0]["id"]
         print("notification exists:", notif_id)
+    elif args.no_notification:
+        print("notification: skipped (configure one in the UI: SMTP, Telegram...)")
     else:
         body = (
             '{% capture subj %}[fleet] {{ name }} {{ status }}{% endcapture %}'
@@ -212,10 +255,15 @@ def main() -> int:
     have = {m.get("name"): m for m in state["monitors"].values()}
     api_ids = []
 
-    def ensure(spec: dict) -> int | None:
+    def ensure(spec: dict, legacy: str | None = None) -> int | None:
         if spec["name"] in have:
             print("monitor exists:", spec["name"])
             return have[spec["name"]]["id"]
+        if legacy and legacy in have:                      # same monitor under its pre-alias name
+            m = dict(have[legacy]); m["name"] = spec["name"]
+            r = sio.call("editMonitor", m, timeout=30)
+            print(("monitor renamed: " if r.get("ok") else "monitor rename FAILED: ") + spec["name"])
+            return m["id"]
         m = dict(base); m.update(spec)
         r = sio.call("add", m, timeout=30)
         if not r.get("ok"):
@@ -233,19 +281,21 @@ def main() -> int:
         conn = b.get("connectivity") or inv.get("defaults", {}).get("connectivity") or "public"
         reach = b.get("reach") or {}
         url_base = reach.get("http") or (f"https://{host}" if conn == "public" else f"http://{reach.get('ssh', host)}")
+        alias = b.get("alias") or b["id"]
         if conn != "offline":   # offline boxes are never polled; their push monitor below carries them
-            mid = ensure({"type": "keyword", "name": f"{b['id']} ERP api", "url": f"{url_base}/erp/api/method/ping",
-                          "keyword": "pong", "interval": 60, "expiryNotification": conn == "public", "ignoreTls": conn != "public"})
+            mid = ensure({"type": "keyword", "name": monitor_name(b["id"], alias, "ERP api"), "url": f"{url_base}/erp/api/method/ping",
+                          "keyword": "pong", "interval": 60, "expiryNotification": conn == "public", "ignoreTls": conn != "public"},
+                         legacy=f"{b['id']} ERP api")
             if mid:
                 api_ids.append(mid)
-            ensure({"type": "http", "name": f"{b['id']} storefront", "url": f"{url_base}/", "interval": 120,
-                    "expiryNotification": conn == "public", "ignoreTls": conn != "public"})
+            ensure({"type": "http", "name": monitor_name(b["id"], alias, "storefront"), "url": f"{url_base}/", "interval": 120,
+                    "expiryNotification": conn == "public", "ignoreTls": conn != "public"}, legacy=f"{b['id']} storefront")
         if not args.no_push_monitors:
             # per-box push monitor: `fleet check` (or fleet-agent) feeds it; down = CRIT or STALE
             tok = hmac.new(push_token.encode(), f"box:{b['id']}".encode(), hashlib.sha256).hexdigest()[:32]
-            ensure({"type": "push", "name": f"{b['id']} check", "url": "", "pushToken": tok, "interval": 93600,
+            ensure({"type": "push", "name": monitor_name(b["id"], alias, "check"), "url": "", "pushToken": tok, "interval": 93600,
                     "retryInterval": 3600, "maxretries": 0, "expiryNotification": False,
-                    "description": f"Fed by the fleet check for {b['id']}: down = CRIT or STALE, or no check for 26 h"})
+                    "description": f"Fed by the fleet check for {b['id']}: down = CRIT or STALE, or no check for 26 h"}, legacy=f"{b['id']} check")
 
     # 5. fleet-wide push monitor: did the nightly check run at all
     if not args.no_push_monitors:

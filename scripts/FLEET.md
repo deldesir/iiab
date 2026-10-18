@@ -42,6 +42,35 @@ and contacts live in the hub's private inventory, never in this repository.
   branch, keeps apps absent from the manifest at their deployed commit, and tolerates a
   remote it cannot read when the manifest pins the deployed commit.
 
+## Naming
+
+Every box has three names with different jobs:
+
+- **id** — `box-001`, `box-002`, …: given once by `fleet onboard`, never reused after an
+  offboarding. It keys everything: the inventory record, `/var/lib/fleet/checks/<id>/`,
+  `/etc/iiab/fleet-vars/<id>.local_vars.yml`, the Managed Box in the fleet site, the
+  monitors, the agent and push tokens, and the machine's own hostname.
+- **alias** — a short slug people type (`malianova`), unique at any moment but free to
+  change when a business rebrands. Output prints `id alias`; monitors are named
+  `<id> <alias> ERP api` and so on.
+- **host** — the customer's domain. A field, not an identity: it changes when they
+  rebrand or let it lapse.
+
+The role (`hub`, `observer`, `till`, `customer`) is a field too, never a name. Every
+command accepts an id, an alias or a host.
+
+```
+fleet onboard --host shop.example --business "Shop SA" --alias shop   # next free id
+fleet rename shop --alias shop-sa                                     # alias change
+fleet rename box-004 box-009                                          # id change (rare)
+fleet hostname box-004                                                # machine name = id
+```
+
+`rename` updates every store in one go (inventory, check history, vars copy, the fleet
+site record with its links, the monitors and the per-box push token) and logs the action.
+`hostname` runs inside the box's window: `/etc/hosts`, `hostnamectl`, `iiab_hostname` in
+its `local_vars.yml` (so IIAB never writes the old name back) and the tailnet hostname.
+
 ## Daily use
 
 ```
@@ -66,7 +95,7 @@ fleet manifest capture --id 2026.10-r8 --from hub --notes "sync round 8"
 fleet manifest set-current 2026.10-r8
 fleet upgrade --all --preflight         # every box: would it fast-forward cleanly?
 fleet upgrade --all                     # canary order, inside each box's window
-fleet upgrade box-3 --now               # one box, ignore the window
+fleet upgrade box-003 --now             # one box (id, alias or host), ignore the window
 fleet upgrade --all --release 2026.09-r7   # roll to an older manifest (only if still a fast-forward)
 ```
 
@@ -90,11 +119,17 @@ fleet push               # mirror inventory, checks and releases into the fleet 
 
 ## Adding a box
 
-1. Add its record to `/etc/iiab/fleet.yml` (copy an existing one; pick the canary rank).
-2. Add it to `BOXES` in `/etc/iiab/fleet-backup.conf` so its backup is pulled and mailed.
-3. `fleet-kuma-seed` (adds its two monitors; existing ones are left alone).
-4. `fleet check <id>` then `fleet push`; in the fleet site, link the Managed Box to its
-   Customer and start its Subscription; add its VPS and domain as Fleet Subscription rows.
+1. `fleet onboard --host <domain> --business "<name>" --alias <slug> [--role till]
+   [--billing <email>] [--technical <email>]`: takes the next free id (inventory and the
+   fleet site's registry are both consulted), writes the inventory record, mirrors it to
+   the fleet site, creates its monitors, pulls its `local_vars.yml` if the box already
+   accepts this machine's key, and prints the `iiab_hostname` / `erpnext_business_name`
+   lines for the box's `local_vars.yml`.
+2. Add its host to `BOXES` in `/etc/iiab/fleet-backup.conf` on the box that runs
+   `fleet-backup-mail`, so its backup is pulled and mailed.
+3. `fleet check <id>`; in the fleet site, link the Managed Box to its Customer and start
+   its Subscription; add its VPS and domain as Fleet Subscription rows.
+4. Inside its window: `fleet hostname <id>`.
 
 ## Installing the control plane on a hub
 
