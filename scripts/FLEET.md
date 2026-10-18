@@ -119,6 +119,10 @@ fleet push               # mirror inventory, checks and releases into the fleet 
 
 ## Adding a box
 
+0. On the new machine, the one-line installer (`curl …/iiab-factory/master/install.txt | bash`)
+   key (b) prepares a customer box from `vars/local_vars_fleet_box.yml` (it asks for the box
+   id, the business name, the domain and the certificate address, and generates the
+   passwords); key (h) does the same for a hub from `vars/local_vars_fleet_hub.yml`.
 1. `fleet onboard --host <domain> --business "<name>" --alias <slug> [--role till]
    [--billing <email>] [--technical <email>]`: takes the next free id (inventory and the
    fleet site's registry are both consulted), writes the inventory record, mirrors it to
