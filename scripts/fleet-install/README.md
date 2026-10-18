@@ -19,3 +19,7 @@ idempotent and prints no secrets (generated passwords go to /etc/iiab/fleet.conf
 
 Each script logs to /var/lib/fleet/<name>.log. The fleet command itself, the nightly units
 and the seeder live in scripts/ and scripts/fleet-units/.
+
+Demo and training: `demo-box.yml` (cloud-init for a Multipass VM), `demo-seed.py` (wizard +
+ERPNext's demo catalogue + prices, stock, POS profile, website items; idempotent) and
+`demo-seed-drill.sh` (proves the seed on a scratch site, then drops it).
