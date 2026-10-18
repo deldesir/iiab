@@ -131,6 +131,15 @@ fleet push               # mirror inventory, checks and releases into the fleet 
    its Subscription; add its VPS and domain as Fleet Subscription rows.
 4. Inside its window: `fleet hostname <id>`.
 
+## Demo box
+
+`scripts/fleet-install/demo-box.yml` is a cloud-init file: `multipass launch 24.04 -c 2 -m 4G
+-d 40G -n demo --cloud-init demo-box.yml` builds a throwaway ERPNext/POS/storefront box in
+a VM on any laptop (Linux, Windows, macOS), seeded with ERPNext's demo catalogue by
+`demo-seed.py` (wizard done, items, prices, stock, customers, a POS profile, website
+items). Snapshot it once, restore before each demo. It never joins the fleet.
+`demo-seed-drill.sh` proves the seed on a scratch site of any bench.
+
 ## Installing the control plane on a hub
 
 - `install -m 0755 scripts/fleet /usr/local/sbin/fleet`; same for `scripts/fleet-kuma-seed`
