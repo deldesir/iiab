@@ -6,6 +6,7 @@ erpnext_enabled: False
 erpnext_db_root_password: "" # Should ideally be {{ mysql_root_password }}
 erpnext_admin_password: "CHANGEME"  # Override in /etc/iiab/local_vars.yml
 erpnext_version: "develop"
+wkhtmltox_version: "0.12.6.1-3"    # upstream wkhtmltox release used where the OS has no wkhtmltopdf package
 erpnext_site_name: "site.local"
 erpnext_user_name: "frappe"
 erpnext_db_name: "_site_local"

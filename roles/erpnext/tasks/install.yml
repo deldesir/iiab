@@ -39,7 +39,6 @@
       - redis-server
       - python3-pip
       - python3-venv
-      - wkhtmltopdf
       - libmysqlclient-dev
       - python3-dev
       - pkg-config
@@ -48,6 +47,46 @@
       - git
     state: present
   when: erpnext_enabled | bool
+
+# wkhtmltopdf renders PDFs (invoices, POS receipts). Ubuntu 24.10+ and Debian 13 dropped the
+# package, so the OS repository is tried first and the upstream wkhtmltox build for jammy
+# second (it installs cleanly on 26.04: its libssl3 dependency is provided by libssl3t64).
+# Without either, the install goes on and PDF printing stays unavailable until one is added.
+- name: Does the OS repository offer wkhtmltopdf?
+  shell: apt-cache policy wkhtmltopdf | grep -q 'Candidate: [0-9]'
+  register: wkhtmltopdf_apt
+  failed_when: false
+  changed_when: false
+  when: erpnext_enabled | bool
+
+- name: Install wkhtmltopdf from the OS repository
+  apt:
+    name: wkhtmltopdf
+    state: present
+  when: erpnext_enabled | bool and wkhtmltopdf_apt.rc == 0
+
+- name: Install wkhtmltopdf from the upstream wkhtmltox release (no OS package)
+  block:
+    - name: Read the package architecture (bare ansible_* facts are undefined in role runs)
+      command: dpkg --print-architecture
+      register: wkhtmltox_arch
+      changed_when: false
+
+    - name: Download wkhtmltox {{ wkhtmltox_version }} for {{ wkhtmltox_arch.stdout }}
+      get_url:
+        url: "https://github.com/wkhtmltopdf/packaging/releases/download/{{ wkhtmltox_version }}/wkhtmltox_{{ wkhtmltox_version }}.jammy_{{ wkhtmltox_arch.stdout }}.deb"
+        dest: /tmp/wkhtmltox.deb
+        mode: '0644'
+        timeout: 120
+
+    - name: Install the wkhtmltox package (apt resolves its dependencies)
+      apt:
+        deb: /tmp/wkhtmltox.deb
+  rescue:
+    - name: wkhtmltopdf could not be installed on this OS
+      debug:
+        msg: "wkhtmltopdf is unavailable here: PDF printing (invoices, receipts) will not work until it is installed by hand. The ERPNext install continues."
+  when: erpnext_enabled | bool and wkhtmltopdf_apt.rc != 0
 
 - name: Ensure git-hooks directory exists in /etc
   file:
