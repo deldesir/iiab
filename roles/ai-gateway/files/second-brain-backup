@@ -126,6 +126,26 @@ done
     -C /etc/iiab fleet-backup.passphrase.d
 echo "machine-local config ok"
 
+# ── Fleet control plane (hub only; harmless where absent) ──────────────────────
+# Inventory, release manifests, credentials file, check history and the monitor's DB,
+# plus the fleet site's own database (the second Frappe site on this bench).
+if [ -f /etc/iiab/fleet.yml ]; then
+    mkdir -p "$DEST/$STAMP/fleet"
+    for f in /etc/iiab/fleet.yml /etc/iiab/fleet.conf; do
+        [ -f "$f" ] && cp -a "$f" "$DEST/$STAMP/fleet/"
+    done
+    [ -d /etc/iiab/fleet-releases ] && tar -czf "$DEST/$STAMP/fleet/fleet-releases.tar.gz" -C /etc/iiab fleet-releases
+    [ -d /var/lib/fleet ] && tar -czf "$DEST/$STAMP/fleet/fleet-state.tar.gz" --exclude=venv -C /var/lib fleet
+    [ -f /library/uptime-kuma/kuma.db ] && backup_sqlite /library/uptime-kuma/kuma.db uptime-kuma.db
+    if [ -d /home/frappe/frappe-bench/sites/fleet.local ]; then
+        sudo -u frappe -H bash -lc 'cd /home/frappe/frappe-bench && bench --site fleet.local backup --with-files' >/dev/null 2>&1
+        newest=$(ls -t /home/frappe/frappe-bench/sites/fleet.local/private/backups/*-database.sql.gz 2>/dev/null | head -1)
+        [ -n "$newest" ] && cp -a "$newest" "$DEST/$STAMP/fleet/" && echo "fleet site db ok"
+        find /home/frappe/frappe-bench/sites/fleet.local/private/backups -type f -mtime +7 -delete 2>/dev/null
+    fi
+    echo "fleet control plane ok"
+fi
+
 chmod 700 "$DEST"
 find "$DEST" -mindepth 1 -maxdepth 1 -type d -mtime +"$KEEP_DAYS" -exec rm -rf {} +
 echo "backup complete: $DEST/$STAMP ($(du -sh "$DEST/$STAMP" | cut -f1))"

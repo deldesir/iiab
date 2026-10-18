@@ -10,6 +10,9 @@
 #   ALLOW_DISCARD=ERE  paths whose local changes were verified by hand as disposable
 #   FORK_OWNER=name    GitHub owner whose forks the bench tracks (default: deldesir);
 #                      apps listed in APP_OWNER (payments, whatsapp -> frappe) follow their own upstream
+#   MANIFEST=file      release manifest (app=commit lines, see scripts/FLEET.md): every app is
+#                      pinned to exactly that commit instead of the fork's current develop head,
+#                      so a whole fleet lands on one known release
 # The run ends with UPGRADE-OK or UPGRADE-FAILED: <reason> as the last log line.
 #
 # Order: backup -> fetch (fail early, services still up) -> stop web+workers ->
@@ -28,6 +31,9 @@ declare -A APP_OWNER=( [payments]=frappe [whatsapp]=frappe )
 # Extra paths (ERE) whose local changes were checked by hand and may be discarded on
 # THIS box, e.g. a hotfix that has since landed in the fork. Empty = none.
 ALLOW_DISCARD=${ALLOW_DISCARD:-}
+# Release manifest (app=commit). Empty = follow the fork heads.
+MANIFEST=${MANIFEST:-}
+[ -z "$MANIFEST" ] || [ -r "$MANIFEST" ] || { echo "UPGRADE-FAILED: manifest $MANIFEST unreadable"; exit 1; }
 LOG=/root/bench-upgrade-$(date +%F).log
 exec >>"$LOG" 2>&1   # plain append: a tee in a process substitution gets killed at unit exit before it flushes the last lines
 
@@ -66,12 +72,21 @@ for a in $APPS; do
   fi
   TARGET[$a]=$(val "git -C apps/$a rev-parse FETCH_HEAD")
   [[ "${TARGET[$a]}" =~ ^[0-9a-f]{40}$ ]] || fail "$a: could not read the fetched commit (got: ${TARGET[$a]})"
-  printf '%-9s %s/develop = %s\n' "$a" "$remote" "${TARGET[$a]:0:10}"
+  if [ -n "$MANIFEST" ]; then
+    pin=$(awk -F= -v a="$a" '$1==a{print $2}' "$MANIFEST")
+    [[ "$pin" =~ ^[0-9a-f]{40}$ ]] || fail "$a: no commit in manifest $MANIFEST"
+    # the pinned commit is normally already in the fetched develop history; fetch it by hash otherwise
+    asf "git -C apps/$a cat-file -e $pin^{commit}" 2>/dev/null || asf "git -C apps/$a fetch -q $remote $pin" || fail "$a: manifest commit ${pin:0:10} is not on $remote"
+    TARGET[$a]=$pin
+    printf '%-9s release %s = %s\n' "$a" "$(awk -F= '$1=="release"{print $2}' "$MANIFEST")" "${pin:0:10}"
+  else
+    printf '%-9s %s/develop = %s\n' "$a" "$remote" "${TARGET[$a]:0:10}"
+  fi
   # only disposable drift may be discarded (generated types, lockfiles); anything else stops the run
   dirty=$(asf "git -C apps/$a status --porcelain --untracked-files=no" | grep -v -E "^[[:space:]]*\$|yarn\.lock\$|\.d\.ts\$|package-lock\.json\$${ALLOW_DISCARD:+|$ALLOW_DISCARD}" || true)
   [ -z "$dirty" ] || fail "$a has local changes that are not disposable:
 $dirty"
-  asf "git -C apps/$a merge-base --is-ancestor HEAD ${TARGET[$a]}" || fail "$a: fork head is not a fast-forward of the deployed commit"
+  asf "git -C apps/$a merge-base --is-ancestor HEAD ${TARGET[$a]}" || fail "$a: target commit is not a fast-forward of the deployed commit (the box is ahead of the release or diverged; a rollback is a manual checkout)"
 done
 
 if [ "${PREFLIGHT_ONLY:-0}" = 1 ]; then
