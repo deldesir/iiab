@@ -154,4 +154,23 @@ fi
 
 chmod 700 "$DEST"
 find "$DEST" -mindepth 1 -maxdepth 1 -type d -mtime +"$KEEP_DAYS" -exec rm -rf {} +
+
+# ── Off-box copy of this snapshot (encrypted with the fleet passphrase) ───────────────────
+# Without it the hub's own state (gateway, knowledge graph, captures, SiYuan, the fleet control
+# plane) exists only on the hub's disk. Config: /etc/iiab/second-brain-offsite.conf with
+# OFFSITE_HOST (ssh root@host, key-only), OFFSITE_DIR, OFFSITE_KEEP_DAYS. Restore:
+#   gpg -d second-brain-<stamp>.tar.gpg | tar x
+if [ -f /etc/iiab/second-brain-offsite.conf ] && [ -s /etc/iiab/fleet-backup.passphrase ]; then
+    # shellcheck disable=SC1091
+    . /etc/iiab/second-brain-offsite.conf
+    OFFSITE_DIR=${OFFSITE_DIR:-/library/backups/hub-offsite}; OFFSITE_KEEP_DAYS=${OFFSITE_KEEP_DAYS:-14}
+    if tar -C "$DEST" -cf - "$STAMP" \
+        | gpg --batch --yes --quiet --symmetric --cipher-algo AES256 --passphrase-file /etc/iiab/fleet-backup.passphrase \
+        | ssh -o BatchMode=yes -o ConnectTimeout=20 "root@$OFFSITE_HOST" \
+            "mkdir -p '$OFFSITE_DIR' && cat > '$OFFSITE_DIR/second-brain-$STAMP.tar.gpg.part' && mv '$OFFSITE_DIR/second-brain-$STAMP.tar.gpg.part' '$OFFSITE_DIR/second-brain-$STAMP.tar.gpg' && find '$OFFSITE_DIR' -name 'second-brain-*.tar.gpg' -mtime +$OFFSITE_KEEP_DAYS -delete"; then
+        echo "off-box copy ok: $OFFSITE_HOST:$OFFSITE_DIR/second-brain-$STAMP.tar.gpg"
+    else
+        echo "WARNING: off-box copy to $OFFSITE_HOST failed (the local snapshot is intact)"
+    fi
+fi
 echo "backup complete: $DEST/$STAMP ($(du -sh "$DEST/$STAMP" | cut -f1))"

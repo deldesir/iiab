@@ -20,8 +20,12 @@ catalog services it carries (scripts/fleet-catalog.yml). Nothing here edits it e
   fleet deploy-agent ID                   install fleet-agent + units on that box (ssh)
   fleet deploy-watchdog ID                install the hub watchdog on a non-hub box (ssh)
   fleet runrole ID ROLE [--tags T]        run an IIAB role on a box through its own runrole
+  fleet reboot ID|--all [--now]           reboot inside the window, wait, re-check
+  fleet backup-pull [--dest DIR]          mirror the observer's backup copies onto this hub
   fleet vars pull|diff|show [ID...|--all] private copies of each box's local_vars.yml on the hub
 
+Roles: hub (this control plane; may live at home, intermittently online), observer (an
+always-on VPS that runs the monitor, the hub watchdog and fleet-backup-mail), till, customer.
 Connectivity: public boxes are probed over https on their host; tailnet boxes over http on
 their tailnet address (no TLS/domain checks); offline boxes are never polled: fleet-agent
 reports to the fleet site and the hub judges freshness (STALE past the heartbeat allowance,
@@ -311,8 +315,14 @@ def domain_info(host: str) -> dict:
     return out
 
 
+_BACKUP_BOX: dict | None = None   # the box running fleet-backup-mail when it is not this machine
+
+
 def hub_backup_age_hours(host: str) -> float | None:
     d = HUB_BACKUPS / host
+    if not d.is_dir() and _BACKUP_BOX:
+        rc, out = run_on(_BACKUP_BOX, f"f=$(ls -t {HUB_BACKUPS}/{host}/*/*-database*.sql.gz 2>/dev/null | head -1); [ -n \"$f\" ] && echo $(( ($(date +%s) - $(stat -c %Y \"$f\")) / 3600 )) || echo none")
+        return float(out.strip()) if rc == 0 and out.strip().replace(".", "").isdigit() else None
     if not d.is_dir():
         return None
     newest = None
@@ -338,6 +348,9 @@ echo "load1=$(cut -d' ' -f1 /proc/loadavg)"
 echo "box_backup_age_h=$(f=$(ls -t $B/sites/$S/private/backups/*-database*.sql.gz 2>/dev/null | head -1); [ -n "$f" ] && echo $(( ($(date +%s) - $(stat -c %Y "$f")) / 3600 )) || echo '?')"
 echo "maintenance=$(python3 -c "import json;print(json.load(open('$B/sites/$S/site_config.json')).get('maintenance_mode',0))" 2>/dev/null)"
 echo "uptime_s=$(cut -d. -f1 /proc/uptime)"
+echo "reboot_required=$([ -f /var/run/reboot-required ] && echo 1 || echo 0)"
+echo "kernel_running=$(uname -r)"
+echo "kernel_newest=$(ls /boot/vmlinuz-* 2>/dev/null | sed 's/.*vmlinuz-//' | sort -V | tail -1)"
 echo "units={units_out}"
 """
 
@@ -357,7 +370,7 @@ def collect_pull(box: dict, catalog: dict) -> dict:
         svc = catalog["services"].get(sid) or {}
         if svc.get("kind") == "box":
             units += svc.get("units") or []
-        if svc.get("kind") == "hub" and box["role"] == "hub":
+        if svc.get("kind") == "hub":
             units += svc.get("units") or []
     units = sorted(set(units))
     units_out = ("$(systemctl is-active " + " ".join(shlex.quote(u) for u in units) + " 2>/dev/null | tr '\\n' ',')") if units else ""
@@ -373,7 +386,16 @@ def collect_pull(box: dict, catalog: dict) -> dict:
         "disk_free_gb": kv.get("disk_free_gb", "?"), "ram_avail_mb": kv.get("ram_avail_mb", "?"), "load1": kv.get("load1", "?"),
         "box_backup_age_h": kv.get("box_backup_age_h", "?"), "maintenance_mode": kv.get("maintenance", "?"), "uptime_s": kv.get("uptime_s", "?"),
         "monitor_units": dict(zip(units, [s for s in kv.get("units", "").split(",") if s])) if units else {},
+        "reboot_required": kv.get("reboot_required", "0"), "kernel_running": kv.get("kernel_running", ""), "kernel_newest": kv.get("kernel_newest", ""),
     })
+    # the hub's own off-box copy (second-brain-offsite.conf: OFFSITE_HOST, OFFSITE_DIR)
+    if box["role"] == "hub":
+        oc = read_conf(Path("/etc/iiab/second-brain-offsite.conf"))
+        if oc.get("OFFSITE_HOST"):
+            rc, out = run_on({"ssh_user": "root", "reach": {"ssh": oc["OFFSITE_HOST"]}, "local": False},
+                             f"f=$(ls -t {oc.get('OFFSITE_DIR', '/library/backups/hub-offsite')}/second-brain-*.tar.gpg 2>/dev/null | head -1); [ -n \"$f\" ] && echo $(( ($(date +%s) - $(stat -c %Y \"$f\")) / 3600 )) || echo none")
+            raw["offsite_copy_age_h"] = out.strip() if rc == 0 else "unreachable"
+            raw["offsite_host"] = oc["OFFSITE_HOST"]
     # HTTP probes from the catalog
     base = box["reach"]["http"].rstrip("/")
     probes = []
@@ -381,7 +403,7 @@ def collect_pull(box: dict, catalog: dict) -> dict:
         svc = catalog["services"].get(sid) or {}
         if svc.get("kind") == "box":
             probes += [dict(p, service=sid) for p in (svc.get("probes") or [])]
-        if svc.get("kind") == "hub" and box["role"] == "hub":
+        if svc.get("kind") == "hub":
             probes += [dict(p, service=sid, hub=True) for p in (svc.get("hub_probes") or [])]
     seen, raw["http"], raw["probes"] = set(), {}, []
     for p in probes:
@@ -499,6 +521,17 @@ def evaluate(box: dict, raw: dict, inv: dict, catalog: dict) -> dict:
     up = raw.get("uptime_s", "?")
     if str(up).isdigit() and int(up) < 86400:
         f("INFO", "rebooted", f"booted {int(up) // 3600} h ago")
+    kr, kn = raw.get("kernel_running") or "", raw.get("kernel_newest") or ""
+    if raw.get("reboot_required") == "1" or (kr and kn and kr != kn):
+        f("WARN", "reboot", f"reboot pending (running {kr or '?'}, installed {kn or '?'}); fleet reboot {box['id']} inside its window")
+    oa = raw.get("offsite_copy_age_h")
+    if oa is not None:
+        if oa in ("none", "unreachable"):
+            f("WARN", "offsite", f"hub off-box backup copy on {raw.get('offsite_host')}: {oa}")
+        elif str(oa).isdigit() and int(oa) > 72:
+            f("CRIT", "offsite", f"hub off-box backup copy is {oa} h old")
+        elif str(oa).isdigit() and int(oa) > 36:
+            f("WARN", "offsite", f"hub off-box backup copy is {oa} h old")
     wd = raw.get("watchdog")
     if wd:
         if not wd.get("reachable"):
@@ -626,8 +659,15 @@ def kuma_heartbeats(results: dict[str, dict], all_checks: dict[str, dict], whole
         kuma_push(url, master, "up", ("CRIT/STALE: " + ", ".join(bad)) if bad else "CHECK-OK")
 
 
+def _set_backup_box(inv: dict) -> None:
+    global _BACKUP_BOX
+    bid = inv.get("backup_mail_box")
+    _BACKUP_BOX = next((b for b in inv["boxes"] if b["id"] == bid and not b.get("local")), None) if bid else None
+
+
 def cmd_check(a, inv):
     catalog = load_catalog()
+    _set_backup_box(inv)
     wd_id = inv.get("hub_watchdog_box")
     if wd_id:
         catalog["_watchdog_box"] = next((b for b in inv["boxes"] if b["id"] == wd_id), None)
@@ -669,8 +709,26 @@ def cmd_digest(a, inv):
         sys.exit("fleet: no digest yet (run `fleet check --all`)")
     print(p.read_text(), end="")
     if a.send:
-        subprocess.run(["systemctl", "start", "fleet-digest.service"], check=False)
-        print("(handed to fleet-digest.service)")
+        text = p.read_text().strip()
+        if Path("/etc/systemd/system/fleet-digest.service").exists() and Path("/opt/iiab/ai-gateway/.venv").exists():
+            subprocess.run(["systemctl", "start", "fleet-digest.service"], check=False)
+            print("(handed to fleet-digest.service: the gateway's admin notification)")
+        else:
+            conf = load_push_conf()
+            if not conf:
+                print("(no delivery path: no gateway here and no fleet site configured)")
+                return 1
+            import requests
+            try:
+                r = requests.post(f"{conf['FLEET_SITE_URL'].rstrip('/')}/api/method/fleet_ops.api.notify",
+                                  json={"subject": "Fleet digest: " + text.splitlines()[0], "text": text},
+                                  headers={"Authorization": f"token {conf['FLEET_API_KEY']}:{conf['FLEET_API_SECRET']}", "Host": conf["FLEET_SITE_NAME"],
+                                           "X-Frappe-Site-Name": conf["FLEET_SITE_NAME"]}, timeout=60)
+                r.raise_for_status()
+                print(f"(sent through the fleet site: {r.json().get('message')})")
+            except Exception as e:
+                print(f"(fleet site mail failed: {e})")
+                return 1
     return 0
 
 
@@ -776,6 +834,68 @@ def cmd_upgrade(a, inv):
             print(f"   post-upgrade check {r['status']}")
     print("UPGRADE-OK" if not a.preflight else "PREFLIGHT-OK")
     return 0
+
+
+# ----------------------------------------------------------------------------- backup-pull
+
+
+def cmd_backup_pull(a, inv):
+    """Mirror /library/backups/fleet from the box that runs fleet-backup-mail onto this hub,
+    so the fleet's backups also sit on hardware we own. Keeps what the source keeps."""
+    _set_backup_box(inv)
+    if not _BACKUP_BOX:
+        sys.exit("fleet: set backup_mail_box in the inventory to the box running fleet-backup-mail (not this machine)")
+    dest = Path(a.dest or str(HUB_BACKUPS))
+    dest.mkdir(parents=True, exist_ok=True, mode=0o700)
+    src = f"{_BACKUP_BOX['ssh_user']}@{_BACKUP_BOX['reach']['ssh']}:{HUB_BACKUPS}/"
+    r = subprocess.run(["rsync", "-a", "--delete", "-e", "ssh -o BatchMode=yes", src, str(dest) + "/"], capture_output=True, text=True)
+    print(r.stderr.strip()[-300:] if r.returncode else f"backup copies mirrored from {_BACKUP_BOX['id']} to {dest}")
+    log_action(f"backup-pull from={_BACKUP_BOX['id']} rc={r.returncode}")
+    return r.returncode
+
+
+# ----------------------------------------------------------------------------- reboot
+
+
+def cmd_reboot(a, inv):
+    """Reboot a box inside its maintenance window (or --now), then wait for it and re-check.
+    Tills: the POS keeps selling offline in the browser during the two minutes a reboot takes.
+    --all: every remote pull-mode box in canary order, stopping at the first failure."""
+    catalog = load_catalog()
+    if getattr(a, "all", False):
+        rc = 0
+        for b in select_boxes(inv, [], True):
+            if b.get("local") or b["mode"] == "push" or b["status"] in ("suspended", "offboarded"):
+                continue
+            sub = argparse.Namespace(id=b["id"], now=a.now, all=False)
+            rc = cmd_reboot(sub, inv)
+            if rc:
+                print(f"stopping after {b['id']}")
+                return rc
+        return rc
+    box = select_boxes(inv, [a.id], False)[0]
+    if box["mode"] == "push":
+        sys.exit("fleet: offline box; reboot it on site")
+    if not a.now and not in_window(box):
+        sys.exit(f"fleet: outside the maintenance window {box.get('maintenance_window')} ({box.get('timezone')}); use --now")
+    print(f"== {box['id']}: rebooting")
+    log_action(f"reboot {box['id']} now={a.now}")
+    run_on(box, "systemd-run --on-active=2 --collect /bin/systemctl reboot", timeout=30)
+    time.sleep(30)
+    for i in range(40):
+        code = http_code(f"{box['reach']['http']}/erp/api/method/ping", timeout=10)
+        if code == "200":
+            print(f"   back after ~{30 + i * 10}s")
+            break
+        time.sleep(10)
+    else:
+        print("   no answer after 7 minutes")
+        return 1
+    r = check_box(box, inv, catalog)
+    write_check(r)
+    print(f"   post-reboot check {r['status']}: " + ("; ".join(x["message"] for x in r["findings"] if x["level"] != "INFO") or "clean"))
+    push(inv, quiet=True)
+    return 0 if r["status"] not in ("CRIT", "STALE") else 1
 
 
 # ----------------------------------------------------------------------------- lifecycle
@@ -1087,13 +1207,15 @@ def main(argv=None) -> int:
     p = sub.add_parser("deploy-agent"); p.add_argument("id")
     p = sub.add_parser("deploy-watchdog"); p.add_argument("id")
     p = sub.add_parser("runrole"); p.add_argument("id"); p.add_argument("role"); p.add_argument("--tags")
+    p = sub.add_parser("reboot"); p.add_argument("id", nargs="?"); p.add_argument("--all", action="store_true"); p.add_argument("--now", action="store_true")
+    p = sub.add_parser("backup-pull"); p.add_argument("--dest")
     p = sub.add_parser("vars"); p.add_argument("action", choices=["pull", "diff", "show"]); p.add_argument("ids", nargs="*"); p.add_argument("--all", action="store_true")
     a = ap.parse_args(argv)
     inv = load_inventory()
     return {"list": cmd_list, "status": cmd_status, "check": cmd_check, "digest": cmd_digest, "manifest": cmd_manifest,
             "upgrade": cmd_upgrade, "suspend": cmd_suspend, "resume": cmd_resume, "offboard": cmd_offboard, "push": cmd_push,
             "agent-token": cmd_agent_token, "deploy-agent": cmd_deploy_agent, "deploy-watchdog": cmd_deploy_watchdog,
-            "runrole": cmd_runrole, "vars": cmd_vars}[a.cmd](a, inv)
+            "runrole": cmd_runrole, "vars": cmd_vars, "reboot": cmd_reboot, "backup-pull": cmd_backup_pull}[a.cmd](a, inv)
 
 
 if __name__ == "__main__":
