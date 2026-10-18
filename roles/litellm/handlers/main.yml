@@ -1,7 +1,0 @@
----
-- name: restart litellm
-  systemd:
-    name: litellm
-    state: restarted
-    daemon_reload: yes
-  become: yes

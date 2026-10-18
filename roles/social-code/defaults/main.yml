@@ -7,7 +7,7 @@
 social_code_src: /opt/iiab/social-code
 social_code_data_dir: /library/social-code
 
-# AI Model (LiteLLM format)
+# AI model, provider/model format (e.g. gemini/..., ollama/...)
 # Default uses Gemini. For offline IIAB deployment, use Ollama:
 #   social_code_ai_model: ollama/llama3
 social_code_ai_model: "gemini/gemini-2.0-flash"

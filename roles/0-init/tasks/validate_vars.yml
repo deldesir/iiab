@@ -84,7 +84,7 @@
 # 'loop' also sidesteps the 2023-12-04 'with_items' breakage caused by the
 # CVE-2023-5764 mitigation in ansible-core 2.16.1.)
 
-- name: Set vars_checklist for 63 + 63 vars ("XYZ_install" + "XYZ_enabled") to be checked
+- name: Set vars_checklist for 62 + 62 vars ("XYZ_install" + "XYZ_enabled") to be checked
   set_fact:
     vars_checklist:
       - hostapd
@@ -145,7 +145,6 @@
       - rivebot
       - email_bridge
       - siyuan
-      - litellm
       - openclaw
       - hermes_agent
       - mempalace

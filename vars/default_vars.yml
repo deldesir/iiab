@@ -497,12 +497,6 @@ openclaw_enabled: False
 openclaw_port: 3030
 openclaw_admin_token: ""
 
-# LiteLLM: OpenAI-compatible proxy server
-litellm_install: False
-litellm_enabled: False
-litellm_port: 4000
-litellm_master_key: ""
-
 # Bagisto: E-Commerce platform
 bagisto_install: False
 bagisto_enabled: False

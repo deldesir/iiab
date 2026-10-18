@@ -1,7 +1,7 @@
 # AI Gateway Role
 
 An IIAB Ansible role for the **AI Gateway** — a stateful conversational AI backend
-that sits between RapidPro (messaging) and LiteLLM (inference).
+that sits between RapidPro (messaging) and the LLM provider (native Gemini by default).
 
 - **Port**: `8085`
 - **Source**: `https://github.com/deldesir/gateway.git`
@@ -19,8 +19,8 @@ that sits between RapidPro (messaging) and LiteLLM (inference).
 | `ai_gateway_repo_version` | `feat/b2b-content` | Branch/tag |
 | `ai_gateway_port` | `8085` | Listening port |
 | `ai_gateway_user` | `{{ iiab_admin_user }}` | Service user |
-| `ai_gateway_openai_api_base` | `http://localhost:4000` | LiteLLM endpoint |
-| `ai_gateway_openai_api_key` | `{{ litellm_master_key }}` | LiteLLM API key |
+| `ai_gateway_openai_api_base` | `http://localhost:4000` | OpenAI-compatible endpoint (fallback path only) |
+| `ai_gateway_openai_api_key` | `change-me` | API key for the fallback endpoint |
 | `ai_gateway_llm_model` | `openai/custom_ai` | Primary LLM model alias |
 | `ai_gateway_rapidpro_host` | `http://localhost:8080` | RapidPro URL |
 | `ai_gateway_rapidpro_token` | `{{ rapidpro_auth_token }}` | RapidPro API token |

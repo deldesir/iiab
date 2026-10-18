@@ -478,6 +478,7 @@ rapidpro_aws_secret_access_key: ""
 ai_gateway_install: True
 ai_gateway_enabled: True
 ai_gateway_api_key: "CHANGEME"            # Generate: python3 -c "import secrets; print(secrets.token_hex(16))"
+ai_gateway_gemini_api_key: "CHANGEME"    # Google AI Studio key: the gateway runs the native Gemini provider
 # ai_gateway_llm_model: "gemini-3.1-flash-lite-preview"
 # ai_gateway_admin_phone: "YOUR_PHONE"
 
@@ -492,15 +493,6 @@ mempalace_enabled: True
 
 rivebot_install: True
 rivebot_enabled: True
-
-# LiteLLM — Multi-provider LLM proxy (optional, disabled by default)
-litellm_install: False
-litellm_enabled: False
-litellm_master_key: "CHANGEME"            # Generate unique token
-litellm_env:
-  OPENAI_API_KEY: "sk-..."
-  ANTHROPIC_API_KEY: "sk-..."
-  GEMINI_API_KEY: "YOUR_GEMINI_API_KEY"
 
 # SiYuan — Note-taking / knowledge base
 siyuan_install: True
