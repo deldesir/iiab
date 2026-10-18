@@ -139,8 +139,6 @@ $IPTABLES -A INPUT -p udp --dport 5984 -j DROP
 # (ts-input ACCEPTs tailscale0 above them) — tailnet access is set via Tailscale ACLs.
 # AI Gateway (uvicorn)
 $IPTABLES -A INPUT -p tcp --dport $(iiab_var_value ai_gateway_port) -j DROP
-# LiteLLM proxy
-$IPTABLES -A INPUT -p tcp --dport $(iiab_var_value litellm_port) -j DROP
 # RiveBot (already on 127.0.0.1 but drop as safety net)
 $IPTABLES -A INPUT -p tcp --dport $(iiab_var_value rivebot_port) -j DROP
 # WuzAPI — WhatsApp channel bridge (already on 127.0.0.1; safety net)

@@ -16,6 +16,4 @@ dependencies:
     vars:
       postgresql_install: true
       postgresql_enabled: true
-  # NOTE: litellm was decommissioned — Hermes uses native Gemini provider.
-  # LiteLLM proxy is no longer needed or started.
 

@@ -79,11 +79,6 @@
     name: openclaw
   when: openclaw_install
 
-- name: LITELLM
-  include_role:
-    name: litellm
-  when: litellm_install
-
 - name: SIYUAN
   include_role:
     name: siyuan
