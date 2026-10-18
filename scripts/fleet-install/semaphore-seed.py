@@ -86,6 +86,8 @@ TEMPLATES = [
     ("Fleet · resume", "resume.sh", "Maintenance page OFF", [sv("BOX", "Box id", required=True)]),
     ("Fleet · monitor seed", "kuma-seed.sh", "Re-seed Uptime Kuma (adds what is missing)", []),
     ("Fleet · push", "push.sh", "Mirror inventory, catalog, checks and releases into the fleet site", []),
+    ("Fleet · reboot", "reboot.sh", "Reboot a box (or all remote boxes) inside its maintenance window; NOW=yes overrides", [sv("BOX", "Box id, or all", required=True), sv("NOW", "Ignore the window (yes/no)", default="no")]),
+    ("Fleet · backup pull", "backup-pull.sh", "Mirror the observer's backup copies onto this hub", []),
     ("IIAB · run role", "runrole.sh", "Run an IIAB Ansible role on a box through the box's own runrole (reads that box's local_vars.yml)", [sv("BOX", "Box id", required=True, default="hub"), sv("ROLE", "Role name (e.g. erpnext, rapidpro, ai-gateway)", required=True), sv("TAGS", "Tags (optional, comma-separated)")]),
 ]
 existing = {t["name"]: t for t in (api.call("GET", f"{P}/templates") or [])}
