@@ -1,0 +1,791 @@
+#!/usr/bin/env python3
+"""fleet — operate a fleet of Frappe/ERPNext boxes from the hub.
+
+The inventory (/etc/iiab/fleet.yml) is the source of truth: one record per box with
+its role, owner, plan, status, canary rank and maintenance window. Everything here
+reads it; nothing here edits it except `suspend`, `resume`, `offboard` (status) and
+`manifest set-current` (current_release).
+
+  fleet list                              the inventory, one line per box
+  fleet status                            last check per box, release, subscription state
+  fleet check [ID...|--all] [--no-push]   health check (heads, units, errors, HTTP, disk,
+                                          backup age, TLS, open shifts); writes
+                                          /var/lib/fleet/checks/<id>/ and the digest
+  fleet digest [--send]                   print the digest; --send hands it to the
+                                          gateway (fleet-digest.service) for delivery
+  fleet manifest capture --id ID [--from BOX]   record a release: app=commit per app
+  fleet manifest list|show ID|set-current ID
+  fleet upgrade [ID...|--all] [--release ID] [--preflight] [--now] [--allow-discard ERE]
+                                          bench-upgrade.sh per box in canary order,
+                                          pinned to a release manifest, smoke after each,
+                                          stop at the first failure
+  fleet suspend ID [--reason TEXT]        maintenance page on (contract grace exhausted)
+  fleet resume ID                         maintenance page off
+  fleet offboard ID                       final backup with files pulled to the hub +
+                                          HANDOVER.txt; prints the wipe steps, runs none
+  fleet push                              mirror inventory + latest checks + releases into
+                                          the ERPNext fleet site (needs /etc/iiab/fleet.conf)
+
+Exit codes: 0 ok, 1 a box failed a check/upgrade, 2 usage or configuration error.
+Runs as root on the hub (needs the fleet SSH key and /etc/iiab). Public repository:
+this file must stay generic — every name lives in the inventory, never here.
+"""
+from __future__ import annotations
+
+import argparse
+import concurrent.futures as cf
+import datetime as dt
+import json
+import os
+import re
+import shlex
+import socket
+import ssl
+import subprocess
+import sys
+import time
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover
+    sys.exit("fleet: python3-yaml is required")
+
+INVENTORY = Path(os.environ.get("FLEET_INVENTORY", "/etc/iiab/fleet.yml"))
+RELEASES = Path(os.environ.get("FLEET_RELEASES", "/etc/iiab/fleet-releases"))
+STATE = Path(os.environ.get("FLEET_STATE", "/var/lib/fleet"))
+PUSH_CONF = Path(os.environ.get("FLEET_PUSH_CONF", "/etc/iiab/fleet.conf"))
+# bench-upgrade.sh ships in the iiab repo; `fleet` itself is installed as a copy in /usr/local/sbin
+_here = Path(__file__).resolve().parent
+UPGRADE_SCRIPT = Path(os.environ.get("FLEET_UPGRADE_SCRIPT") or (
+    _here / "bench-upgrade.sh" if (_here / "bench-upgrade.sh").exists() else "/opt/iiab/iiab/scripts/bench-upgrade.sh"))
+APPS = ["frappe", "erpnext", "hrms", "whatsapp", "crm", "builder", "webshop", "payments", "pos_next"]
+TARGETS = ["frappe-bench-frappe-schedule", "frappe-bench-web.target", "frappe-bench-workers.target"]
+KEEP_CHECKS = 90
+BACKUP_STALE_HOURS = 36
+TLS_WARN_DAYS = 14
+HUB_BACKUPS = Path("/library/backups/fleet")
+
+# ----------------------------------------------------------------------------- inventory
+
+
+def load_inventory() -> dict:
+    if not INVENTORY.exists():
+        sys.exit(f"fleet: inventory {INVENTORY} missing")
+    inv = yaml.safe_load(INVENTORY.read_text()) or {}
+    inv.setdefault("defaults", {})
+    inv.setdefault("boxes", [])
+    for b in inv["boxes"]:
+        for k, v in inv["defaults"].items():
+            b.setdefault(k, v)
+        b.setdefault("local", False)
+        b.setdefault("status", "active")
+        b.setdefault("canary_rank", 99)
+    return inv
+
+
+def save_inventory(inv: dict) -> None:
+    """Rewrite the inventory keeping the header comment block."""
+    text = INVENTORY.read_text()
+    header = "".join(line for line in text.splitlines(keepends=True) if line.startswith("#"))
+    body = {k: v for k, v in inv.items()}
+    # strip defaults that were merged into boxes
+    for b in body["boxes"]:
+        for k in list(b):
+            if k in inv["defaults"] and b[k] == inv["defaults"][k] and k not in ("plan", "status"):
+                del b[k]
+        if b.get("local") is False:
+            del b["local"]
+    tmp = INVENTORY.with_suffix(".tmp")
+    tmp.write_text(header + yaml.safe_dump(body, sort_keys=False, allow_unicode=True, width=100))
+    os.chmod(tmp, 0o640)
+    tmp.replace(INVENTORY)
+
+
+def select_boxes(inv: dict, ids: list[str], all_: bool) -> list[dict]:
+    boxes = sorted(inv["boxes"], key=lambda b: (b["canary_rank"], b["id"]))
+    if all_ or not ids:
+        return boxes
+    by_id = {b["id"]: b for b in boxes}
+    by_host = {b["host"]: b for b in boxes}
+    out = []
+    for i in ids:
+        b = by_id.get(i) or by_host.get(i)
+        if not b:
+            sys.exit(f"fleet: unknown box {i!r} (ids: {', '.join(by_id)})")
+        out.append(b)
+    return out
+
+
+# ----------------------------------------------------------------------------- remote exec
+
+
+def run_on(box: dict, cmd: str, timeout: int = 120) -> tuple[int, str]:
+    """Run a shell command on the box (locally for the hub). Returns (rc, output)."""
+    if box.get("local"):
+        argv = ["bash", "-c", cmd]
+    else:
+        argv = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
+                f"{box['ssh_user']}@{box['host']}", cmd]
+    try:
+        p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return 124, "timeout"
+    return p.returncode, (p.stdout + p.stderr).strip()
+
+
+def scp_to(box: dict, src: Path, dest: str) -> None:
+    if box.get("local"):
+        subprocess.run(["install", "-m", "0755", str(src), dest], check=True)
+    else:
+        subprocess.run(["scp", "-q", "-o", "BatchMode=yes", str(src),
+                        f"{box['ssh_user']}@{box['host']}:{dest}"], check=True)
+
+
+def bench(box: dict, args: str) -> str:
+    return (f"sudo -u frappe -H bash -lc {shlex.quote(f'cd {box['bench']} && bench {args}')}")
+
+
+# ----------------------------------------------------------------------------- releases
+
+
+def manifest_path(rid: str) -> Path:
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", rid):
+        sys.exit("fleet: release id may contain letters, digits, . _ -")
+    return RELEASES / f"{rid}.manifest"
+
+
+def read_manifest(rid: str) -> dict[str, str]:
+    p = manifest_path(rid)
+    if not p.exists():
+        sys.exit(f"fleet: no release {rid} ({p})")
+    heads = {}
+    for line in p.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        k, _, v = line.partition("=")
+        heads[k.strip()] = v.strip()
+    return heads
+
+
+def heads_of(box: dict, short: bool = False) -> dict[str, str]:
+    fmt = "--short" if short else ""
+    cmd = " ; ".join(
+        f"printf '%s=%s\\n' {a} $(sudo -u frappe git -C {box['bench']}/apps/{a} rev-parse {fmt} HEAD 2>/dev/null || echo '?')"
+        for a in APPS)
+    rc, out = run_on(box, cmd)
+    heads = {}
+    for line in out.splitlines():
+        k, _, v = line.partition("=")
+        if k in APPS:
+            heads[k] = v.strip()
+    return heads
+
+
+def cmd_manifest(a, inv):
+    RELEASES.mkdir(parents=True, exist_ok=True)
+    if a.action == "capture":
+        box = select_boxes(inv, [a.from_box] if a.from_box else [], False)[0]
+        heads = heads_of(box)
+        missing = [k for k in APPS if heads.get(k, "?") == "?"]
+        if missing:
+            sys.exit(f"fleet: could not read heads for {missing} on {box['id']}")
+        p = manifest_path(a.id)
+        if p.exists() and not a.force:
+            sys.exit(f"fleet: {p} exists (use --force to overwrite)")
+        stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        lines = [f"# fleet release {a.id} — captured {stamp} from {box['id']}",
+                 "# app=full commit; bench-upgrade.sh pins each app to exactly this commit",
+                 f"release={a.id}", f"captured={stamp}"]
+        if a.notes:
+            lines.append(f"notes={a.notes}")
+        lines += [f"{k}={heads[k]}" for k in APPS]
+        p.write_text("\n".join(lines) + "\n")
+        print(f"captured {a.id} -> {p}")
+        for k in APPS:
+            print(f"  {k:<9} {heads[k][:10]}")
+    elif a.action == "list":
+        cur = inv.get("current_release") or ""
+        for p in sorted(RELEASES.glob("*.manifest")):
+            rid = p.stem
+            m = read_manifest(rid)
+            flag = "  (current)" if rid == cur else ""
+            print(f"{rid:<18} {m.get('captured','?'):<22}{flag}")
+    elif a.action == "show":
+        m = read_manifest(a.id)
+        for k, v in m.items():
+            print(f"{k}={v}")
+    elif a.action == "set-current":
+        read_manifest(a.id)
+        inv["current_release"] = a.id
+        save_inventory(inv)
+        print(f"current_release = {a.id}")
+
+
+# ----------------------------------------------------------------------------- checks
+
+
+def http_code(url: str, host_header: str | None = None, timeout: int = 20) -> str:
+    argv = ["curl", "-s", "-o", "/dev/null", "-m", str(timeout), "-w", "%{http_code}", "-L", url]
+    if host_header:
+        argv[1:1] = ["-H", f"Host: {host_header}"]
+    try:
+        return subprocess.run(argv, capture_output=True, text=True, timeout=timeout + 5).stdout.strip() or "000"
+    except subprocess.TimeoutExpired:
+        return "000"
+
+
+def tls_days_left(host: str) -> int | None:
+    try:
+        ctx = ssl.create_default_context()
+        with socket.create_connection((host, 443), timeout=10) as s, ctx.wrap_socket(s, server_hostname=host) as ss:
+            cert = ss.getpeercert()
+        exp = dt.datetime.strptime(cert["notAfter"], "%b %d %H:%M:%S %Y %Z").replace(tzinfo=dt.timezone.utc)
+        return (exp - dt.datetime.now(dt.timezone.utc)).days
+    except Exception:
+        return None
+
+
+DOMAIN_WARN_DAYS = 30
+
+
+def domain_info(host: str) -> dict:
+    """Registrar and expiry via RDAP (rdap.org bootstraps every TLD it knows; a registry
+    URL is tried for the rest). Cached for a day under the state dir; failures cache too,
+    so one bad registry does not slow every check."""
+    cache = STATE / "rdap"
+    cache.mkdir(parents=True, exist_ok=True)
+    f = cache / f"{host}.json"
+    if f.exists() and time.time() - f.stat().st_mtime < 86400:
+        return json.loads(f.read_text())
+    import urllib.request
+    tld = host.rsplit(".", 1)[-1]
+    out = {"registrar": None, "expiry": None, "days_left": None}
+    for url in (f"https://rdap.org/domain/{host}", f"https://rdap.nic.{tld}/domain/{host}"):
+        try:
+            req = urllib.request.Request(url, headers={"Accept": "application/rdap+json", "User-Agent": "fleet-check"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                j = json.load(r)
+        except Exception:
+            continue
+        exp = next((e.get("eventDate") for e in j.get("events", []) if e.get("eventAction") == "expiration"), None)
+        reg = None
+        for ent in j.get("entities", []):
+            if "registrar" in (ent.get("roles") or []):
+                reg = next((v[3] for v in (ent.get("vcardArray") or [None, []])[1] if v and v[0] == "fn"), None)
+                break
+        if exp:
+            d = dt.datetime.fromisoformat(exp.replace("Z", "+00:00"))
+            out = {"registrar": reg, "expiry": d.date().isoformat(),
+                   "days_left": (d - dt.datetime.now(dt.timezone.utc)).days}
+            break
+    f.write_text(json.dumps(out))
+    return out
+
+
+def hub_backup_age_hours(host: str) -> float | None:
+    d = HUB_BACKUPS / host
+    if not d.is_dir():
+        return None
+    newest = None
+    for sub in d.iterdir():
+        if sub.is_dir() and re.fullmatch(r"\d{4}-\d{2}-\d{2}", sub.name):
+            for f in sub.glob("*-database*.sql.gz"):
+                m = f.stat().st_mtime
+                newest = m if newest is None or m > newest else newest
+    if newest is None:
+        return None
+    return round((time.time() - newest) / 3600, 1)
+
+
+REMOTE_PROBE = r"""
+B={bench}; S={site}
+db=$(python3 -c "import json;print(json.load(open('$B/sites/$S/site_config.json'))['db_name'])" 2>/dev/null)
+echo "targets=$(systemctl is-active {targets} 2>/dev/null | tr '\n' ' ')"
+echo "failed_units=$(systemctl --failed --no-legend | wc -l)"
+echo "errorlog=$(mysql -N -e "select count(*) from \`tabError Log\` where creation > '{since}'" $db 2>/dev/null || echo '?')"
+echo "open_shifts=$(mysql -N -e "select count(*) from \`tabPOS Opening Shift\` where status='Open' and docstatus=1" $db 2>/dev/null || echo '?')"
+echo "disk_free_gb=$(df -BG --output=avail / | awk 'NR==2{{print $1+0}}')"
+echo "ram_avail_mb=$(awk '/MemAvailable/{{print int($2/1024)}}' /proc/meminfo)"
+echo "load1=$(cut -d' ' -f1 /proc/loadavg)"
+echo "box_backup_age_h=$(f=$(ls -t $B/sites/$S/private/backups/*-database*.sql.gz 2>/dev/null | head -1); [ -n "$f" ] && echo $(( ($(date +%s) - $(stat -c %Y "$f")) / 3600 )) || echo '?')"
+echo "maintenance=$(python3 -c "import json;print(json.load(open('$B/sites/$S/site_config.json')).get('maintenance_mode',0))" 2>/dev/null)"
+echo "uptime_s=$(cut -d. -f1 /proc/uptime)"
+"""
+
+
+def check_box(box: dict, inv: dict) -> dict:
+    tz = ZoneInfo(box.get("timezone") or "UTC")
+    now = dt.datetime.now(tz)
+    since = now.strftime("%Y-%m-%d 00:00:00")
+    res: dict = {"id": box["id"], "host": box["host"], "role": box["role"], "status_inventory": box["status"],
+                 "checked_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "problems": []}
+    heads = heads_of(box, short=False)
+    res["heads"] = heads
+    if not heads or all(v == "?" for v in heads.values()):
+        res["problems"].append("unreachable: could not read app heads")
+        res["status"] = "FAILED"
+        return res
+    probe = REMOTE_PROBE.format(bench=box["bench"], site=box["site"], targets=" ".join(TARGETS), since=since)
+    rc, out = run_on(box, probe)
+    kv = {}
+    for line in out.splitlines():
+        k, _, v = line.partition("=")
+        kv[k.strip()] = v.strip()
+    res.update({
+        "targets": kv.get("targets", ""),
+        "failed_units": kv.get("failed_units", "?"),
+        "errorlog_rows_today": kv.get("errorlog", "?"),
+        "open_shifts": kv.get("open_shifts", "?"),
+        "disk_free_gb": kv.get("disk_free_gb", "?"),
+        "ram_avail_mb": kv.get("ram_avail_mb", "?"),
+        "load1": kv.get("load1", "?"),
+        "box_backup_age_h": kv.get("box_backup_age_h", "?"),
+        "maintenance_mode": kv.get("maintenance", "?"),
+        "uptime_s": kv.get("uptime_s", "?"),
+    })
+    for t, s in zip(TARGETS, res["targets"].split()):
+        if s != "active":
+            res["problems"].append(f"{t} is {s}")
+    if res["failed_units"] not in ("0", "?"):
+        res["problems"].append(f"{res['failed_units']} failed systemd unit(s)")
+    if res["disk_free_gb"].isdigit() and int(res["disk_free_gb"]) < 10:
+        res["problems"].append(f"disk free {res['disk_free_gb']} GB")
+    # HTTP
+    paths = ["/erp/login", "/erp/api/method/ping", "/"]
+    if box.get("profile") == "retail":
+        paths.insert(2, "/erp/pos")
+    codes = {}
+    for p in paths:
+        codes[p] = http_code(f"https://{box['host']}{p}")
+    res["http"] = codes
+    suspended = box["status"] == "suspended"
+    for p, c in codes.items():
+        if c != "200" and not (suspended and c == "503"):
+            res["problems"].append(f"HTTP {c} on {p}")
+    # TLS
+    days = tls_days_left(box["host"])
+    res["tls_days_left"] = days
+    if days is None:
+        res["problems"].append("TLS certificate unreadable")
+    elif days < TLS_WARN_DAYS:
+        res["problems"].append(f"TLS certificate expires in {days} days")
+    # domain registration
+    dom = domain_info(box["host"])
+    res["domain_registrar"], res["domain_expiry"], res["domain_days_left"] = dom["registrar"], dom["expiry"], dom["days_left"]
+    if dom["days_left"] is not None and dom["days_left"] < DOMAIN_WARN_DAYS:
+        res["problems"].append(f"domain registration expires in {dom['days_left']} days")
+    # extra services this box must keep up (inventory: monitor_units)
+    extra = box.get("monitor_units") or []
+    if extra:
+        rc, out = run_on(box, "systemctl is-active " + " ".join(shlex.quote(u) for u in extra))
+        states = out.split()
+        res["monitor_units"] = dict(zip(extra, states))
+        for u, st in zip(extra, states):
+            if st != "active":
+                res["problems"].append(f"{u} is {st}")
+    # backups
+    hub_age = hub_backup_age_hours(box["host"])
+    res["hub_backup_age_h"] = hub_age
+    if hub_age is None or hub_age > BACKUP_STALE_HOURS:
+        res["problems"].append(f"hub backup copy stale ({hub_age} h)")
+    # release
+    cur = inv.get("current_release") or ""
+    res["release_current"] = cur
+    if cur:
+        want = read_manifest(cur)
+        behind = [a for a in APPS if want.get(a) and heads.get(a) != want.get(a)]
+        res["behind_release"] = behind
+        if behind:
+            res["problems"].append(f"behind {cur}: {', '.join(behind)}")
+    res["status"] = "FAILED" if res["problems"] else "OK"
+    return res
+
+
+def write_check(res: dict) -> None:
+    d = STATE / "checks" / res["id"]
+    d.mkdir(parents=True, exist_ok=True)
+    stamp = res["checked_at"].replace(":", "").replace("-", "")
+    (d / f"{stamp}.json").write_text(json.dumps(res, indent=1))
+    (d / "latest.json").write_text(json.dumps(res, indent=1))
+    old = sorted(p for p in d.glob("*.json") if p.name != "latest.json")
+    for p in old[:-KEEP_CHECKS]:
+        p.unlink()
+
+
+def latest_checks(inv: dict) -> dict[str, dict]:
+    out = {}
+    for b in inv["boxes"]:
+        p = STATE / "checks" / b["id"] / "latest.json"
+        if p.exists():
+            out[b["id"]] = json.loads(p.read_text())
+    return out
+
+
+def fmt_age(h) -> str:
+    if h in (None, "?"):
+        return "?"
+    h = float(h)
+    return f"{h:.0f}h" if h < 48 else f"{h/24:.1f}d"
+
+
+def build_digest(inv: dict, checks: dict[str, dict]) -> str:
+    tz = ZoneInfo(inv["defaults"].get("timezone") or "UTC")
+    now = dt.datetime.now(tz).strftime("%a %d %b %H:%M")
+    ok = [c for c in checks.values() if c.get("status") == "OK"]
+    bad = [c for c in checks.values() if c.get("status") != "OK"]
+    lines = [f"Fleet {now}: {len(ok)} ok, {len(bad)} failing of {len(inv['boxes'])}"]
+    rel = inv.get("current_release") or "none"
+    lines.append(f"Release: {rel}")
+    for b in sorted(inv["boxes"], key=lambda b: (b["canary_rank"], b["id"])):
+        c = checks.get(b["id"])
+        if not c:
+            lines.append(f"- {b['id']}: never checked")
+            continue
+        mark = "OK " if c["status"] == "OK" else "!! "
+        bits = [f"disk {c.get('disk_free_gb','?')}G", f"bak {fmt_age(c.get('hub_backup_age_h'))}",
+                f"err {c.get('errorlog_rows_today','?')}"]
+        if c.get("open_shifts") not in ("?", None) and b["role"] == "till":
+            bits.append(f"shifts {c['open_shifts']}")
+        if c.get("tls_days_left") is not None:
+            bits.append(f"tls {c['tls_days_left']}d")
+        if c.get("domain_days_left") is not None and c["domain_days_left"] < 90:
+            bits.append(f"domain {c['domain_days_left']}d")
+        if b["status"] != "active":
+            bits.append(b["status"].upper())
+        lines.append(f"- {mark}{b['id']} ({b['business']}): " + ", ".join(bits))
+        for p in c.get("problems", []):
+            lines.append(f"    · {p}")
+    return "\n".join(lines)
+
+
+def cmd_check(a, inv):
+    boxes = select_boxes(inv, a.ids, a.all)
+    results = {}
+    with cf.ThreadPoolExecutor(max_workers=6) as ex:
+        futs = {ex.submit(check_box, b, inv): b for b in boxes}
+        for f in cf.as_completed(futs):
+            r = f.result()
+            results[r["id"]] = r
+            write_check(r)
+    for b in boxes:
+        r = results[b["id"]]
+        heads = " ".join(f"{k}={v[:7]}" for k, v in r.get("heads", {}).items())
+        print(f"== {b['id']} {b['host']} {r['status']}")
+        print(f"   {heads}")
+        if r.get("http"):
+            print("   " + " ".join(f"{p}={c}" for p, c in r["http"].items()))
+        print(f"   disk {r.get('disk_free_gb','?')}G ram {r.get('ram_avail_mb','?')}M err {r.get('errorlog_rows_today','?')}"
+              f" shifts {r.get('open_shifts','?')} bak hub {fmt_age(r.get('hub_backup_age_h'))} box {fmt_age(r.get('box_backup_age_h'))}"
+              f" tls {r.get('tls_days_left')}d domain {r.get('domain_days_left')}d ({r.get('domain_registrar') or '?'})")
+        for p in r.get("problems", []):
+            print(f"   !! {p}")
+    all_checks = latest_checks(inv)
+    digest = build_digest(inv, all_checks)
+    (STATE / "latest-digest.txt").write_text(digest + "\n")
+    os.chmod(STATE / "latest-digest.txt", 0o644)
+    if not a.no_push:
+        push(inv, quiet=True)
+    failed = [r["id"] for r in results.values() if r["status"] != "OK"]
+    if a.all:
+        kuma_heartbeat(all_checks)
+    print(f"CHECK-{'FAILED ' + ','.join(failed) if failed else 'OK'}")
+    return 1 if failed else 0
+
+
+def kuma_heartbeat(all_checks: dict[str, dict]) -> None:
+    """Feed the Uptime Kuma push monitor: up when every box is OK, down (with the list)
+    otherwise, so a failed nightly check raises the same alert as an outage."""
+    conf = read_conf(PUSH_CONF)
+    url, token = conf.get("KUMA_URL"), conf.get("KUMA_PUSH_TOKEN")
+    if not (url and token):
+        return
+    failing = [i for i, c in all_checks.items() if c.get("status") != "OK"]
+    status = "down" if failing else "up"
+    msg = ("failing: " + ", ".join(failing)) if failing else "CHECK-OK"
+    try:
+        import requests
+        requests.get(f"{url.rstrip('/')}/api/push/{token}", params={"status": status, "msg": msg[:250]}, timeout=10)
+    except Exception as e:
+        print(f"kuma heartbeat: {e}")
+
+
+def read_conf(p: Path) -> dict:
+    conf = {}
+    if p.exists():
+        for line in p.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, _, v = line.partition("=")
+                conf[k.strip()] = v.strip().strip('"')
+    return conf
+
+
+def cmd_digest(a, inv):
+    p = STATE / "latest-digest.txt"
+    if not p.exists():
+        sys.exit("fleet: no digest yet (run `fleet check --all`)")
+    print(p.read_text(), end="")
+    if a.send:
+        subprocess.run(["systemctl", "start", "fleet-digest.service"], check=False)
+        print("(handed to fleet-digest.service)")
+    return 0
+
+
+def cmd_status(a, inv):
+    checks = latest_checks(inv)
+    print(f"release: {inv.get('current_release') or 'none'}   inventory: {INVENTORY}")
+    print(f"{'id':<10} {'host':<22} {'role':<9} {'status':<10} {'check':<7} {'when':<17} problems")
+    for b in sorted(inv["boxes"], key=lambda b: (b["canary_rank"], b["id"])):
+        c = checks.get(b["id"], {})
+        when = c.get("checked_at", "-")[:16].replace("T", " ")
+        probs = "; ".join(c.get("problems", [])) or "-"
+        print(f"{b['id']:<10} {b['host']:<22} {b['role']:<9} {b['status']:<10} {c.get('status','-'):<7} {when:<17} {probs}")
+    return 0
+
+
+def cmd_list(a, inv):
+    print(f"{'rank':<4} {'id':<10} {'host':<22} {'business':<24} {'role':<9} {'owner':<9} {'plan':<10} status")
+    for b in sorted(inv["boxes"], key=lambda b: (b["canary_rank"], b["id"])):
+        print(f"{b['canary_rank']:<4} {b['id']:<10} {b['host']:<22} {b['business']:<24} {b['role']:<9} {b['owner']:<9} {b.get('plan',''):<10} {b['status']}")
+    return 0
+
+
+# ----------------------------------------------------------------------------- upgrade
+
+
+def in_window(box: dict) -> bool:
+    win = box.get("maintenance_window") or ""
+    m = re.fullmatch(r"(\d\d):(\d\d)-(\d\d):(\d\d)", win)
+    if not m:
+        return True
+    tz = ZoneInfo(box.get("timezone") or "UTC")
+    now = dt.datetime.now(tz).time()
+    start = dt.time(int(m[1]), int(m[2]))
+    end = dt.time(int(m[3]), int(m[4]))
+    if start <= end:
+        return start <= now <= end
+    return now >= start or now <= end          # window crosses midnight
+
+
+def log_action(text: str) -> None:
+    STATE.mkdir(parents=True, exist_ok=True)
+    with open(STATE / "actions.log", "a") as f:
+        f.write(f"{dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds')} {text}\n")
+
+
+def upgrade_box(box: dict, rid: str | None, preflight: bool, allow_discard: str | None) -> bool:
+    if not UPGRADE_SCRIPT.exists():
+        sys.exit(f"fleet: {UPGRADE_SCRIPT} missing")
+    scp_to(box, UPGRADE_SCRIPT, "/root/bench-upgrade.sh")
+    env = []
+    if rid:
+        scp_to(box, manifest_path(rid), "/root/bench-upgrade.manifest")
+        env.append("--setenv=MANIFEST=/root/bench-upgrade.manifest")
+    if preflight:
+        env.append("--setenv=PREFLIGHT_ONLY=1")
+    if allow_discard:
+        env.append(f"--setenv=ALLOW_DISCARD={allow_discard}")
+    unit = f"bench-upgrade-{int(time.time())}"
+    log = f"/root/bench-upgrade-{dt.date.today():%Y-%m-%d}.log"
+    rc, out = run_on(box, f"systemd-run --unit={unit} --collect --setenv=HOME=/root {' '.join(env)} /bin/bash /root/bench-upgrade.sh")
+    if rc != 0:
+        print(f"   could not start the upgrade unit: {out}")
+        return False
+    print(f"   started {unit}; log {log}")
+    deadline = time.time() + 3600
+    last = ""
+    while time.time() < deadline:
+        time.sleep(20)
+        rc, out = run_on(box, f"tail -n 3 {log}")
+        tail = out.splitlines()[-1] if out else ""
+        if tail != last:
+            print(f"   {tail}")
+            last = tail
+        if any(l.startswith(("UPGRADE-OK", "UPGRADE-FAILED", "PREFLIGHT-OK")) for l in out.splitlines()):
+            rc2, _ = run_on(box, f"systemctl is-active {unit} >/dev/null 2>&1; grep -qE '^(UPGRADE-OK|PREFLIGHT-OK)' <(tail -n 3 {log})")
+            return rc2 == 0
+    print("   timed out after 60 minutes")
+    return False
+
+
+def cmd_upgrade(a, inv):
+    boxes = select_boxes(inv, a.ids, a.all)
+    rid = a.release or inv.get("current_release") or None
+    if rid:
+        read_manifest(rid)
+    print(f"upgrade {'(preflight) ' if a.preflight else ''}order: {', '.join(b['id'] for b in boxes)}; release: {rid or 'fork heads'}")
+    for b in boxes:
+        if b["status"] in ("suspended", "offboarded") and not a.now:
+            print(f"== {b['id']}: skipped ({b['status']})")
+            continue
+        if not a.preflight and not a.now and not in_window(b):
+            print(f"== {b['id']}: outside its maintenance window {b.get('maintenance_window')} ({b.get('timezone')}); use --now")
+            return 1
+        print(f"== {b['id']} {b['host']}")
+        ok = upgrade_box(b, rid, a.preflight, a.allow_discard)
+        log_action(f"upgrade {b['id']} release={rid} preflight={a.preflight} result={'ok' if ok else 'FAILED'}")
+        if not ok:
+            print(f"UPGRADE-FAILED {b['id']} — stopping the rollout")
+            return 1
+        if not a.preflight:
+            r = check_box(b, inv)
+            write_check(r)
+            if r["status"] != "OK":
+                print(f"   post-upgrade check FAILED: {'; '.join(r['problems'])} — stopping the rollout")
+                return 1
+            print("   post-upgrade check OK")
+    print("UPGRADE-OK" if not a.preflight else "PREFLIGHT-OK")
+    return 0
+
+
+# ----------------------------------------------------------------------------- suspend / resume / offboard
+
+
+def set_status(inv: dict, box: dict, status: str) -> None:
+    for b in inv["boxes"]:
+        if b["id"] == box["id"]:
+            b["status"] = status
+    save_inventory(inv)
+
+
+def cmd_suspend(a, inv):
+    box = select_boxes(inv, [a.id], False)[0]
+    if box["owner"] == "self":
+        sys.exit("fleet: refusing to suspend one of our own boxes")
+    rc, out = run_on(box, bench(box, f"--site {box['site']} set-maintenance-mode on"))
+    if rc != 0:
+        print(out)
+        return 1
+    set_status(inv, box, "suspended")
+    log_action(f"suspend {box['id']} reason={a.reason!r}")
+    print(f"{box['id']} suspended (maintenance page on). Reason: {a.reason or '-'}")
+    push(inv, quiet=True)
+    return 0
+
+
+def cmd_resume(a, inv):
+    box = select_boxes(inv, [a.id], False)[0]
+    rc, out = run_on(box, bench(box, f"--site {box['site']} set-maintenance-mode off"))
+    if rc != 0:
+        print(out)
+        return 1
+    set_status(inv, box, "active")
+    log_action(f"resume {box['id']}")
+    print(f"{box['id']} resumed")
+    push(inv, quiet=True)
+    return 0
+
+
+def cmd_offboard(a, inv):
+    box = select_boxes(inv, [a.id], False)[0]
+    if box["owner"] == "self":
+        sys.exit("fleet: refusing to offboard one of our own boxes")
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    dest = Path("/library/backups/offboard") / box["id"] / stamp
+    dest.mkdir(parents=True, exist_ok=True)
+    print(f"== {box['id']}: final backup with files")
+    rc, out = run_on(box, bench(box, f"--site {box['site']} backup --with-files"), timeout=1800)
+    if rc != 0:
+        print(out)
+        return 1
+    bdir = f"{box['bench']}/sites/{box['site']}/private/backups/"
+    src = bdir if box.get("local") else f"{box['ssh_user']}@{box['host']}:{bdir}"
+    subprocess.run(["rsync", "-a", "-e", "ssh -o BatchMode=yes", src, str(dest)], check=True)
+    (dest / "HANDOVER.txt").write_text(
+        f"Offboarding backup for {box['business']} ({box['host']}) taken {stamp}.\n"
+        "Contents: the newest *-database.sql.gz, *-files.tar, *-private-files.tar and the\n"
+        "site_config backup. Restore on any Frappe bench with the same app set:\n"
+        f"  bench new-site <site> ; bench --site <site> restore <db>.sql.gz --with-public-files <files.tar> --with-private-files <private.tar>\n"
+        "Hand this folder to the customer on the medium agreed in the contract.\n")
+    set_status(inv, box, "offboarded")
+    log_action(f"offboard {box['id']} backup={dest}")
+    print(f"backup at {dest}\n{box['id']} marked offboarded in the inventory.")
+    print("Wipe is a manual step after the customer confirms receipt in writing:\n"
+          f"  ssh {box['ssh_user']}@{box['host']} \"sudo -u frappe -H bash -lc 'cd {box['bench']} && bench drop-site {box['site']} --force'\"\n"
+          "  then remove the box from /etc/iiab/fleet.yml and /etc/iiab/fleet-backup.conf.")
+    push(inv, quiet=True)
+    return 0
+
+
+# ----------------------------------------------------------------------------- push (ERPNext mirror)
+
+
+def load_push_conf() -> dict | None:
+    conf = read_conf(PUSH_CONF)
+    need = ("FLEET_SITE_URL", "FLEET_SITE_NAME", "FLEET_API_KEY", "FLEET_API_SECRET")
+    return conf if all(conf.get(k) for k in need) else None
+
+
+def push(inv: dict, quiet: bool = False) -> int:
+    conf = load_push_conf()
+    if not conf:
+        if not quiet:
+            print(f"push: {PUSH_CONF} missing or incomplete; nothing mirrored")
+        return 0
+    import requests
+    s = requests.Session()
+    s.headers.update({"Authorization": f"token {conf['FLEET_API_KEY']}:{conf['FLEET_API_SECRET']}",
+                      "Host": conf["FLEET_SITE_NAME"], "X-Frappe-Site-Name": conf["FLEET_SITE_NAME"]})
+    base = conf["FLEET_SITE_URL"].rstrip("/")
+    checks = latest_checks(inv)
+    releases = []
+    for p in sorted(RELEASES.glob("*.manifest")):
+        m = read_manifest(p.stem)
+        releases.append({"release": p.stem, "captured": m.get("captured"), "notes": m.get("notes", ""),
+                         "apps": {k: m[k] for k in APPS if k in m}})
+    payload = {"current_release": inv.get("current_release") or "", "releases": releases, "boxes": []}
+    for b in inv["boxes"]:
+        c = checks.get(b["id"])
+        payload["boxes"].append({
+            "box_id": b["id"], "host": b["host"], "business": b["business"], "role": b["role"],
+            "owner": b["owner"], "profile": b.get("profile", ""), "plan": b.get("plan", ""),
+            "status": b["status"], "canary_rank": b["canary_rank"], "timezone": b.get("timezone", ""),
+            "maintenance_window": b.get("maintenance_window", ""),
+            "billing_contact": (b.get("contacts") or {}).get("billing", ""),
+            "technical_contact": (b.get("contacts") or {}).get("technical", ""),
+            "check": c})
+    try:
+        r = s.post(f"{base}/api/method/fleet_ops.api.sync", json=payload, timeout=60)
+        r.raise_for_status()
+        msg = r.json().get("message", {})
+    except Exception as e:
+        print(f"push: failed: {e}")
+        return 1
+    if not quiet:
+        print(f"push: {msg}")
+    return 0
+
+
+def cmd_push(a, inv):
+    return push(inv)
+
+
+# ----------------------------------------------------------------------------- main
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="fleet", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("list")
+    sub.add_parser("status")
+    p = sub.add_parser("check"); p.add_argument("ids", nargs="*"); p.add_argument("--all", action="store_true"); p.add_argument("--no-push", action="store_true")
+    p = sub.add_parser("digest"); p.add_argument("--send", action="store_true")
+    p = sub.add_parser("manifest"); ps = p.add_subparsers(dest="action", required=True)
+    c = ps.add_parser("capture"); c.add_argument("--id", required=True); c.add_argument("--from", dest="from_box"); c.add_argument("--notes"); c.add_argument("--force", action="store_true")
+    ps.add_parser("list"); c = ps.add_parser("show"); c.add_argument("id"); c = ps.add_parser("set-current"); c.add_argument("id")
+    p = sub.add_parser("upgrade"); p.add_argument("ids", nargs="*"); p.add_argument("--all", action="store_true"); p.add_argument("--release"); p.add_argument("--preflight", action="store_true"); p.add_argument("--now", action="store_true"); p.add_argument("--allow-discard")
+    p = sub.add_parser("suspend"); p.add_argument("id"); p.add_argument("--reason", default="")
+    p = sub.add_parser("resume"); p.add_argument("id")
+    p = sub.add_parser("offboard"); p.add_argument("id")
+    sub.add_parser("push")
+    a = ap.parse_args(argv)
+    inv = load_inventory()
+    return {"list": cmd_list, "status": cmd_status, "check": cmd_check, "digest": cmd_digest, "manifest": cmd_manifest,
+            "upgrade": cmd_upgrade, "suspend": cmd_suspend, "resume": cmd_resume, "offboard": cmd_offboard, "push": cmd_push}[a.cmd](a, inv)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

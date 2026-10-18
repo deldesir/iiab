@@ -1,0 +1,11 @@
+[Unit]
+Description=Fleet health check across every managed Frappe box (writes /var/lib/fleet, then hands the digest to the gateway)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/fleet check --all
+ExecStartPost=-/bin/systemctl start --no-block fleet-digest.service
+# a failing box is a finding, not a unit failure: keep the timer healthy
+SuccessExitStatus=1

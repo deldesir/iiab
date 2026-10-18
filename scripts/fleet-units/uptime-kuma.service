@@ -1,0 +1,25 @@
+[Unit]
+Description=Uptime Kuma (fleet availability monitor; tailnet-only bind)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+# Tailnet bind only: this box has a public IP and the monitor must never sit on it.
+Environment=NODE_ENV=production
+Environment=DATA_DIR=/library/uptime-kuma/
+Environment=UPTIME_KUMA_HOST=<tailnet-ip>
+Environment=UPTIME_KUMA_PORT=3001
+WorkingDirectory=/opt/uptime-kuma
+ExecStart=/usr/bin/node server/server.js
+User=uptime-kuma
+Group=uptime-kuma
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/library/uptime-kuma /opt/uptime-kuma
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

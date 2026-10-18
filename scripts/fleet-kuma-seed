@@ -1,0 +1,240 @@
+#!/var/lib/fleet/venv/bin/python
+"""fleet-kuma-seed — put Uptime Kuma in the state the fleet needs, idempotently.
+
+Reads the inventory (/etc/iiab/fleet.yml) and /etc/iiab/fleet.conf (KUMA_URL,
+KUMA_ADMIN_USER, KUMA_ADMIN_PASSWORD, KUMA_PUSH_TOKEN; the last two are generated and
+written back on first run), the operator address (RECIPIENT in /etc/iiab/fleet-backup.conf)
+and the email bridge's send token (EMAIL_SEND_AUTH in the bridge's .env; used in-process,
+never printed). Then:
+
+  1. first-run database setup (SQLite) and the admin account, if still needed
+  2. server settings: operator timezone, primary base URL, no update checks
+  3. one default notification: webhook -> email bridge /send-json -> operator mailbox
+  4. per box: "<id> ERP api" (keyword 'pong' on /erp/api/method/ping, TLS expiry on)
+              "<id> storefront" (HTTP 200 on /)
+  5. one push monitor "fleet-check" that `fleet check` feeds (down = a box failed)
+  6. a status page /status/fleet listing the ERP api monitors
+
+Re-running only adds what is missing. Exit 0 on success.
+"""
+import json
+import os
+import secrets
+import sys
+import time
+from pathlib import Path
+
+import requests
+import socketio
+import yaml
+
+INVENTORY = Path("/etc/iiab/fleet.yml")
+CONF = Path("/etc/iiab/fleet.conf")
+BACKUP_CONF = Path("/etc/iiab/fleet-backup.conf")
+BRIDGE_ENV = Path("/opt/iiab/email-bridge/.env")
+BRIDGE_URL = "http://127.0.0.1:8096/send-json"
+
+
+def read_kv(p: Path) -> dict:
+    out = {}
+    if p.exists():
+        for line in p.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, _, v = line.partition("=")
+                out[k.strip()] = v.strip().strip('"')
+    return out
+
+
+def set_kv(p: Path, key: str, value: str) -> None:
+    lines = p.read_text().splitlines() if p.exists() else []
+    for i, line in enumerate(lines):
+        if line.startswith(f"{key}="):
+            lines[i] = f"{key}={value}"
+            break
+    else:
+        lines.append(f"{key}={value}")
+    p.write_text("\n".join(lines) + "\n")
+    os.chmod(p, 0o600)
+
+
+def main() -> int:
+    conf = read_kv(CONF)
+    url = conf.get("KUMA_URL") or "http://100.64.0.18:3001"
+    user = conf.get("KUMA_ADMIN_USER") or "fleet"
+    pw = conf.get("KUMA_ADMIN_PASSWORD")
+    if not pw:
+        pw = secrets.token_urlsafe(18)
+        set_kv(CONF, "KUMA_URL", url)
+        set_kv(CONF, "KUMA_ADMIN_USER", user)
+        set_kv(CONF, "KUMA_ADMIN_PASSWORD", pw)
+        print("generated the Uptime Kuma admin password into", CONF)
+    push_token = conf.get("KUMA_PUSH_TOKEN")
+    if not push_token:
+        push_token = secrets.token_hex(16)
+        set_kv(CONF, "KUMA_PUSH_TOKEN", push_token)
+    operator = read_kv(BACKUP_CONF).get("RECIPIENT") or ""
+    bridge_token = read_kv(BRIDGE_ENV).get("EMAIL_SEND_AUTH") or ""
+    if not operator or not bridge_token:
+        sys.exit("fleet-kuma-seed: operator address or bridge token missing")
+    inv = yaml.safe_load(INVENTORY.read_text())
+    tz = (inv.get("defaults") or {}).get("timezone") or "UTC"
+
+    # 1. first-run database setup
+    for _ in range(30):
+        try:
+            entry = requests.get(f"{url}/api/entry-page", timeout=5).json()
+            break
+        except Exception:
+            time.sleep(2)
+    else:
+        sys.exit("fleet-kuma-seed: Uptime Kuma is not answering")
+    if entry.get("type") == "setup-database":
+        r = requests.post(f"{url}/setup-database", json={"dbConfig": {"type": "sqlite"}}, timeout=60)
+        print("database setup:", r.status_code, r.text[:80])
+        for _ in range(60):
+            time.sleep(2)
+            try:
+                if requests.get(f"{url}/api/entry-page", timeout=5).json().get("type") != "setup-database":
+                    break
+            except Exception:
+                pass
+        else:
+            sys.exit("fleet-kuma-seed: server did not come back after database setup")
+
+    sio = socketio.Client(logger=False, engineio_logger=False)
+    state = {"monitors": {}, "notifications": []}
+
+    @sio.on("monitorList")
+    def _ml(data):
+        state["monitors"] = data or {}
+
+    @sio.on("notificationList")
+    def _nl(data):
+        state["notifications"] = data or []
+
+    # After the database step the server migrates and re-listens; connect until it answers.
+    need = None
+    for attempt in range(12):
+        try:
+            if not sio.connected:
+                sio.connect(url, transports=["websocket"], wait_timeout=20)
+            need = sio.call("needSetup", timeout=15)
+            break
+        except Exception as e:
+            print(f"waiting for the socket server ({e.__class__.__name__}), attempt {attempt + 1}")
+            try:
+                sio.disconnect()
+            except Exception:
+                pass
+            time.sleep(5)
+    if need is None:
+        sys.exit("fleet-kuma-seed: socket server never answered")
+    if need:
+        res = sio.call("setup", (user, pw), timeout=30)
+        print("admin setup:", res.get("msg", res))
+    res = sio.call("login", {"username": user, "password": pw, "token": ""}, timeout=30)
+    if not res.get("ok"):
+        sys.exit(f"fleet-kuma-seed: login failed: {res.get('msg')}")
+    time.sleep(2)  # the server pushes monitorList / notificationList after login
+
+    # 2. settings
+    settings = sio.call("getSettings", timeout=20).get("data", {})
+    settings.update({"serverTimezone": tz, "primaryBaseURL": url, "checkUpdate": False,
+                     "checkBeta": False, "searchEngineIndex": False, "entryPage": "dashboard",
+                     "tlsExpiryNotifyDays": [7, 14, 21], "keepDataPeriodDays": 180})
+    r = sio.call("setSettings", (settings, pw), timeout=20)
+    print("settings:", r.get("msg", r))
+
+    # 3. default notification -> email bridge -> operator
+    want_name = "Operator email (bridge)"
+    existing = [n for n in state["notifications"] if n.get("name") == want_name]
+    if existing:
+        notif_id = existing[0]["id"]
+        print("notification exists:", notif_id)
+    else:
+        body = (
+            '{% capture subj %}[fleet] {{ name }} {{ status }}{% endcapture %}'
+            '{% capture text %}{{ msg }}\n\n{{ hostnameOrURL }}'
+            '{% if heartbeatJSON %}\n{{ heartbeatJSON.time }} — {{ heartbeatJSON.msg }}{% endif %}{% endcapture %}'
+            '{"to": ' + json.dumps(operator) + ', "subject": {{ subj | json }}, "text": {{ text | json }}, '
+            '"id": "kuma-{{ heartbeatJSON.monitorID }}-{{ heartbeatJSON.time }}"}'
+        )
+        notification = {"name": want_name, "type": "webhook", "isDefault": True, "applyExisting": True,
+                        "webhookURL": BRIDGE_URL, "httpMethod": "post", "webhookContentType": "custom",
+                        "webhookCustomBody": body,
+                        "webhookAdditionalHeaders": json.dumps({"Authorization": bridge_token,
+                                                                "Content-Type": "application/json"})}
+        r = sio.call("addNotification", (notification, None), timeout=20)
+        if not r.get("ok"):
+            sys.exit(f"fleet-kuma-seed: addNotification failed: {r.get('msg')}")
+        notif_id = r["id"]
+        print("notification created:", notif_id)
+        t = sio.call("testNotification", notification, timeout=60)
+        print("notification test:", t.get("msg", t))
+
+    # 4. monitors
+    base = {
+        "type": "http", "name": "", "parent": None, "url": "", "method": "GET", "protocol": None,
+        "location": "world", "ipFamily": None, "interval": 60, "retryInterval": 60, "resendInterval": 0,
+        "maxretries": 2, "retryOnlyOnStatusCodeFailure": False, "notificationIDList": {str(notif_id): True},
+        "ignoreTls": False, "upsideDown": False, "expiryNotification": True, "domainExpiryNotification": False,
+        "maxredirects": 10, "accepted_statuscodes": ["200-299"], "saveResponse": False, "saveErrorResponse": True,
+        "responseMaxLength": 1024, "dns_resolve_type": "A", "dns_resolve_server": "", "docker_container": "",
+        "docker_host": None, "proxyId": None, "basic_auth_user": "", "basic_auth_pass": "", "bearer_token": "",
+        "mqttUsername": "", "mqttPassword": "", "mqttTopic": "", "mqttWebsocketPath": "", "mqttSuccessMessage": "",
+        "mqttCheckType": "keyword", "authMethod": None, "oauth_auth_method": "client_secret_basic",
+        "httpBodyEncoding": "json", "kafkaProducerBrokers": [], "kafkaProducerSaslOptions": {"mechanism": "None"},
+        "cacheBust": False, "kafkaProducerSsl": False, "kafkaProducerAllowAutoTopicCreation": False,
+        "gamedigGivenPortOnly": True, "gamedigToken": "", "remote_browser": None, "screenshot_delay": 0,
+        "rabbitmqNodes": [], "rabbitmqUsername": "", "rabbitmqPassword": "", "conditions": [],
+        "system_service_name": "", "sshAuthMethod": "password", "ntpStratumThreshold": 5,
+        "ntpTimeOffsetThreshold": 1000, "ntpRootDispersionThreshold": 500, "timeout": 30,
+    }
+    have = {m.get("name"): m for m in state["monitors"].values()}
+    api_ids = []
+
+    def ensure(spec: dict) -> int | None:
+        if spec["name"] in have:
+            print("monitor exists:", spec["name"])
+            return have[spec["name"]]["id"]
+        m = dict(base); m.update(spec)
+        r = sio.call("add", m, timeout=30)
+        if not r.get("ok"):
+            print("monitor FAILED:", spec["name"], r.get("msg"))
+            return None
+        print("monitor created:", spec["name"])
+        return r.get("monitorID")
+
+    for b in sorted(inv["boxes"], key=lambda b: (b.get("canary_rank", 99), b["id"])):
+        host = b["host"]
+        mid = ensure({"type": "keyword", "name": f"{b['id']} ERP api", "url": f"https://{host}/erp/api/method/ping",
+                      "keyword": "pong", "interval": 60})
+        if mid:
+            api_ids.append(mid)
+        ensure({"type": "http", "name": f"{b['id']} storefront", "url": f"https://{host}/", "interval": 120})
+
+    # 5. push monitor fed by `fleet check`
+    ensure({"type": "push", "name": "fleet-check", "url": "", "pushToken": push_token, "interval": 93600,
+            "retryInterval": 3600, "maxretries": 0, "expiryNotification": False,
+            "description": "Fed by the nightly `fleet check`; down means a box failed its check or the check never ran"})
+
+    # 6. status page
+    slug = "fleet"
+    r = sio.call("addStatusPage", ("Fleet status", slug), timeout=20)
+    print("status page:", r.get("msg", r))          # "already exists" on a re-run is fine
+    config = {"slug": slug, "title": "Fleet status", "description": "ERP availability per managed box (tailnet-only page)",
+              "theme": "auto", "published": True, "showTags": False, "domainNameList": [], "customCSS": "",
+              "footerText": "", "showPoweredBy": False, "showCertificateExpiry": True, "autoRefreshInterval": 300}
+    groups = [{"name": "ERP boxes", "weight": 1, "monitorList": [{"id": i} for i in api_ids]}]
+    config["icon"] = "/icon.svg"
+    config["analyticsType"] = None
+    r = sio.call("saveStatusPage", (slug, config, "/icon.svg", groups), timeout=30)
+    print("status page saved:", r.get("msg", r))
+    sio.disconnect()
+    print(f"KUMA-SEED-OK {url}  status page: {url}/status/{slug}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
