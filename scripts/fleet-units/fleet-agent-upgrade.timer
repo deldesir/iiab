@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily check for a new release to apply (the agent itself honours the window)
+
+[Timer]
+OnCalendar=*-*-* 20:30:00
+RandomizedDelaySec=1800
+Persistent=true
+
+[Install]
+WantedBy=timers.target

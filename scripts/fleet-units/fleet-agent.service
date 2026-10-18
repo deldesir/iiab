@@ -1,0 +1,8 @@
+[Unit]
+Description=Fleet agent report (this box tells the hub's fleet site how it is doing)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/fleet-agent report
+SuccessExitStatus=1

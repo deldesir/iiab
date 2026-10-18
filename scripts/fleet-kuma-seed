@@ -58,9 +58,24 @@ def set_kv(p: Path, key: str, value: str) -> None:
     os.chmod(p, 0o600)
 
 
+def parse_args():
+    import argparse
+    ap = argparse.ArgumentParser(description="Seed Uptime Kuma for the fleet (idempotent).")
+    ap.add_argument("--url", help="Uptime Kuma base URL (default KUMA_URL from the conf, else the hub tailnet address)")
+    ap.add_argument("--conf", default=str(CONF), help="where KUMA_* credentials live (default /etc/iiab/fleet.conf)")
+    ap.add_argument("--boxes", help="comma-separated box ids to monitor (default: all)")
+    ap.add_argument("--no-notification", action="store_true", help="do not create the email-bridge webhook notification")
+    ap.add_argument("--no-status-page", action="store_true")
+    ap.add_argument("--no-push-monitors", action="store_true", help="skip the per-box and fleet-wide push monitors")
+    return ap.parse_args()
+
+
 def main() -> int:
+    global CONF
+    args = parse_args()
+    CONF = Path(args.conf)
     conf = read_kv(CONF)
-    url = conf.get("KUMA_URL") or "http://100.64.0.18:3001"
+    url = args.url or conf.get("KUMA_URL") or "http://100.64.0.18:3001"
     user = conf.get("KUMA_ADMIN_USER") or "fleet"
     pw = conf.get("KUMA_ADMIN_PASSWORD")
     if not pw:
@@ -75,8 +90,8 @@ def main() -> int:
         set_kv(CONF, "KUMA_PUSH_TOKEN", push_token)
     operator = read_kv(BACKUP_CONF).get("RECIPIENT") or ""
     bridge_token = read_kv(BRIDGE_ENV).get("EMAIL_SEND_AUTH") or ""
-    if not operator or not bridge_token:
-        sys.exit("fleet-kuma-seed: operator address or bridge token missing")
+    if not args.no_notification and (not operator or not bridge_token):
+        sys.exit("fleet-kuma-seed: operator address or bridge token missing (use --no-notification where the bridge is not local)")
     inv = yaml.safe_load(INVENTORY.read_text())
     tz = (inv.get("defaults") or {}).get("timezone") or "UTC"
 
@@ -149,7 +164,10 @@ def main() -> int:
     # 3. default notification -> email bridge -> operator
     want_name = "Operator email (bridge)"
     existing = [n for n in state["notifications"] if n.get("name") == want_name]
-    if existing:
+    notif_id = None
+    if args.no_notification:
+        print("notification: skipped (configure one in the UI: SMTP, Telegram...)")
+    elif existing:
         notif_id = existing[0]["id"]
         print("notification exists:", notif_id)
     else:
@@ -177,7 +195,7 @@ def main() -> int:
     base = {
         "type": "http", "name": "", "parent": None, "url": "", "method": "GET", "protocol": None,
         "location": "world", "ipFamily": None, "interval": 60, "retryInterval": 60, "resendInterval": 0,
-        "maxretries": 2, "retryOnlyOnStatusCodeFailure": False, "notificationIDList": {str(notif_id): True},
+        "maxretries": 2, "retryOnlyOnStatusCodeFailure": False, "notificationIDList": ({str(notif_id): True} if notif_id else {}),
         "ignoreTls": False, "upsideDown": False, "expiryNotification": True, "domainExpiryNotification": False,
         "maxredirects": 10, "accepted_statuscodes": ["200-299"], "saveResponse": False, "saveErrorResponse": True,
         "responseMaxLength": 1024, "dns_resolve_type": "A", "dns_resolve_server": "", "docker_container": "",
@@ -206,20 +224,40 @@ def main() -> int:
         print("monitor created:", spec["name"])
         return r.get("monitorID")
 
+    import hmac, hashlib
+    wanted = set(args.boxes.split(",")) if args.boxes else None
     for b in sorted(inv["boxes"], key=lambda b: (b.get("canary_rank", 99), b["id"])):
+        if wanted and b["id"] not in wanted:
+            continue
         host = b["host"]
-        mid = ensure({"type": "keyword", "name": f"{b['id']} ERP api", "url": f"https://{host}/erp/api/method/ping",
-                      "keyword": "pong", "interval": 60})
-        if mid:
-            api_ids.append(mid)
-        ensure({"type": "http", "name": f"{b['id']} storefront", "url": f"https://{host}/", "interval": 120})
+        conn = b.get("connectivity") or inv.get("defaults", {}).get("connectivity") or "public"
+        reach = b.get("reach") or {}
+        url_base = reach.get("http") or (f"https://{host}" if conn == "public" else f"http://{reach.get('ssh', host)}")
+        if conn != "offline":   # offline boxes are never polled; their push monitor below carries them
+            mid = ensure({"type": "keyword", "name": f"{b['id']} ERP api", "url": f"{url_base}/erp/api/method/ping",
+                          "keyword": "pong", "interval": 60, "expiryNotification": conn == "public", "ignoreTls": conn != "public"})
+            if mid:
+                api_ids.append(mid)
+            ensure({"type": "http", "name": f"{b['id']} storefront", "url": f"{url_base}/", "interval": 120,
+                    "expiryNotification": conn == "public", "ignoreTls": conn != "public"})
+        if not args.no_push_monitors:
+            # per-box push monitor: `fleet check` (or fleet-agent) feeds it; down = CRIT or STALE
+            tok = hmac.new(push_token.encode(), f"box:{b['id']}".encode(), hashlib.sha256).hexdigest()[:32]
+            ensure({"type": "push", "name": f"{b['id']} check", "url": "", "pushToken": tok, "interval": 93600,
+                    "retryInterval": 3600, "maxretries": 0, "expiryNotification": False,
+                    "description": f"Fed by the fleet check for {b['id']}: down = CRIT or STALE, or no check for 26 h"})
 
-    # 5. push monitor fed by `fleet check`
-    ensure({"type": "push", "name": "fleet-check", "url": "", "pushToken": push_token, "interval": 93600,
-            "retryInterval": 3600, "maxretries": 0, "expiryNotification": False,
-            "description": "Fed by the nightly `fleet check`; down means a box failed its check or the check never ran"})
+    # 5. fleet-wide push monitor: did the nightly check run at all
+    if not args.no_push_monitors:
+        ensure({"type": "push", "name": "fleet-check", "url": "", "pushToken": push_token, "interval": 93600,
+                "retryInterval": 3600, "maxretries": 0, "expiryNotification": False,
+                "description": "Fed by the nightly `fleet check --all` run; down means the check never ran"})
 
     # 6. status page
+    if args.no_status_page:
+        sio.disconnect()
+        print(f"KUMA-SEED-OK {url} (no status page)")
+        return 0
     slug = "fleet"
     r = sio.call("addStatusPage", ("Fleet status", slug), timeout=20)
     print("status page:", r.get("msg", r))          # "already exists" on a re-run is fine

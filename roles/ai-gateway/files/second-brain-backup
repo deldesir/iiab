@@ -143,6 +143,11 @@ if [ -f /etc/iiab/fleet.yml ]; then
         [ -n "$newest" ] && cp -a "$newest" "$DEST/$STAMP/fleet/" && echo "fleet site db ok"
         find /home/frappe/frappe-bench/sites/fleet.local/private/backups -type f -mtime +7 -delete 2>/dev/null
     fi
+    # Semaphore UI (runbook front end): its config (keys + DB password) and its database
+    if [ -f /etc/semaphore/config.json ]; then
+        cp -a /etc/semaphore/config.json "$DEST/$STAMP/fleet/semaphore-config.json"
+        sudo -u postgres pg_dump -Fc semaphore > "$DEST/$STAMP/fleet/semaphore.pgdump" 2>/dev/null && echo "semaphore db ok"
+    fi
     echo "fleet control plane ok"
 fi
 

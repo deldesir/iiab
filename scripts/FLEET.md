@@ -18,6 +18,30 @@ and contacts live in the hub's private inventory, never in this repository.
 | Fleet site | second Frappe site on the hub bench, tailnet-bound | ERPNext Customer / Subscription / Sales Invoice / Dunning plus the `fleet_ops` app (Managed Box, Fleet Check, Fleet Release, Fleet Subscription) |
 | Private config | `/etc/iiab/fleet.conf` (0600) | fleet site URL and API key pair, monitor URL and push token |
 
+## Version 2: levels, catalog, connectivity, runbook console
+
+- A box is **OK / WARN / CRIT / STALE**; findings carry a level. CRIT = service down or data
+  at risk (bench target down, a critical probe failing, disk < 5 GB, backup > 72 h, a
+  control-plane unit down). WARN = attention this week (TLS < 14 d, domain < 30 d, behind the
+  release, failed timer units, error-log rows, disk < 15 GB). STALE = an offline box past its
+  reporting allowance. Only CRIT/STALE trip the monitors and exit 1.
+- **Catalog** (`scripts/fleet-catalog.yml`): services a box or the hub provides, with
+  probes, units, maturity (ready / on-request / candidate) and a billing item. A box lists
+  its `services`; probes derive from them. Mirrored into the fleet site as Fleet Service.
+- **Connectivity** per box: `public` (probed over https), `tailnet` (probed over http on
+  the tailnet address, no TLS/domain checks), `offline` (never polled: `fleet deploy-agent
+  <id>` installs `fleet-agent`, which reports hourly to the fleet site, feeds the box's
+  push monitor and self-upgrades to the current manifest inside its window).
+- **Per-box push monitors** ("<id> check") plus the fleet-wide one.
+- **Hub watchdog**: `fleet deploy-watchdog <box>` installs `fleet-hub-watchdog` on another
+  box; after 3 failed probes it asks Contabo for the instance status and sends `start` if
+  stopped (credentials in `/etc/iiab/fleet-hub-watchdog.conf` on that box).
+- **Semaphore UI** (tailnet-bound) runs each runbook as a template with survey questions;
+  templates call `scripts/fleet-tasks/*.sh`, which run `fleet` through a sudoers rule.
+- `bench-upgrade.sh` now handles every app in `sites/apps.txt`, follows each app's own
+  branch, keeps apps absent from the manifest at their deployed commit, and tolerates a
+  remote it cannot read when the manifest pins the deployed commit.
+
 ## Daily use
 
 ```
@@ -88,7 +112,12 @@ fleet push               # mirror inventory, checks and releases into the fleet 
 - The fleet site: a second site on the bench with ERPNext and `fleet_ops`, served by a
   tailnet-only nginx listener; a `fleet-bot` user with the Fleet Manager role whose API key
   pair goes into `/etc/iiab/fleet.conf`.
-- The email bridge needs `/send-json` (bridge PR #4) for the monitor's alerts.
+- The email bridge needs `/send-json` for the monitor's alerts.
+- Semaphore UI 2.x: binary from its releases to `/usr/local/bin`, a `semaphore` user, a
+  Postgres database, `/etc/semaphore/config.json` (dialect, interface = tailnet address,
+  port, tmp_path, web_host, the three keys), `semaphore user add --admin`, a sudoers rule
+  for `/usr/local/sbin/fleet*`, then seed project, local repository (this repo's path),
+  inventory and templates through its API (see the private operations manual).
 
 ## Manifest format
 

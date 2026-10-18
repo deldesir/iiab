@@ -10,6 +10,7 @@
 #   ALLOW_DISCARD=ERE  paths whose local changes were verified by hand as disposable
 #   FORK_OWNER=name    GitHub owner whose forks the bench tracks (default: deldesir);
 #                      apps listed in APP_OWNER (payments, whatsapp -> frappe) follow their own upstream
+#   APPS="a b c"       apps to handle (default: every app in sites/apps.txt)
 #   MANIFEST=file      release manifest (app=commit lines, see scripts/FLEET.md): every app is
 #                      pinned to exactly that commit instead of the fork's current develop head,
 #                      so a whole fleet lands on one known release
@@ -23,7 +24,10 @@
 set -uo pipefail
 B=/home/frappe/frappe-bench
 SITE=site.local
-APPS="frappe erpnext hrms whatsapp crm builder webshop payments pos_next"
+# Apps: every app the bench has installed (sites/apps.txt), so a box carrying extra apps is
+# covered and one without them is not blocked. APPS=... in the environment overrides.
+APPS=${APPS:-$(tr "\n" " " < $B/sites/apps.txt 2>/dev/null)}
+[ -n "$APPS" ] || APPS="frappe erpnext"
 FORK_OWNER=${FORK_OWNER:-deldesir}
 # Apps that are not forks track their upstream directly; name the GitHub owner whose
 # remote to follow. Everything else follows FORK_OWNER.
@@ -62,25 +66,39 @@ for a in $APPS; do
   owner=${APP_OWNER[$a]:-$FORK_OWNER}
   remote=$(asf "git -C apps/$a remote -v" | awk -v o="[/:]$owner/" '$2 ~ o && /fetch/ {print $1; exit}')
   [ -n "$remote" ] || fail "$a: no remote pointing at $owner"
+  branch=$(val "git -C apps/$a rev-parse --abbrev-ref HEAD"); [ -n "$branch" ] && [ "$branch" != HEAD ] || branch=develop
   if [ "$(val "git -C apps/$a rev-parse --is-shallow-repository")" = true ]; then
     # depth-1 clone (bench get-app): deepen to just before the deployed commit so the
     # ancestry check and the fast-forward below can see how the two commits relate
     since=$(date -u -d "@$(( $(val "git -C apps/$a log -1 --format=%ct HEAD") - 172800 ))" +%FT%TZ)
-    asf "git -C apps/$a fetch -q --shallow-since=$since $remote develop" || fail "$a: fetch (deepening shallow clone)"
+    asf "git -C apps/$a fetch -q --shallow-since=$since $remote $branch" || fail "$a: fetch (deepening shallow clone)"
   else
-    asf "git -C apps/$a fetch -q $remote develop" || fail "$a: fetch"
+    if ! asf "git -C apps/$a fetch -q $remote $branch" 2>/dev/null; then
+      # A private repository the bench user cannot read (an app the hub maintains itself): acceptable
+      # only when the manifest pins it to exactly the deployed commit, i.e. nothing is asked of it.
+      head=$(val "git -C apps/$a rev-parse HEAD")
+      pin=$([ -n "$MANIFEST" ] && awk -F= -v a="$a" '$1==a{print $2}' "$MANIFEST")
+      if [ -n "$pin" ] && [ "$pin" = "$head" ]; then
+        echo "$a: remote not readable by the bench user; already at the manifest commit ${head:0:10}, keeping it"
+        TARGET[$a]=$head; continue
+      fi
+      fail "$a: fetch (remote not readable and no matching manifest pin)"
+    fi
   fi
   TARGET[$a]=$(val "git -C apps/$a rev-parse FETCH_HEAD")
   [[ "${TARGET[$a]}" =~ ^[0-9a-f]{40}$ ]] || fail "$a: could not read the fetched commit (got: ${TARGET[$a]})"
   if [ -n "$MANIFEST" ]; then
     pin=$(awk -F= -v a="$a" '$1==a{print $2}' "$MANIFEST")
-    [[ "$pin" =~ ^[0-9a-f]{40}$ ]] || fail "$a: no commit in manifest $MANIFEST"
+    if [ -z "$pin" ]; then
+      echo "$a: not in the manifest; keeping the deployed commit"; TARGET[$a]=$(val "git -C apps/$a rev-parse HEAD"); continue
+    fi
+    [[ "$pin" =~ ^[0-9a-f]{40}$ ]] || fail "$a: malformed commit in manifest $MANIFEST"
     # the pinned commit is normally already in the fetched develop history; fetch it by hash otherwise
     asf "git -C apps/$a cat-file -e $pin^{commit}" 2>/dev/null || asf "git -C apps/$a fetch -q $remote $pin" || fail "$a: manifest commit ${pin:0:10} is not on $remote"
     TARGET[$a]=$pin
     printf '%-9s release %s = %s\n' "$a" "$(awk -F= '$1=="release"{print $2}' "$MANIFEST")" "${pin:0:10}"
   else
-    printf '%-9s %s/develop = %s\n' "$a" "$remote" "${TARGET[$a]:0:10}"
+    printf '%-9s %s/%s = %s\n' "$a" "$remote" "$branch" "${TARGET[$a]:0:10}"
   fi
   # only disposable drift may be discarded (generated types, lockfiles); anything else stops the run
   dirty=$(asf "git -C apps/$a status --porcelain --untracked-files=no" | grep -v -E "^[[:space:]]*\$|yarn\.lock\$|\.d\.ts\$|package-lock\.json\$${ALLOW_DISCARD:+|$ALLOW_DISCARD}" || true)
