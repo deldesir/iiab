@@ -32,6 +32,8 @@ accept id, alias or host; output shows "id alias".
   fleet rename ID [NEW_ID] [--alias A]    rename everywhere: inventory, history, vars copy, fleet
                                           site record, monitors (+ push token)
   fleet hostname ID [--now]               set the box's OS (and tailnet) hostname to its id
+  fleet authorize-key FILE [ID...|--all] [--check]   add a public key to root's authorized_keys on
+                                          boxes (a new hub's key); --check only reports
 
 Roles: hub (this control plane; may live at home, intermittently online), observer (an
 always-on VPS that runs the monitor, the hub watchdog and fleet-backup-mail), till, customer.
@@ -1400,6 +1402,38 @@ def cmd_hostname(a, inv):
     return 0 if rc == 0 else 1
 
 
+def cmd_authorize_key(a, inv):
+    """Let another machine (typically the next hub) in as root on the selected boxes: append
+    its public key to /root/.ssh/authorized_keys where it is missing. --check only reports."""
+    pub = Path(a.file).read_text().strip().splitlines()
+    pub = [l for l in pub if l and not l.startswith("#")]
+    if len(pub) != 1 or not re.match(r"^(ssh-(rsa|ed25519)|ecdsa-sha2-\S+) \S+", pub[0]):
+        sys.exit("fleet: expected one OpenSSH public key line in the file")
+    key = pub[0]
+    keytype, blob = key.split()[:2]
+    rc_all = 0
+    for b in select_boxes(inv, a.ids, a.all):
+        probe = f"grep -qsF {shlex.quote(blob)} /root/.ssh/authorized_keys && echo PRESENT || echo ABSENT"
+        rc, out = run_on(b, probe, timeout=30)
+        if rc != 0 and "ABSENT" not in out and "PRESENT" not in out:
+            print(f"{label(b)}: unreachable ({out[-80:]})")
+            rc_all = 1
+            continue
+        if "PRESENT" in out:
+            print(f"{label(b)}: already present")
+            continue
+        if a.check:
+            print(f"{label(b)}: absent")
+            continue
+        add = (f"install -d -m 700 /root/.ssh && printf '%s\\n' {shlex.quote(key)} >> /root/.ssh/authorized_keys"
+               f" && chmod 600 /root/.ssh/authorized_keys && echo ADDED")
+        rc, out = run_on(b, add, timeout=30)
+        print(f"{label(b)}: {'added' if 'ADDED' in out else 'FAILED ' + out[-80:]}")
+        rc_all = rc_all or (0 if "ADDED" in out else 1)
+    log_action(f"authorize-key {keytype} {blob[-12:]} check={a.check} boxes={','.join(b['id'] for b in select_boxes(inv, a.ids, a.all))}")
+    return rc_all
+
+
 # ----------------------------------------------------------------------------- main
 
 
@@ -1431,13 +1465,14 @@ def main(argv=None) -> int:
     p.add_argument("--rank", type=int); p.add_argument("--id")
     p = sub.add_parser("rename"); p.add_argument("id"); p.add_argument("new_id", nargs="?"); p.add_argument("--alias")
     p = sub.add_parser("hostname"); p.add_argument("id"); p.add_argument("--now", action="store_true")
+    p = sub.add_parser("authorize-key"); p.add_argument("file"); p.add_argument("ids", nargs="*"); p.add_argument("--all", action="store_true"); p.add_argument("--check", action="store_true")
     a = ap.parse_args(argv)
     inv = load_inventory()
     return {"list": cmd_list, "status": cmd_status, "check": cmd_check, "digest": cmd_digest, "manifest": cmd_manifest,
             "upgrade": cmd_upgrade, "suspend": cmd_suspend, "resume": cmd_resume, "offboard": cmd_offboard, "push": cmd_push,
             "agent-token": cmd_agent_token, "deploy-agent": cmd_deploy_agent, "deploy-watchdog": cmd_deploy_watchdog,
             "runrole": cmd_runrole, "vars": cmd_vars, "reboot": cmd_reboot, "backup-pull": cmd_backup_pull,
-            "onboard": cmd_onboard, "rename": cmd_rename, "hostname": cmd_hostname}[a.cmd](a, inv)
+            "onboard": cmd_onboard, "rename": cmd_rename, "hostname": cmd_hostname, "authorize-key": cmd_authorize_key}[a.cmd](a, inv)
 
 
 if __name__ == "__main__":
