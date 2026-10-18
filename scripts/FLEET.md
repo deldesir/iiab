@@ -10,7 +10,7 @@ and contacts live in the hub's private inventory, never in this repository.
 | Piece | Where | What |
 |---|---|---|
 | Inventory | `/etc/iiab/fleet.yml` (hub, 0640, private) | one record per box: id, host, business, role (hub / till / customer), owner, profile, plan, status, canary rank, maintenance window, contacts, hosting provider, extra units to watch |
-| `fleet` | `scripts/fleet` → `/usr/local/sbin/fleet` | the command: list, status, check, digest, manifest, upgrade, suspend, resume, offboard, push |
+| `fleet` | `scripts/fleet`, installed as a copy at `/usr/local/sbin/fleet` | the command: list, status, check, digest, manifest, upgrade, suspend, resume, offboard, push |
 | Release manifests | `/etc/iiab/fleet-releases/<id>.manifest` | `app=commit` per app; what "release 2026.10-r8" means |
 | `bench-upgrade.sh` | `scripts/bench-upgrade.sh` | per-box upgrade; with `MANIFEST=` pins every app to the release |
 | Nightly check | `fleet-check.timer` → `fleet check --all` → `fleet-digest.service` | writes `/var/lib/fleet/checks/<id>/`, the digest, feeds the monitor's push monitor, mirrors into the fleet site, hands the digest to the gateway for delivery |
@@ -75,6 +75,8 @@ fleet push               # mirror inventory, checks and releases into the fleet 
 ## Installing the control plane on a hub
 
 - `install -m 0755 scripts/fleet /usr/local/sbin/fleet`; same for `scripts/fleet-kuma-seed`
+  (copies, not symlinks, so the running hub never depends on which branch the repo is on;
+  `fleet upgrade` reads `bench-upgrade.sh` from the repo, or `FLEET_UPGRADE_SCRIPT`)
   (it runs on a small venv: `uv venv /var/lib/fleet/venv && uv pip install --python
   /var/lib/fleet/venv/bin/python "python-socketio[client]" requests pyyaml websocket-client`).
 - Units: `fleet-check.service`, `fleet-check.timer`, `fleet-digest.service` (see the

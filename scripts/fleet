@@ -56,8 +56,10 @@ INVENTORY = Path(os.environ.get("FLEET_INVENTORY", "/etc/iiab/fleet.yml"))
 RELEASES = Path(os.environ.get("FLEET_RELEASES", "/etc/iiab/fleet-releases"))
 STATE = Path(os.environ.get("FLEET_STATE", "/var/lib/fleet"))
 PUSH_CONF = Path(os.environ.get("FLEET_PUSH_CONF", "/etc/iiab/fleet.conf"))
-SCRIPTS = Path(__file__).resolve().parent
-UPGRADE_SCRIPT = SCRIPTS / "bench-upgrade.sh"
+# bench-upgrade.sh ships in the iiab repo; `fleet` itself is installed as a copy in /usr/local/sbin
+_here = Path(__file__).resolve().parent
+UPGRADE_SCRIPT = Path(os.environ.get("FLEET_UPGRADE_SCRIPT") or (
+    _here / "bench-upgrade.sh" if (_here / "bench-upgrade.sh").exists() else "/opt/iiab/iiab/scripts/bench-upgrade.sh"))
 APPS = ["frappe", "erpnext", "hrms", "whatsapp", "crm", "builder", "webshop", "payments", "pos_next"]
 TARGETS = ["frappe-bench-frappe-schedule", "frappe-bench-web.target", "frappe-bench-workers.target"]
 KEEP_CHECKS = 90
