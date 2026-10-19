@@ -2,8 +2,9 @@
 
 Copies of the systemd units the hub runs; see `scripts/FLEET.md`.
 
-- `fleet-check.timer` / `fleet-check.service`: nightly `fleet check --all`, then starts
-  `fleet-digest.service`. A failing box is a finding, not a unit failure.
+- `fleet-check.timer` / `fleet-check.service`: nightly `fleet check --all`, then `fleet digest --send`:
+  through `fleet-digest.service` where the gateway runs, else through the fleet site's outgoing
+  Email Account to `DIGEST_TO` in `/etc/iiab/fleet.conf`. A failing box is a finding, not a unit failure.
 - `fleet-digest.service`: runs as the gateway user with the gateway's environment and
   delivers `/var/lib/fleet/latest-digest.txt` through `notify_admin`.
 - `fleet-backup-pull.timer` / `.service`: daily (07:30 Haiti) mirror of the observer's backup

@@ -799,7 +799,7 @@ def cmd_digest(a, inv):
             import requests
             try:
                 r = requests.post(f"{conf['FLEET_SITE_URL'].rstrip('/')}/api/method/fleet_ops.api.notify",
-                                  json={"subject": "Fleet digest: " + text.splitlines()[0], "text": text},
+                                  json={"subject": "Fleet digest: " + text.splitlines()[0], "text": text, **({"to": conf["DIGEST_TO"]} if conf.get("DIGEST_TO") else {})},
                                   headers={"Authorization": f"token {conf['FLEET_API_KEY']}:{conf['FLEET_API_SECRET']}", "Host": conf["FLEET_SITE_NAME"],
                                            "X-Frappe-Site-Name": conf["FLEET_SITE_NAME"]}, timeout=60)
                 r.raise_for_status()

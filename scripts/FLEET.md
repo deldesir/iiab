@@ -16,7 +16,7 @@ and contacts live in the hub's private inventory, never in this repository.
 | Nightly check | `fleet-check.timer` → `fleet check --all` → `fleet-digest.service` | writes `/var/lib/fleet/checks/<id>/`, the digest, feeds the monitor's push monitor, mirrors into the fleet site, hands the digest to the gateway for delivery |
 | Monitor | Uptime Kuma, tailnet-bound, `scripts/fleet-kuma-seed` | HTTP keyword check on the ERP API and the storefront per box, TLS expiry, a push monitor for the nightly check, a status page; alerts go through the email bridge's `/send-json` |
 | Fleet site | second Frappe site on the hub bench, tailnet-bound | ERPNext Customer / Subscription / Sales Invoice / Dunning plus the `fleet_ops` app (Managed Box, Fleet Check, Fleet Release, Fleet Subscription) |
-| Private config | `/etc/iiab/fleet.conf` (0600) | fleet site URL and API key pair, monitor URL and push token |
+| Private config | `/etc/iiab/fleet.conf` (0600) | fleet site URL and API key pair, monitor URL and push token, `DIGEST_TO` (where the digest mail goes on a hub without the gateway) |
 
 ## Version 2: levels, catalog, connectivity, runbook console
 
