@@ -208,7 +208,7 @@ def in_house(ref, *args, room, charges=(), payment=None, **kwargs):
 # The front desk's timeline: two guests arrived on earlier business dates, then today's business
 set_business_date(add_days(today, -2))
 in_house("DEMO-03", "Rose", "STE", add_days(today, -2), 2, room="301", requests="Late check-out if possible",
-         charges=(("Room Service", "Dinner, room service", 1850), ("Laundry", "Laundry, 4 pieces", 600)), payment=10000)
+         charges=(("Laundry", "Laundry, 4 pieces", 600),), payment=10000)
 set_business_date(add_days(today, -1))
 in_house("DEMO-02", "Jean-Baptiste", "DLX", add_days(today, -1), 3, room="201", rate_plan="CORP", kind="Corporate",
          adults=1, charges=(("Minibar", "Minibar", 450),))
@@ -231,31 +231,80 @@ if status(nadege) == "Draft":
     except Exception:
         frappe.db.rollback()
 
+# 6b. The bar and restaurant: menu items backed by ERPNext items with stock and prices (the bar
+# sells them at the POS Next till through the "Bar" profile), and one restaurant order signed to
+# a room, which the PMS charges to the folio on delivery.
+from hospitality_pms.services import kitchen as kitchen_service
+warehouse = frappe.db.get_value("Warehouse", {"company": company, "warehouse_name": "Stores"}, "name") \
+    or frappe.db.get_value("Warehouse", {"company": company, "is_group": 0}, "name")
+price_list = frappe.db.get_single_value("Selling Settings", "selling_price_list") or "Standard Selling"
+bar_group = ensure("Item Group", {"item_group_name": "Bar and restaurant"}, {"parent_item_group": "All Item Groups", "is_group": 0})
+MENU = (  # menu code, name, category, ERPNext item, selling rate, cost, minibar item
+    ("PRESTIGE", "Prestige beer", "Alcoholic Beverage", "BAR-PRESTIGE", 250, 120, 1),
+    ("RHUM", "Barbancourt rum, 5 cl", "Alcoholic Beverage", "BAR-RHUM", 350, 150, 0),
+    ("COLA", "Soft drink", "Beverage", "BAR-COLA", 125, 60, 1),
+    ("WATER", "Bottled water", "Beverage", "BAR-WATER", 75, 30, 1),
+    ("GRIOT", "Griot with pikliz", "Main Course", "BAR-GRIOT", 950, 400, 0),
+    ("CLUB", "Club sandwich", "Snack", "BAR-CLUB", 650, 250, 0),
+)
+bar_items = []
+for code, name, category, item_code, rate, cost, minibar in MENU:
+    ensure("Item", {"item_code": item_code}, {"item_name": name, "item_group": bar_group, "stock_uom": "Nos", "is_stock_item": 1,
+                                              "is_sales_item": 1, "include_item_in_manufacturing": 0, "valuation_rate": cost})
+    ensure("Item Price", {"item_code": item_code, "price_list": price_list}, {"price_list_rate": rate, "currency": currency, "selling": 1})
+    ensure("Menu Item", {"menu_item_code": code}, {"menu_item_name": name, "property": PROPERTY, "is_active": 1, "category": category,
+                                                   "item": item_code, "selling_rate": rate, "currency": currency,
+                                                   "is_available_for_room_service": 1, "is_minibar_item": minibar})
+    bar_items.append((item_code, cost))
+missing = [(c, r) for c, r in bar_items if not frappe.db.get_value("Bin", {"item_code": c, "warehouse": warehouse}, "actual_qty")]
+if missing:
+    se = frappe.get_doc({"doctype": "Stock Entry", "stock_entry_type": "Material Receipt", "purpose": "Material Receipt", "company": company,
+                         "to_warehouse": warehouse, "posting_date": today,
+                         "items": [{"item_code": c, "qty": 48, "basic_rate": r, "t_warehouse": warehouse, "uom": "Nos", "conversion_factor": 1}
+                                   for c, r in missing]})
+    se.insert(ignore_permissions=True)
+    se.submit()
+walk_in = ensure("Customer", {"customer_name": "Walk-in Customer"}, {"customer_group": "Individual", "customer_type": "Individual", "territory": "All Territories"})
+if not frappe.db.get_value("Mode of Payment Account", {"parent": "Cash", "company": company}, "name"):
+    cash_account = frappe.get_cached_value("Company", company, "default_cash_account")
+    if cash_account:
+        mop = frappe.get_doc("Mode of Payment", "Cash")
+        mop.append("accounts", {"company": company, "default_account": cash_account})
+        mop.save(ignore_permissions=True)
+if not frappe.db.exists("POS Profile", "Bar"):
+    frappe.get_doc({"doctype": "POS Profile", "name": "Bar", "company": company, "warehouse": warehouse,
+                    "selling_price_list": price_list, "currency": currency, "customer": walk_in,
+                    "write_off_account": frappe.get_cached_value("Company", company, "write_off_account"),
+                    "write_off_cost_center": cost_center, "write_off_limit": 1, "disable_rounded_total": 1, "disabled": 0,
+                    "payments": [{"mode_of_payment": "Cash", "default": 1}],
+                    "applicable_for_users": [{"user": "Administrator", "default": 1}]}).insert(ignore_permissions=True)
+# Rose had dinner at the restaurant and signed it to her room
+rose = frappe.db.get_value("Reservation", {"external_reference": "DEMO-03"}, "name")
+rose_stay = frappe.db.get_value("Stay", {"reservation": rose}, "name") if rose else None
+if rose_stay and not frappe.db.exists("Room Service Order", {"stay": rose_stay, "order_type": "Restaurant"}):
+    order = kitchen_service.create_order(PROPERTY, [{"menu_item": "GRIOT", "quantity": 2}, {"menu_item": "PRESTIGE", "quantity": 2}],
+                                         stay=rose_stay, order_type="Restaurant", special_instructions="Table 4, signed to room 301")
+    kitchen_service.deliver_order(order)
+    frappe.db.commit()
+
 # 7. Housekeeping and maintenance, so the boards are not empty
 if frappe.db.get_value("Hotel Room", ROOMS["102"], "housekeeping_status") == "Clean":
-    room_service.set_status(ROOMS["102"], "housekeeping_status", "Dirty", reason="Demo: checked out this morning")
+    room_service.set_status(ROOMS["102"], room_service.HOUSEKEEPING, "Dirty", reason="Demo: checked out this morning")
     frappe.db.commit()
-if not frappe.db.exists("Housekeeping Task", {"room": ROOMS["102"], "status": ("not in", ("Completed", "Cancelled"))}):
-    try:
-        housekeeping_service.create_task(PROPERTY, ROOMS["102"], task_type="Departure Clean", priority="High")
-        frappe.db.commit()
-    except Exception:
-        frappe.db.rollback()
-if not frappe.db.exists("Maintenance Ticket", {"room": ROOMS["304"], "status": ("not in", ("Closed", "Cancelled", "Completed"))}):
-    try:
-        maintenance_service.create_ticket(PROPERTY, title="Air conditioning not cooling", room=ROOMS["304"],
-                                          description="Guest reported warm air; technician booked for tomorrow.",
-                                          category="HVAC", priority="High")
-        frappe.db.commit()
-    except Exception:
-        frappe.db.rollback()
-        try:
-            maintenance_service.create_ticket(PROPERTY, title="Air conditioning not cooling", room=ROOMS["304"],
-                                              description="Guest reported warm air; technician booked for tomorrow.",
-                                              priority="High")
-            frappe.db.commit()
-        except Exception:
-            frappe.db.rollback()
+if not frappe.db.exists("Housekeeping Task", {"room": ROOMS["102"], "task_status": ("not in", ("Completed", "Cancelled"))}):
+    housekeeping_service.create_task(PROPERTY, ROOMS["102"], task_type="Departure Clean", priority="High")
+    frappe.db.commit()
+TICKET_TITLE = "Air conditioning not cooling"
+ticket = frappe.db.get_value("Maintenance Ticket", {"room": ROOMS["304"], "title": TICKET_TITLE}, "name")
+if not ticket:
+    ticket = maintenance_service.create_ticket(PROPERTY, title=TICKET_TITLE, room=ROOMS["304"],
+                                               description="Guest reported warm air; technician booked for tomorrow.",
+                                               category="HVAC", priority="High")
+    frappe.db.commit()
+if not frappe.db.get_value("Maintenance Ticket", ticket, "takes_room_out_of_service"):
+    # a submitted Room Block takes the room out of sale, so availability and the rack agree
+    maintenance_service.take_out_of_service(ticket, "Out of Order", "Air conditioning failed", until_date=add_days(today, 2))
+    frappe.db.commit()
 
 # 8. The fixed demo login
 from frappe.utils.password import update_password
@@ -267,6 +316,8 @@ summary = {
     "reservations": frappe.db.count("Reservation", {"property": PROPERTY}),
     "in_house": frappe.db.count("Stay", {"property": PROPERTY, "stay_status": ("in", ("In House", "Due Out"))}),
     "folios": frappe.db.count("Guest Folio", {"property": PROPERTY}),
+    "menu_items": frappe.db.count("Menu Item", {"property": PROPERTY}),
+    "orders": frappe.db.count("Room Service Order", {"property": PROPERTY}),
     "business_date": str(frappe.db.get_value("Property", PROPERTY, "business_date")),
 }
 print(f"DEMO-HOTEL-SEED-OK {summary}")
