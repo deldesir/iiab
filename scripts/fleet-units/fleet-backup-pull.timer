@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily mirror of the fleet backup copies (07:30 Haiti, after the observer pull at 06:30)
+
+[Timer]
+OnCalendar=*-*-* 07:30:00 America/Port-au-Prince
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

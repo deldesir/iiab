@@ -40,7 +40,7 @@ json.dump(new, open(sys.argv[2], "w"), indent=1)
 PY
 echo "=== fleet_ops app"
 rsync -a --delete "$T/app/fleet_ops/" "$B/apps/fleet_ops/"; chown -R frappe:frappe "$B/apps/fleet_ops"
-sudo -u frappe -H bash -lc "cd $B && bench pip install -q -e apps/fleet_ops && (grep -qx fleet_ops sites/apps.txt || echo fleet_ops >> sites/apps.txt) && bench --site $SITE migrate && bench --site $SITE set-config host_name http://$TAILIP:8931 && bench --site $SITE enable-scheduler && bench --site $SITE clear-cache" >/dev/null
+sudo -u frappe -H bash -lc "cd $B && bench pip install -q -e apps/fleet_ops && (grep -qx fleet_ops sites/apps.txt || { sed -i -e '\$a\\' sites/apps.txt; echo fleet_ops >> sites/apps.txt; }) && bench --site $SITE migrate && bench --site $SITE set-config host_name http://$TAILIP:8931 && bench --site $SITE enable-scheduler && bench --site $SITE clear-cache" >/dev/null
 systemctl restart frappe-bench-web.target
 echo "=== semaphore"
 if [ -f "$T/semaphore/config.json" ]; then
@@ -54,7 +54,7 @@ if [ -f "$T/semaphore/config.json" ]; then
   bash "$R/scripts/fleet-install/semaphore-install.sh" || true
   systemctl stop semaphore
   sudo -u postgres psql -c "DROP DATABASE IF EXISTS semaphore" >/dev/null; sudo -u postgres psql -c "CREATE DATABASE semaphore OWNER semaphore" >/dev/null
-  sudo -u postgres pg_restore -d semaphore "$T/semaphore/semaphore.pgdump" || true
+  sudo -u postgres pg_restore -d semaphore < "$T/semaphore/semaphore.pgdump" || true   # via stdin: the postgres user cannot read root's temp dir
   python3 - "$T/semaphore/config.json" /etc/semaphore/config.json "$TAILIP" <<'PY'
 import json, sys
 old, new = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
@@ -67,7 +67,7 @@ PY
 fi
 echo "=== nginx + units + commands"
 [ -f "$T/nginx/fleet-tailnet.conf" ] && sed "s/listen [0-9.]*:8931/listen $TAILIP:8931/" "$T/nginx/fleet-tailnet.conf" > /etc/nginx/sites-enabled/fleet-tailnet.conf && nginx -t && systemctl reload nginx
-for u in fleet-check.service fleet-check.timer fleet-digest.service; do cp -a "$R/scripts/fleet-units/$u" /etc/systemd/system/; done
-systemctl daemon-reload; systemctl enable --now fleet-check.timer
+for u in fleet-check.service fleet-check.timer fleet-digest.service fleet-backup-pull.service fleet-backup-pull.timer; do cp -a "$R/scripts/fleet-units/$u" /etc/systemd/system/; done
+systemctl daemon-reload; systemctl enable --now fleet-check.timer fleet-backup-pull.timer   # backup-pull needs backup_mail_box in the inventory
 install -m 0755 "$R/scripts/fleet" /usr/local/sbin/fleet; install -m 0755 "$R/scripts/fleet-kuma-seed" /usr/local/sbin/fleet-kuma-seed
 echo "IMPORT-OK. Now: edit /etc/iiab/fleet.yml (this machine = hub, local: true; the old hub = observer), run 'fleet check --all', then on the old hub disable fleet-check.timer and semaphore."
