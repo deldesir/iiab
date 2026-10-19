@@ -2,7 +2,8 @@
 # import-control-plane.sh — make this machine the fleet hub from an export bundle.
 #
 # Prerequisites on this machine: IIAB installed with the erpnext role (a bench at
-# /home/frappe/frappe-bench, MariaDB, Postgres on the IIAB cluster), tailscale joined, root
+# /home/frappe/frappe-bench, MariaDB; the IIAB Postgres cluster is installed here if the hub
+# preset's postgresql_install did not bring it, since no install stage runs that role), tailscale joined, root
 # SSH key that the boxes accept, the fleet passphrase at /etc/iiab/fleet-backup.passphrase,
 # and this repository checked out at /opt/iiab/iiab. Run as root:
 #   import-control-plane.sh /path/to/control-plane-export-<stamp>.tar.gpg
@@ -43,6 +44,13 @@ sudo -u frappe -H bash -lc "cd $B && bench pip install -q -e apps/fleet_ops && (
 systemctl restart frappe-bench-web.target
 echo "=== semaphore"
 if [ -f "$T/semaphore/config.json" ]; then
+  if ! systemctl is-active -q postgresql-iiab; then
+    # local_vars_fleet_hub.yml sets postgresql_install, but upstream's install stages no longer run the
+    # postgresql role (only Moodle includes it): run it here so Semaphore has its cluster.
+    echo "    postgresql-iiab is not running: running the postgresql role"
+    (cd "$R" && ./runrole postgresql) >"$T/postgresql-role.log" 2>&1 || { tail -n 20 "$T/postgresql-role.log"; echo "postgresql role failed"; exit 1; }
+    systemctl is-active -q postgresql-iiab || { echo "postgresql-iiab still not running"; exit 1; }
+  fi
   bash "$R/scripts/fleet-install/semaphore-install.sh" || true
   systemctl stop semaphore
   sudo -u postgres psql -c "DROP DATABASE IF EXISTS semaphore" >/dev/null; sudo -u postgres psql -c "CREATE DATABASE semaphore OWNER semaphore" >/dev/null
