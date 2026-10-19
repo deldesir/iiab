@@ -1,6 +1,7 @@
 [Unit]
 Description=Deliver the latest fleet digest to the operator through the gateway's admin notification path
 After=ai-gateway.service
+ConditionPathExists=/opt/iiab/ai-gateway/.venv/bin/python
 
 [Service]
 Type=oneshot
