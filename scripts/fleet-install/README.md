@@ -16,6 +16,11 @@ idempotent and prints no secrets (generated passwords go to /etc/iiab/fleet.conf
    runs one from the command line.
 4. `restore-drill.sh <host>` — restores that box's newest hub copy onto a scratch site,
    proves ping and login, removes it, prints the timing. Run quarterly.
+5. `export-control-plane.sh` / `import-control-plane.sh` — the whole control plane as one
+   encrypted bundle (inventory, releases, local_vars copies, fleet site, fleet_ops source,
+   Semaphore, the tailnet listener) and its restore on another machine, which also installs the
+   nightly units. `fleet-export.timer` runs the export nightly: that bundle is the hub's own
+   backup, which the observer's `fleet-backup-mail` mails (`BOXES` entry `hub=<address>`).
 
 Each script logs to /var/lib/fleet/<name>.log. The fleet command itself, the nightly units
 and the seeder live in scripts/ and scripts/fleet-units/.

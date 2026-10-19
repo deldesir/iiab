@@ -13,8 +13,8 @@ and contacts live in the hub's private inventory, never in this repository.
 | `fleet` | `scripts/fleet`, installed as a copy at `/usr/local/sbin/fleet` | the command: list, status, check, digest, manifest, upgrade, suspend, resume, offboard, push |
 | Release manifests | `/etc/iiab/fleet-releases/<id>.manifest` | `app=commit` per app; what "release 2026.10-r8" means |
 | `bench-upgrade.sh` | `scripts/bench-upgrade.sh` | per-box upgrade; with `MANIFEST=` pins every app to the release |
-| Nightly check | `fleet-check.timer` → `fleet check --all` → `fleet-digest.service` | writes `/var/lib/fleet/checks/<id>/`, the digest, feeds the monitor's push monitor, mirrors into the fleet site, hands the digest to the gateway for delivery |
-| Monitor | Uptime Kuma, tailnet-bound, `scripts/fleet-kuma-seed` | HTTP keyword check on the ERP API and the storefront per box, TLS expiry, a push monitor for the nightly check, a status page; alerts go through the email bridge's `/send-json` |
+| Nightly check | `fleet-check.timer` → `fleet check --all` → `fleet digest --send` | writes `/var/lib/fleet/checks/<id>/`, the digest, feeds the monitor's push monitors, mirrors into the fleet site, sends the digest (through the gateway where one runs, else through the fleet site's outgoing Email Account) |
+| Monitor | Uptime Kuma, tailnet-bound, `scripts/fleet-kuma-seed` | per box, from its services: keyword check on the ERP API, HTTP check on the storefront, keyword check on the fleet site for the hub; TLS expiry; a push monitor per box and one for the nightly run; a status page; alerts go through the email bridge's `/send-json` |
 | Fleet site | second Frappe site on the hub bench, tailnet-bound | ERPNext Customer / Subscription / Sales Invoice / Dunning plus the `fleet_ops` app (Managed Box, Fleet Check, Fleet Release, Fleet Subscription) |
 | Private config | `/etc/iiab/fleet.conf` (0600) | fleet site URL and API key pair, monitor URL and push token, `DIGEST_TO` (where the digest mail goes on a hub without the gateway) |
 
@@ -78,7 +78,7 @@ fleet list                      # the inventory
 fleet status                    # last check per box
 fleet check --all               # run the check now (the timer does it nightly)
 fleet digest                    # the text the nightly delivery sends
-fleet digest --send             # deliver it now through the gateway
+fleet digest --send             # deliver it now (gateway where one runs, else the fleet site's Email Account)
 ```
 
 A check records app heads, the three bench targets, failed units, Error Log rows since
@@ -162,6 +162,10 @@ today's arrivals, future and tentative bookings, housekeeping and a room out of 
 `x` offers the same two profiles on real hardware.
 
 ## Installing the control plane on a hub
+
+To rebuild or move an existing control plane, use `scripts/fleet-install/export-control-plane.sh`
+on the old hub and `import-control-plane.sh` on the new one (the private operations manual
+has the runbook). The list below is what those scripts install, for a first build by hand.
 
 - `install -m 0755 scripts/fleet /usr/local/sbin/fleet`; same for `scripts/fleet-kuma-seed`
   (copies, not symlinks, so the running hub never depends on which branch the repo is on;
