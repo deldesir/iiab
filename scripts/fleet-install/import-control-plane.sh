@@ -54,7 +54,7 @@ if [ -f "$T/semaphore/config.json" ]; then
   bash "$R/scripts/fleet-install/semaphore-install.sh" || true
   systemctl stop semaphore
   sudo -u postgres psql -c "DROP DATABASE IF EXISTS semaphore" >/dev/null; sudo -u postgres psql -c "CREATE DATABASE semaphore OWNER semaphore" >/dev/null
-  sudo -u postgres pg_restore -d semaphore "$T/semaphore/semaphore.pgdump" || true
+  sudo -u postgres pg_restore -d semaphore < "$T/semaphore/semaphore.pgdump" || true   # via stdin: the postgres user cannot read root's temp dir
   python3 - "$T/semaphore/config.json" /etc/semaphore/config.json "$TAILIP" <<'PY'
 import json, sys
 old, new = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
