@@ -73,9 +73,15 @@ its `local_vars.yml` (so IIAB never writes the old name back) and the tailnet ho
 
 ## Daily use
 
+Output habits, borrowed from IIAB's `iiab-vpn`: states (OK / WARN / CRIT / STALE) are coloured
+on a terminal only (plain in logs, Semaphore and mail; `NO_COLOR` respected), and a command that
+changes something ends with a `Check:` line (how to see it took) and, where it applies, an
+`Undo:` or `Next:` line.
+
 ```
 fleet list                      # the inventory
 fleet status                    # last check per box
+fleet tailnet                   # our nodes as the tailnet sees them: which box, online or last seen
 fleet check --all               # run the check now (the timer does it nightly)
 fleet digest                    # the text the nightly delivery sends
 fleet digest --send             # deliver it now (gateway where one runs, else the fleet site's Email Account)
