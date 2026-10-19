@@ -40,7 +40,7 @@ json.dump(new, open(sys.argv[2], "w"), indent=1)
 PY
 echo "=== fleet_ops app"
 rsync -a --delete "$T/app/fleet_ops/" "$B/apps/fleet_ops/"; chown -R frappe:frappe "$B/apps/fleet_ops"
-sudo -u frappe -H bash -lc "cd $B && bench pip install -q -e apps/fleet_ops && (grep -qx fleet_ops sites/apps.txt || echo fleet_ops >> sites/apps.txt) && bench --site $SITE migrate && bench --site $SITE set-config host_name http://$TAILIP:8931 && bench --site $SITE enable-scheduler && bench --site $SITE clear-cache" >/dev/null
+sudo -u frappe -H bash -lc "cd $B && bench pip install -q -e apps/fleet_ops && (grep -qx fleet_ops sites/apps.txt || { sed -i -e '\$a\\' sites/apps.txt; echo fleet_ops >> sites/apps.txt; }) && bench --site $SITE migrate && bench --site $SITE set-config host_name http://$TAILIP:8931 && bench --site $SITE enable-scheduler && bench --site $SITE clear-cache" >/dev/null
 systemctl restart frappe-bench-web.target
 echo "=== semaphore"
 if [ -f "$T/semaphore/config.json" ]; then
