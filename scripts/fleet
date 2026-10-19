@@ -410,6 +410,7 @@ echo "failed_list=$(systemctl --failed --no-legend --plain | awk '{{print $1}}' 
 LOGDB=$B/sites/$S/private/files/sqlite.db   # Frappe keeps Error Log in a per-site SQLite file now; the MariaDB table is a leftover on older sites
 echo "errorlog=$( ( [ -r "$LOGDB" ] && python3 -c "import sqlite3; c=sqlite3.connect('file:$LOGDB?mode=ro', uri=True); print(c.execute('select count(*) from \"tabError Log\" where creation > ?', ('{since}',)).fetchone()[0])" 2>/dev/null ) || mysql -N -e "select count(*) from \`tabError Log\` where creation > '{since}'" $db 2>/dev/null || echo '?')"
 echo "open_shifts=$(mysql -N -e "select count(*) from \`tabPOS Opening Shift\` where status='Open' and docstatus=1" $db 2>/dev/null || echo '?')"
+echo "hotel_business_date=$(mysql -N -e "select max(business_date) from \`tabProperty\` where is_active=1" $db 2>/dev/null)"   # empty where there is no PMS
 echo "disk_free_gb=$(df -BG --output=avail / | awk 'NR==2{{print $1+0}}')"
 echo "ram_avail_mb=$(awk '/MemAvailable/{{print int($2/1024)}}' /proc/meminfo)"
 echo "load1=$(cut -d' ' -f1 /proc/loadavg)"
@@ -451,6 +452,7 @@ def collect_pull(box: dict, catalog: dict) -> dict:
     raw.update({
         "targets": kv.get("targets", ""), "failed_units": kv.get("failed_units", "?"), "failed_list": kv.get("failed_list", ""),
         "errorlog_rows_today": kv.get("errorlog", "?"), "open_shifts": kv.get("open_shifts", "?"),
+        "hotel_business_date": kv.get("hotel_business_date", "") or "",
         "disk_free_gb": kv.get("disk_free_gb", "?"), "ram_avail_mb": kv.get("ram_avail_mb", "?"), "load1": kv.get("load1", "?"),
         "box_backup_age_h": kv.get("box_backup_age_h", "?"), "maintenance_mode": kv.get("maintenance", "?"), "uptime_s": kv.get("uptime_s", "?"),
         "monitor_units": dict(zip(units, [s for s in kv.get("units", "").split(",") if s])) if units else {},
@@ -551,6 +553,21 @@ def evaluate(box: dict, raw: dict, inv: dict, catalog: dict) -> dict:
     for u, st in (raw.get("monitor_units") or {}).items():
         if st != "active":
             f("CRIT", "unit", f"{u} is {st}")
+    if "hospitality" in (box.get("services") or []):
+        # the PMS's business date advances only when the night audit runs: a date that lags
+        # means no room charges are being posted and the front desk is working on yesterday
+        bd = raw.get("hotel_business_date") or ""
+        today = dt.datetime.now(ZoneInfo(box.get("timezone") or "UTC")).date()
+        try:
+            lag = (today - dt.date.fromisoformat(bd[:10])).days if bd and bd != "NULL" else None
+        except ValueError:
+            lag = None
+        if lag is None:
+            f("WARN", "night-audit", "no active property with a business date (PMS not set up?)")
+        elif lag >= 7:
+            f("CRIT", "night-audit", f"night audit not run: business date {bd[:10]} is {lag} days behind")
+        elif lag >= 2:
+            f("WARN", "night-audit", f"night audit not run: business date {bd[:10]} is {lag} days behind")
     for p in raw.get("probes") or []:
         if p["code"] == p["expect"]:
             continue
@@ -710,6 +727,8 @@ def build_digest(inv: dict, checks: dict[str, dict]) -> str:
                 f"err {c.get('errorlog_rows_today', '?')}"]
         if b["role"] == "till" and c.get("open_shifts") not in ("?", None):
             bits.append(f"shifts {c['open_shifts']}")
+        if "hospitality" in (b.get("services") or []) and c.get("hotel_business_date"):
+            bits.append(f"day {str(c['hotel_business_date'])[:10]}")
         if c.get("tls_days_left") is not None:
             bits.append(f"tls {c['tls_days_left']}d")
         if c.get("domain_days_left") is not None and c["domain_days_left"] < 90:

@@ -1,0 +1,167 @@
+# local_vars_fleet_box_hotel.yml — a customer hotel box on a public VPS: the fleet box preset plus the
+# Hospitality PMS (front desk, rooms, rates, folios, housekeeping, night audit). Installed by
+# `sudo iiab` → key (b) → hotel, which fills the placeholders exactly as for a shop box.
+# Identical to local_vars_fleet_box.yml except the extra app list at the end: the hotel's bar or
+# restaurant sells at a POS Next till whose POS Profile carries "Charge credit sales to the guest's
+# room", so a bill put on the guest's account lands on the folio and is settled at checkout.
+download_timeout: 100
+
+iiab_admin_user: iiab-admin
+iiab_admin_user_install: True
+iiab_admin_can_sudo: True
+iiab_admin_published_pwd: "__ADMIN_PW__"
+admin_console_install: False
+admin_console_enabled: False
+iiab_home_url: /
+js_menu_install: False
+nodocs: True
+
+iiab_hostname: __BOX_ID__
+iiab_domain: lan
+host_country_code: US
+host_ssid: Internet in a Box
+host_wifi_mode: g
+host_channel: 6
+hostapd_enabled: False
+wifi_up_down: False
+iiab_gateway_enabled: False
+wan_ip: dhcp
+wan_netmask:
+wan_gateway:
+wan_nameserver:
+wan_try_dhcp_before_static_ip: True
+ports_externally_visible: 2
+
+ssl_install: True
+ssl_enabled: True
+iiab_ssl_enabled: True
+iiab_ssl_domain: "__DOMAIN__"
+iiab_ssl_certbot_email: "__CERTBOT_EMAIL__"
+dns_jail_enabled: False
+sshd_install: True
+sshd_enabled: True
+remoteit_install: False
+remoteit_enabled: False
+tailscale_install: True
+tailscale_enabled: True
+squid_install: False
+squid_enabled: False
+gw_squid_whitelist: False
+gw_block_https: False
+bluetooth_install: False
+bluetooth_enabled: False
+bluetooth_term_enabled: False
+usb_lib_writable_sticks: False
+cups_install: False
+cups_enabled: False
+samba_install: False
+samba_enabled: False
+nginx_high_php_limits: False
+allow_www_data_poweroff: False
+
+postgresql_install: False
+postgresql_enabled: False
+
+gitea_install: False
+gitea_enabled: False
+jupyterhub_install: False
+jupyterhub_enabled: False
+lokole_install: False
+lokole_enabled: False
+mediawiki_install: False
+mediawiki_enabled: False
+mosquitto_install: False
+mosquitto_enabled: False
+nodered_install: False
+nodered_enabled: False
+nextcloud_install: False
+nextcloud_enabled: False
+wordpress_install: False
+wordpress_enabled: False
+kolibri_install: False
+kolibri_enabled: False
+kiwix_install: False
+kiwix_enabled: False
+moodle_install: False
+moodle_enabled: False
+osm_vector_maps_install: False
+osm_vector_maps_enabled: False
+maps_install: False
+maps_enabled: False
+sugarizer_install: False
+sugarizer_enabled: False
+transmission_install: False
+transmission_enabled: False
+awstats_install: False
+awstats_enabled: False
+matomo_install: False
+matomo_enabled: False
+monit_install: False
+monit_enabled: False
+munin_install: False
+munin_enabled: False
+phpmyadmin_install: False
+phpmyadmin_enabled: False
+vnstat_install: False
+vnstat_enabled: False
+azuracast_install: False
+azuracast_enabled: False
+captiveportal_install: False
+captiveportal_enabled: False
+internetarchive_install: False
+internetarchive_enabled: False
+luanti_install: False
+luanti_enabled: False
+calibreweb_install: False
+calibreweb_enabled: False
+calibre_install: False
+calibre_enabled: False
+code_install: False
+code_enabled: False
+pbx_install: False
+pbx_enabled: False
+
+erpnext_install: True
+erpnext_enabled: True
+erpnext_admin_password: "__ERP_ADMIN_PW__"
+erpnext_business_name: "__BUSINESS__"
+
+bagisto_install: False
+bagisto_enabled: False
+bagisto_headless_install: False
+bagisto_headless_enabled: False
+rapidpro_install: False
+rapidpro_enabled: False
+rapidpro_aws_enabled: False
+wuzapi_install: False
+wuzapi_enabled: False
+ai_gateway_install: False
+ai_gateway_enabled: False
+openclaw_install: False
+openclaw_enabled: False
+hermes_agent_install: False
+hermes_agent_enabled: False
+mempalace_install: False
+mempalace_enabled: False
+rivebot_install: False
+rivebot_enabled: False
+siyuan_install: False
+siyuan_enabled: False
+organized_install: False
+organized_enabled: False
+anki_install: False
+anki_enabled: False
+email_bridge_install: False
+email_bridge_enabled: False
+
+# The fleet's Frappe apps (the role's default list) plus the hotel PMS. Defining the variable
+# replaces the default list, so every app is spelled out here.
+erpnext_extra_apps:
+  - { name: "https://github.com/deldesir/hrms.git",    branch: "develop", app_name: "hrms" }
+  - { name: "whatsapp",   branch: "develop", app_name: "whatsapp" }
+  - { name: "https://github.com/deldesir/crm.git",     branch: "develop", app_name: "crm" }
+  - { name: "https://github.com/deldesir/builder.git",  branch: "develop", app_name: "builder" }
+  - { name: "payments",   branch: "develop", app_name: "payments" }
+  - { name: "https://github.com/deldesir/webshop.git",  branch: "develop", app_name: "webshop" }
+  - { name: "https://github.com/deldesir/POSNext.git",  branch: "develop", app_name: "pos_next" }
+  - { name: "https://github.com/deldesir/hospitality_pms.git", branch: "version-16", app_name: "hospitality_pms" }

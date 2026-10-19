@@ -123,3 +123,5 @@ services:
     upstream: https://github.com/deldesir/hospitality_pms   # fork of globcomqatar/hospitality_pms, branch version-16
     probes:
       - { path: /erp/pms, expect: 200, critical: false }   # the PMS shell (a guest is bounced to the login page)
+    metrics: [night_audit]   # the check warns when the property's business date lags (night audit not run)
+    notes: a POS Next till with "Charge credit sales to the guest's room" on its POS Profile puts a bill signed to the room on the guest's folio, settled at checkout; preset vars/local_vars_fleet_box_hotel.yml
