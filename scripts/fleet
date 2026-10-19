@@ -94,15 +94,18 @@ ALIAS_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,30}$")   # short slug people type; 
 # ----------------------------------------------------------------------------- config
 
 
-def read_conf(p: Path) -> dict:
+def parse_conf(text: str) -> dict:
     conf = {}
-    if p.exists():
-        for line in p.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, _, v = line.partition("=")
-                conf[k.strip()] = v.strip().strip('"')
+    for line in text.splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, _, v = line.partition("=")
+            conf[k.strip()] = v.strip().strip('"')
     return conf
+
+
+def read_conf(p: Path) -> dict:
+    return parse_conf(p.read_text()) if p.exists() else {}
 
 
 def set_conf(p: Path, key: str, value: str) -> None:
@@ -306,6 +309,21 @@ def http_code(url: str, timeout: int = 20) -> str:
         return "000"
 
 
+def box_http_code(box: dict, url: str, timeout: int = 20) -> str:
+    """HTTP status as the box itself sees it: for services that only listen on its loopback (the
+    hub-kind probes), which the machine running the check cannot reach once the hub and the box
+    that carries the service are no longer the same computer."""
+    rc, out = run_on(box, f"curl -s -o /dev/null -m {timeout} -w '%{{http_code}}' -L {shlex.quote(url)}", timeout=timeout + 15)
+    code = out.strip()[-3:]
+    return code if rc == 0 and code.isdigit() else "000"
+
+
+def local_addresses() -> set[str]:
+    """Names and addresses this machine answers to (its tailnet address included)."""
+    out = subprocess.run(["hostname", "-I"], capture_output=True, text=True).stdout.split()
+    return set(out) | {socket.gethostname(), socket.getfqdn(), "localhost", "127.0.0.1"}
+
+
 def tls_days_left(host: str) -> int | None:
     try:
         ctx = ssl.create_default_context()
@@ -354,14 +372,14 @@ _BACKUP_BOX: dict | None = None   # the box running fleet-backup-mail when it is
 def hub_backup_age_hours(host: str) -> float | None:
     d = HUB_BACKUPS / host
     if not d.is_dir() and _BACKUP_BOX:
-        rc, out = run_on(_BACKUP_BOX, f"f=$(ls -t {HUB_BACKUPS}/{host}/*/*-database*.sql.gz 2>/dev/null | head -1); [ -n \"$f\" ] && echo $(( ($(date +%s) - $(stat -c %Y \"$f\")) / 3600 )) || echo none")
+        rc, out = run_on(_BACKUP_BOX, f"f=$(ls -t {HUB_BACKUPS}/{host}/*/*-database*.sql.gz {HUB_BACKUPS}/{host}/*/control-plane-export-*.tar.gpg 2>/dev/null | head -1); [ -n \"$f\" ] && echo $(( ($(date +%s) - $(stat -c %Y \"$f\")) / 3600 )) || echo none")
         return float(out.strip()) if rc == 0 and out.strip().replace(".", "").isdigit() else None
     if not d.is_dir():
         return None
     newest = None
     for sub in d.iterdir():
         if sub.is_dir() and re.fullmatch(r"\d{4}-\d{2}-\d{2}", sub.name):
-            for f in sub.glob("*-database*.sql.gz"):
+            for f in [*sub.glob("*-database*.sql.gz"), *sub.glob("control-plane-export-*.tar.gpg")]:
                 m = f.stat().st_mtime
                 newest = m if newest is None or m > newest else newest
     return None if newest is None else round((time.time() - newest) / 3600, 1)
@@ -422,11 +440,14 @@ def collect_pull(box: dict, catalog: dict) -> dict:
         "monitor_units": dict(zip(units, [s for s in kv.get("units", "").split(",") if s])) if units else {},
         "reboot_required": kv.get("reboot_required", "0"), "kernel_running": kv.get("kernel_running", ""), "kernel_newest": kv.get("kernel_newest", ""),
     })
-    # the hub's own off-box copy (second-brain-offsite.conf: OFFSITE_HOST, OFFSITE_DIR)
-    if box["role"] == "hub":
-        oc = read_conf(Path("/etc/iiab/second-brain-offsite.conf"))
+    # the pipeline's off-box snapshot copy: second-brain-offsite.conf (OFFSITE_HOST, OFFSITE_DIR) lives on
+    # the box that runs the assistant; the copy may sit on this machine or on another box
+    if "whatsapp-assistant" in box["services"]:
+        rc, out = run_on(box, "cat /etc/iiab/second-brain-offsite.conf 2>/dev/null")
+        oc = parse_conf(out) if rc == 0 else {}
         if oc.get("OFFSITE_HOST"):
-            rc, out = run_on({"ssh_user": "root", "reach": {"ssh": oc["OFFSITE_HOST"]}, "local": False},
+            target = {"ssh_user": "root", "reach": {"ssh": oc["OFFSITE_HOST"]}, "local": oc["OFFSITE_HOST"] in local_addresses()}
+            rc, out = run_on(target,
                              f"f=$(ls -t {oc.get('OFFSITE_DIR', '/library/backups/hub-offsite')}/second-brain-*.tar.gpg 2>/dev/null | head -1); [ -n \"$f\" ] && echo $(( ($(date +%s) - $(stat -c %Y \"$f\")) / 3600 )) || echo none")
             raw["offsite_copy_age_h"] = out.strip() if rc == 0 else "unreachable"
             raw["offsite_host"] = oc["OFFSITE_HOST"]
@@ -445,7 +466,7 @@ def collect_pull(box: dict, catalog: dict) -> dict:
         if url in seen:
             continue
         seen.add(url)
-        code = http_code(url)
+        code = box_http_code(box, url) if p.get("hub") else http_code(url)
         raw["http"][p.get("path") or url] = code
         raw["probes"].append({"url": url, "code": code, "expect": str(p.get("expect", 200)), "critical": bool(p.get("critical", True)), "service": p["service"]})
     if box["connectivity"] == "public":
@@ -561,11 +582,11 @@ def evaluate(box: dict, raw: dict, inv: dict, catalog: dict) -> dict:
     oa = raw.get("offsite_copy_age_h")
     if oa is not None:
         if oa in ("none", "unreachable"):
-            f("WARN", "offsite", f"hub off-box backup copy on {raw.get('offsite_host')}: {oa}")
+            f("WARN", "offsite", f"pipeline off-box copy on {raw.get('offsite_host')}: {oa}")
         elif str(oa).isdigit() and int(oa) > 72:
-            f("CRIT", "offsite", f"hub off-box backup copy is {oa} h old")
+            f("CRIT", "offsite", f"pipeline off-box copy is {oa} h old")
         elif str(oa).isdigit() and int(oa) > 36:
-            f("WARN", "offsite", f"hub off-box backup copy is {oa} h old")
+            f("WARN", "offsite", f"pipeline off-box copy is {oa} h old")
     wd = raw.get("watchdog")
     if wd:
         if not wd.get("reachable"):

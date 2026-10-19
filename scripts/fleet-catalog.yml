@@ -10,7 +10,8 @@
 #            candidate  upstream app identified, not forked or tested on the fleet heads
 # probes:    HTTP paths on the box (public: https://<host><path>; tailnet: http://<ip><path>)
 #            critical: true  -> a failure is CRIT (service down); false -> WARN
-# units:     systemd units that must be active (box kind: on the box; hub kind: on the hub)
+# units:     systemd units that must be active (box kind: on the box; hub kind: on the hub or observer that carries it)
+# hub_probes: URLs curled on the box that carries a hub-kind service (loopback listeners)
 version: 1
 services:
   erp:
