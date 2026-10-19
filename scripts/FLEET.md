@@ -110,9 +110,20 @@ the customer till last.
 ```
 fleet suspend <id> --reason "invoice overdue 30 days"   # maintenance page on
 fleet resume <id>
+fleet dunning [--apply]  # overdue invoices from the fleet site: grace, then suspension past grace
+fleet rollback <id> [--release ID] [--no-restore] [--dry-run]   # undo the last upgrade (code + data)
 fleet offboard <id>      # final backup with files pulled to the hub + HANDOVER.txt; wipe stays manual
 fleet push               # mirror inventory, checks and releases into the fleet site
 ```
+
+`rollback` reads what `upgrade` recorded on the box before changing anything (the commit
+each app ran, the backup it took): apps go back to those commits, requirements and assets
+are rebuilt, the database and files are restored from that backup. `dunning` turns unpaid
+Sales Invoices in the fleet site into findings (WARN while overdue, CRIT past the box's
+`grace_days`), moves the status active/grace with the money, and with `--apply` (or
+`auto_suspend: true` in the inventory, nightly) suspends past the grace and lifts automatic
+suspensions once paid. The backup mailer can also copy every bundle to object storage
+(`RCLONE_REMOTE` in its conf).
 
 `suspend` and `offboard` refuse our own boxes. Every action is appended to
 `/var/lib/fleet/actions.log`.

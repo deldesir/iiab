@@ -58,6 +58,19 @@ df -h / | awk 'NR==2{print "disk free:", $4}'; free -m | awk 'NR==2{print "ram a
 if [ "${PREFLIGHT_ONLY:-0}" != 1 ]; then
   step "backup (db + files)"
   asf "bench --site $SITE backup --with-files" || fail "backup"
+  # Record what this upgrade starts from, for bench-rollback.sh: the backup just taken and
+  # the commit each app runs now. Written before anything changes.
+  bk=$B/sites/$SITE/private/backups
+  {
+    echo "STAMP=$(date +%Y%m%dT%H%M%S)"; echo "SITE=$SITE"
+    echo "DB_BACKUP=$(ls -t $bk/*-database*.sql.gz 2>/dev/null | head -1)"
+    echo "FILES_BACKUP=$(ls -t $bk/*-files*.tar 2>/dev/null | grep -v -- '-private-files' | head -1)"
+    echo "PRIVATE_BACKUP=$(ls -t $bk/*-private-files*.tar 2>/dev/null | head -1)"
+    printf 'PREV_HEADS="'; for a in $APPS; do printf '%s=%s ' "$a" "$(val "git -C apps/$a rev-parse HEAD")"; done; printf '"\n'
+    echo "RELEASE=$([ -n "$MANIFEST" ] && awk -F= '$1=="release"{print $2}' "$MANIFEST")"
+  } > /root/bench-upgrade.last.env
+  chmod 600 /root/bench-upgrade.last.env
+  echo "rollback state recorded in /root/bench-upgrade.last.env"
 fi
 
 step "fetch fork heads"
