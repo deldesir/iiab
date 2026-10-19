@@ -7,6 +7,8 @@
 # files + site_config), the fleet_ops app source (its repository is private), Semaphore config
 # + database dump, the tailnet nginx listener, Uptime Kuma data (only if it moves too).
 # Output: /library/backups/control-plane-export-<stamp>.tar.gpg. Prints no secrets.
+# Run nightly by fleet-export.timer: the bundle doubles as the hub's own backup, which the observer's
+# fleet-backup-mail pulls and mails; the newest KEEP (7) bundles stay under /library/backups.
 set -euo pipefail
 STAMP=$(date +%Y%m%d-%H%M%S); OUT=${1:-/library/backups/control-plane-export-$STAMP.tar.gpg}
 B=/home/frappe/frappe-bench; SITE=fleet.local; PASS=/etc/iiab/fleet-backup.passphrase
@@ -41,4 +43,6 @@ site: $SITE  app commit: $(cat "$T/app/fleet_ops.commit" 2>/dev/null)
 import with: import-control-plane.sh $OUT
 M
 tar -C "$T" -cf - . | gpg --batch --yes --quiet --symmetric --cipher-algo AES256 --passphrase-file "$PASS" > "$OUT"
-chmod 0600 "$OUT"; echo "EXPORT-OK $OUT ($(du -h "$OUT" | cut -f1))"
+chmod 0600 "$OUT"
+ls -t /library/backups/control-plane-export-*.tar.gpg 2>/dev/null | tail -n +$(( ${KEEP:-7} + 1 )) | xargs -r rm -f
+echo "EXPORT-OK $OUT ($(du -h "$OUT" | cut -f1))"

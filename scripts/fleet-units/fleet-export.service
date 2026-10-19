@@ -1,0 +1,7 @@
+[Unit]
+Description=Nightly control-plane export (the hub's own state, encrypted with the fleet passphrase)
+# The observer's fleet-backup-mail pulls the newest bundle and mails it (BOXES entry "hub=<this host>").
+
+[Service]
+Type=oneshot
+ExecStart=/opt/iiab/iiab/scripts/fleet-install/export-control-plane.sh

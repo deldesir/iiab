@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly control-plane export (03:00 Haiti, before the observer pulls at 06:30)
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 America/Port-au-Prince
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
