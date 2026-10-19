@@ -278,6 +278,18 @@ if not frappe.db.exists("POS Profile", "Bar"):
                     "write_off_cost_center": cost_center, "write_off_limit": 1, "disable_rounded_total": 1, "disabled": 0,
                     "payments": [{"mode_of_payment": "Cash", "default": 1}],
                     "applicable_for_users": [{"user": "Administrator", "default": 1}]}).insert(ignore_permissions=True)
+# The bar till charges rooms: a bill put on the guest's account lands on the folio (the PMS's
+# pos bridge, through this POS Profile flag) and POS Next must allow the sale on account.
+if frappe.db.has_column("POS Profile", "hpms_charge_to_room"):
+    frappe.db.set_value("POS Profile", "Bar", "hpms_charge_to_room", 1, update_modified=False)
+if frappe.db.exists("DocType", "POS Settings"):
+    ensure("POS Settings", {"pos_profile": "Bar"}, {"enabled": 1, "allow_credit_sale": 1})
+    frappe.db.set_value("POS Settings", {"pos_profile": "Bar"}, "allow_credit_sale", 1, update_modified=False)
+# Walk-ins at the pool or the bar buy at the same till for cash: a day pass is an ordinary item
+ensure("Item", {"item_code": "POOL-DAY"}, {"item_name": "Pool day pass", "item_group": item_group, "stock_uom": "Nos",
+                                            "is_stock_item": 0, "is_sales_item": 1, "is_purchase_item": 0,
+                                            "standard_rate": 1500})
+ensure("Item Price", {"item_code": "POOL-DAY", "price_list": price_list}, {"price_list_rate": 1500, "selling": 1})
 # Rose had dinner at the restaurant and signed it to her room
 rose = frappe.db.get_value("Reservation", {"external_reference": "DEMO-03"}, "name")
 rose_stay = frappe.db.get_value("Stay", {"reservation": rose}, "name") if rose else None
