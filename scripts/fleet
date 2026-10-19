@@ -373,7 +373,8 @@ db=$(python3 -c "import json;print(json.load(open('$B/sites/$S/site_config.json'
 echo "targets=$(systemctl is-active {targets} 2>/dev/null | tr '\n' ' ')"
 echo "failed_units=$(systemctl --failed --no-legend | wc -l)"
 echo "failed_list=$(systemctl --failed --no-legend --plain | awk '{{print $1}}' | tr '\n' ',')"
-echo "errorlog=$(mysql -N -e "select count(*) from \`tabError Log\` where creation > '{since}'" $db 2>/dev/null || echo '?')"
+LOGDB=$B/sites/$S/private/files/sqlite.db   # Frappe keeps Error Log in a per-site SQLite file now; the MariaDB table is a leftover on older sites
+echo "errorlog=$( ( [ -r "$LOGDB" ] && python3 -c "import sqlite3; c=sqlite3.connect('file:$LOGDB?mode=ro', uri=True); print(c.execute('select count(*) from \"tabError Log\" where creation > ?', ('{since}',)).fetchone()[0])" 2>/dev/null ) || mysql -N -e "select count(*) from \`tabError Log\` where creation > '{since}'" $db 2>/dev/null || echo '?')"
 echo "open_shifts=$(mysql -N -e "select count(*) from \`tabPOS Opening Shift\` where status='Open' and docstatus=1" $db 2>/dev/null || echo '?')"
 echo "disk_free_gb=$(df -BG --output=avail / | awk 'NR==2{{print $1+0}}')"
 echo "ram_avail_mb=$(awk '/MemAvailable/{{print int($2/1024)}}' /proc/meminfo)"
@@ -645,6 +646,10 @@ def latest_checks(inv: dict) -> dict[str, dict]:
     return out
 
 
+def fmt_days(v) -> str:
+    return "?" if v is None else f"{v}d"
+
+
 def fmt_age(h) -> str:
     if h in (None, "?", ""):
         return "?"
@@ -738,8 +743,8 @@ def cmd_check(a, inv):
         if r.get("http"):
             print("   " + " ".join(f"{p}={c}" for p, c in r["http"].items()))
         print(f"   disk {r.get('disk_free_gb', '?')}G ram {r.get('ram_avail_mb', '?')}M err {r.get('errorlog_rows_today', '?')} shifts {r.get('open_shifts', '?')}"
-              f" bak hub {fmt_age(r.get('hub_backup_age_h'))} box {fmt_age(r.get('box_backup_age_h'))} tls {r.get('tls_days_left')}d"
-              f" domain {r.get('domain_days_left')}d ({r.get('domain_registrar') or '?'})")
+              f" bak hub {fmt_age(r.get('hub_backup_age_h'))} box {fmt_age(r.get('box_backup_age_h'))} tls {fmt_days(r.get('tls_days_left'))}"
+              f" domain {fmt_days(r.get('domain_days_left'))} ({r.get('domain_registrar') or '?'})")
         for x in r.get("findings", []):
             print(f"   {x['level']:<5} {x['message']}")
     apply_dunning(inv, results, apply=bool(inv.get("auto_suspend")))
