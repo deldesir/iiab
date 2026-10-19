@@ -55,13 +55,14 @@ declare -A FORKS=(
   [crm]="https://github.com/frappe/crm.git develop"
   [hrms]="https://github.com/frappe/hrms.git develop"
   [POSNext]="https://github.com/BrainWise-DEV/POSNext.git develop"
+  [hospitality_pms]="https://github.com/globcomqatar/hospitality_pms.git version-16"
   [builder-cli]="https://github.com/stravo1/builder-cli.git main"
 )
 # Default order (heaviest repos last so quick wins/conflicts surface first).
 # builder-cli is intentionally excluded from the default set: it is our own tool
 # with history unrelated to stravo1/builder-cli, so it is not an upstream-tracking
 # fork. Pass it explicitly (`update_frappe_forks.sh builder-cli`) if ever needed.
-DEFAULT_ORDER=(builder webshop crm hrms POSNext erpnext frappe)
+DEFAULT_ORDER=(builder webshop crm hrms hospitality_pms POSNext erpnext frappe)
 
 # ── Arg parsing ───────────────────────────────────────────────────────────────
 MODE="dryrun"   # dryrun | release | pr

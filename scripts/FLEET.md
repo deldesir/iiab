@@ -137,9 +137,11 @@ suspensions once paid. The backup mailer can also copy every bundle to object st
 ## Adding a box
 
 0. On the new machine, the one-line installer (`curl …/iiab-factory/master/install.txt | bash`)
-   key (b) prepares a customer box from `vars/local_vars_fleet_box.yml` (it asks for the box
-   id, the business name, the domain and the certificate address, and generates the
-   passwords); key (h) does the same for a hub from `vars/local_vars_fleet_hub.yml`.
+   key (b) prepares a customer box (it asks shop or hotel, the box id, the business name, the
+   domain and the certificate address, and generates the passwords) from
+   `vars/local_vars_fleet_box.yml` or `vars/local_vars_fleet_box_hotel.yml`; key (h) does the
+   same for a hub from `vars/local_vars_fleet_hub.yml`. A hotel box lists `hospitality` among
+   its services: the check then watches the PMS and its business date (night audit).
 1. `fleet onboard --host <domain> --business "<name>" --alias <slug> [--role till]
    [--billing <email>] [--technical <email>]`: takes the next free id (inventory and the
    fleet site's registry are both consulted), writes the inventory record, mirrors it to
