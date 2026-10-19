@@ -1,6 +1,8 @@
 #cloud-config
-# demo-box.yml — a throwaway ERPNext / POS / storefront box for demos and training,
-# built unattended inside a Multipass VM (Linux, Windows or macOS host).
+# demo-box.yml — a throwaway ERPNext box for demos and training, built unattended inside a
+# Multipass VM (Linux, Windows or macOS host). Two profiles, chosen by the PROFILE line below:
+#   shop   ERPNext + POS + storefront with ERPNext's demo catalogue (the default)
+#   hotel  the same plus the Hospitality PMS, seeded with a 12-room hotel and a busy front desk
 #
 #   multipass launch 24.04 -c 2 -m 4G -d 40G -n demo --cloud-init demo-box.yml
 #   multipass list                      # its address after a minute
@@ -12,9 +14,10 @@
 #   multipass delete --purge demo               # throw it away
 #
 # Logins: ERPNext Administrator / demo1234 at http://<address>/erp, POS at /erp/app/pos-next,
-# storefront at http://<address>/. The box never joins the fleet or the tailnet: it is a VM
-# on a laptop with made-up data (ERPNext's own demo catalogue). The preset it installs is
-# vars/local_vars_demo.yml, the same one `sudo iiab` offers as key (x).
+# storefront at http://<address>/, and for the hotel profile the PMS at http://<address>/erp/pms.
+# The box never joins the fleet or the tailnet: it is a VM on a laptop with made-up data. The
+# presets it installs are vars/local_vars_demo.yml and vars/local_vars_demo_hotel.yml, the same
+# ones `sudo iiab` offers as key (x).
 hostname: demo
 manage_etc_hosts: true
 package_update: true
@@ -25,26 +28,37 @@ write_files:
     permissions: "0755"
     content: |
       #!/bin/bash
-      # Installs IIAB with the demo preset, then seeds the demo shop. Log: /var/log/demo-box.log
+      # Installs IIAB with the demo preset, then seeds the demo data. Log: /var/log/demo-box.log
       set -uo pipefail
+      PROFILE=shop   # shop | hotel  (change this line before launching the VM)
       B=/home/frappe/frappe-bench; SITE=site.local
-      echo "=== $(date -Is) demo-box: clone"
+      case "$PROFILE" in
+        shop)  VARS=vars/local_vars_demo.yml;       SEED=demo-seed.py;       READY=DEMO-SEED-OK ;;
+        hotel) VARS=vars/local_vars_demo_hotel.yml; SEED=demo-hotel-seed.py; READY=DEMO-HOTEL-SEED-OK ;;
+        *) echo "DEMO-BOX-FAILED: unknown PROFILE '$PROFILE' (shop or hotel)"; exit 1 ;;
+      esac
+      echo "=== $(date -Is) demo-box: clone (profile $PROFILE)"
       [ -d /opt/iiab/iiab/.git ] || git clone -q https://github.com/deldesir/iiab /opt/iiab/iiab || { echo "DEMO-BOX-FAILED: clone"; exit 1; }
       cd /opt/iiab/iiab || exit 1
-      mkdir -p /etc/iiab; [ -s /etc/iiab/local_vars.yml ] || install -m 600 vars/local_vars_demo.yml /etc/iiab/local_vars.yml   # the demo preset (same as `sudo iiab` → x)
+      mkdir -p /etc/iiab; [ -s /etc/iiab/local_vars.yml ] || install -m 600 "$VARS" /etc/iiab/local_vars.yml   # the demo preset (same as `sudo iiab` → x)
       for attempt in 1 2 3; do
         echo "=== $(date -Is) demo-box: iiab-install (attempt $attempt)"
         ./iiab-install && break
         echo "iiab-install stopped; retrying in 30 s"; sleep 30
       done
       grep -q '^erpnext_installed: True' /etc/iiab/iiab_state.yml || { echo "DEMO-BOX-FAILED: ERPNext role did not finish (see /opt/iiab/iiab/iiab-install.log)"; exit 1; }
-      echo "=== $(date -Is) demo-box: seed"
-      cp scripts/fleet-install/demo-seed.py /tmp/demo-seed.py; chmod 644 /tmp/demo-seed.py
-      sudo -u frappe -H bash -lc "cd $B && bench --site $SITE execute \"exec(open('/tmp/demo-seed.py').read(), {})\"" | tail -3
+      echo "=== $(date -Is) demo-box: seed ($SEED)"
+      cp "scripts/fleet-install/$SEED" /tmp/demo-seed.py; chmod 644 /tmp/demo-seed.py
+      sudo -u frappe -H bash -lc "cd $B && bench --site $SITE execute \"exec(open('/tmp/demo-seed.py').read(), {})\"" | tail -3 | tee /tmp/demo-seed.out
+      grep -q "$READY" /tmp/demo-seed.out || { echo "DEMO-BOX-FAILED: the seed did not finish (see above)"; rm -f /tmp/demo-seed.py /tmp/demo-seed.out; exit 1; }
       ip=$(hostname -I | awk '{print $1}')
       sudo -u frappe -H bash -lc "cd $B && bench --site $SITE set-config host_name http://$ip/erp && bench --site $SITE clear-cache" >/dev/null
-      rm -f /tmp/demo-seed.py
-      printf 'DEMO BOX READY\n  ERPNext   http://%s/erp        Administrator / demo1234\n  POS       http://%s/erp/app/pos-next\n  Storefront http://%s/\n' "$ip" "$ip" "$ip" | tee /etc/motd
+      rm -f /tmp/demo-seed.py /tmp/demo-seed.out
+      {
+        printf 'DEMO BOX READY (%s)\n  ERPNext    http://%s/erp        Administrator / demo1234\n' "$PROFILE" "$ip"
+        [ "$PROFILE" = hotel ] && printf '  Hotel PMS  http://%s/erp/pms\n' "$ip"
+        printf '  POS        http://%s/erp/app/pos-next\n  Storefront http://%s/\n' "$ip" "$ip"
+      } | tee /etc/motd
       echo "=== $(date -Is) DEMO-BOX-READY http://$ip/erp"
 
 runcmd:

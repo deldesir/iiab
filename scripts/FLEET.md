@@ -149,11 +149,16 @@ suspensions once paid. The backup mailer can also copy every bundle to object st
 ## Demo box
 
 `scripts/fleet-install/demo-box.yml` is a cloud-init file: `multipass launch 24.04 -c 2 -m 4G
--d 40G -n demo --cloud-init demo-box.yml` builds a throwaway ERPNext/POS/storefront box in
-a VM on any laptop (Linux, Windows, macOS), seeded with ERPNext's demo catalogue by
-`demo-seed.py` (wizard done, items, prices, stock, customers, a POS profile, website
-items). Snapshot it once, restore before each demo. It never joins the fleet.
-`demo-seed-drill.sh` proves the seed on a scratch site of any bench.
+-d 40G -n demo --cloud-init demo-box.yml` builds a throwaway box in a VM on any laptop
+(Linux, Windows, macOS). Its `PROFILE` line picks what it becomes: `shop` (ERPNext, POS,
+storefront, seeded with ERPNext's demo catalogue by `demo-seed.py`: wizard done, items,
+prices, stock, customers, a POS profile, website items) or `hotel` (the same plus the
+Hospitality PMS, `vars/local_vars_demo_hotel.yml`, seeded by `demo-hotel-seed.py`: a 12-room
+property, room types, rate plans, the posting profile, guests, guests in house with folio
+lines, today's arrivals, future and tentative bookings, housekeeping and a maintenance
+ticket). Snapshot it once, restore before each demo. It never joins the fleet.
+`demo-seed-drill.sh` proves the shop seed on a scratch site of any bench. `sudo iiab` → key
+`x` offers the same two profiles on real hardware.
 
 ## Installing the control plane on a hub
 

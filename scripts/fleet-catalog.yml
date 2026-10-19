@@ -115,8 +115,10 @@ services:
     apps: [healthcare]
     upstream: https://github.com/earthians/marley
   hospitality:
-    title: Hotel management (hospitality PMS)
+    title: "Hotel management (Hospitality PMS: front desk, rooms, rates, folios, housekeeping, night audit)"
     kind: box
-    maturity: candidate
+    maturity: on-request
     apps: [hospitality_pms]
-    upstream: https://github.com/globcomqatar/hospitality_pms
+    upstream: https://github.com/deldesir/hospitality_pms   # fork of globcomqatar/hospitality_pms, branch version-16
+    probes:
+      - { path: /erp/pms, expect: 200, critical: false }   # the PMS shell (a guest is bounced to the login page)
