@@ -13,6 +13,10 @@
 #
 # Config: /etc/iiab/fleet-backup.conf   Passphrase: /etc/iiab/fleet-backup.passphrase
 #
+# BOXES entries: "<ssh-host>" (a Frappe box: newest site backup + uploaded files),
+# "local=<label>" (this machine), "hub=<ssh-host>" (the fleet hub: its newest
+# control-plane export bundle, which export-control-plane.sh writes there nightly).
+#
 # Recipients (these settings affect ONLY these backup mails, nothing else the
 # stack sends): RECIPIENT is the default for every box; RECIPIENT_OVERRIDES
 # ("box=email box=email") redirects individual boxes. Manage them with:
@@ -47,7 +51,7 @@ DRY_RUN=${DRY_RUN:-0}              # DRY_RUN=1: build bundles, send nothing
 [ -n "$RECIPIENT" ] && [ -n "$BOXES" ] || { echo "RECIPIENT/BOXES missing in $CONF" >&2; exit 2; }
 [ -s "$PASSFILE" ] || { echo "missing $PASSFILE" >&2; exit 2; }
 
-label_of() { echo "${1#*=}"; }                # BOXES entry -> label ("local=<label>" or "<ssh-host>")
+label_of() { echo "${1#*=}"; }                # BOXES entry -> label ("local=<label>", "hub=<ssh-host>" or "<ssh-host>")
 recipient_for() {                             # per-box override, else the default
   local pair
   for pair in $RECIPIENT_OVERRIDES; do
@@ -125,9 +129,54 @@ send_mail() {  # send_mail <to> <subject> <body> [file]
   [ "$code" = 200 ] || { echo "  email-bridge HTTP $code: $(head -c 200 "$WORK/resp")" >&2; return 1; }
 }
 
+mail_bundle() {  # mail_bundle <to> <label> <warn> <bundle> <body> — one mail, or several parts above the size cap
+  local to=$1 label=$2 warn=$3 bundle=$4 body=$5
+  local size; size=$(stat -c %s "$bundle")
+  if [ "$size" -le "$PART_BYTES" ]; then
+    send_mail "$to" "[backup] ${warn}$label $STAMP ($(human "$size"))" "$body" "$bundle" || return 1
+  else
+    split -b "$PART_BYTES" -d -a 2 "$bundle" "$bundle.part"
+    local parts=("$bundle".part*) i=0 p
+    for p in "${parts[@]}"; do
+      i=$((i + 1))
+      send_mail "$to" "[backup] ${warn}$label $STAMP part $i/${#parts[@]}" \
+        "$body
+
+This backup is split: save all ${#parts[@]} parts, then  cat $(basename "$bundle").part* > $(basename "$bundle")" "$p" || return 1
+    done
+  fi
+}
+
+# backup_hub <ssh-host> — the fleet hub keeps its own state as a control-plane export bundle
+# (export-control-plane.sh, nightly there, already encrypted with the fleet passphrase):
+# pull the newest one, keep it here for KEEP_DAYS, mail it as it is.
+backup_hub() {
+  local host=$1 label=$1 to
+  to=$(recipient_for "$label")
+  echo "== $label (hub export) -> $to"
+  local bundle; bundle=$(on "$host" "ls -t /library/backups/control-plane-export-*.tar.gpg 2>/dev/null | head -1") || return 1
+  [ -n "$bundle" ] || { echo "  no control-plane export found (fleet-export.timer on the hub)" >&2; return 1; }
+  local out=$DEST/$label/$STAMP; mkdir -p "$out"
+  pull "$host" "$bundle" "$out/" || return 1
+  local mtime age_h warn=""
+  mtime=$(on "$host" "stat -c %Y '$bundle'") || return 1
+  age_h=$(( ( $(date +%s) - mtime ) / 3600 ))
+  [ "$age_h" -ge "$STALE_HOURS" ] && warn="STALE ${age_h}h - "
+  local copy=$WORK/$(basename "$bundle"); cp -a "$out/$(basename "$bundle")" "$copy"
+  echo "  $(basename "$bundle") ($(human "$(stat -c %s "$copy")"), ${age_h}h old)"
+  local body="Encrypted export of the fleet hub ($label): inventory, releases, local_vars copies, fleet site database + files, Semaphore; taken ${age_h}h before mailing.
+
+Decrypt with the fleet passphrase (kept on the hub: $PASSFILE):
+  gpg -d $(basename "$bundle") | tar x
+or rebuild a hub from it: import-control-plane.sh $(basename "$bundle"). An off-box copy is also kept here under $DEST/$label/ for $KEEP_DAYS days."
+  mail_bundle "$to" "$label" "$warn" "$copy" "$body" || return 1
+  find "$DEST/$label" -mindepth 1 -maxdepth 1 -type d -name '20*' -mtime +"$KEEP_DAYS" -exec rm -rf {} +
+}
+
 backup_box() {
   local entry=$1 box label
-  box=${entry%%=*}; label=${entry#*=}          # "local=<label>" or "<ssh-host>"
+  box=${entry%%=*}; label=${entry#*=}          # "local=<label>", "hub=<ssh-host>" or "<ssh-host>"
+  if [ "$box" = hub ]; then backup_hub "$label"; return $?; fi
   local to passfile
   to=$(recipient_for "$label"); passfile=$(passfile_for "$label")
   echo "== $label -> $to"
@@ -198,19 +247,7 @@ A copy is also in object storage: $RCLONE_REMOTE/$label/ (kept $RCLONE_KEEP_DAYS
 Decrypt with the backup passphrase (kept on the hub: $passfile):
   gpg -d $(basename "$bundle") | tar x
 then follow RESTORE.txt inside. An off-box copy is also kept on the hub under $DEST/$label/ for $KEEP_DAYS days.$offsite"
-  if [ "$size" -le "$PART_BYTES" ]; then
-    send_mail "$to" "[backup] ${warn}$label $STAMP ($(human "$size"))" "$body" "$bundle" || return 1
-  else
-    split -b "$PART_BYTES" -d -a 2 "$bundle" "$bundle.part"
-    local parts=("$bundle".part*) i=0
-    for p in "${parts[@]}"; do
-      i=$((i + 1))
-      send_mail "$to" "[backup] ${warn}$label $STAMP part $i/${#parts[@]}" \
-        "$body
-
-This backup is split: save all ${#parts[@]} parts, then  cat $(basename "$bundle").part* > $(basename "$bundle")" "$p" || return 1
-    done
-  fi
+  mail_bundle "$to" "$label" "$warn" "$bundle" "$body" || return 1
   find "$DEST/$label" -mindepth 1 -maxdepth 1 -type d -name '20*' -mtime +"$KEEP_DAYS" -exec rm -rf {} +
 }
 

@@ -6,11 +6,16 @@ Copies of the systemd units the hub runs; see `scripts/FLEET.md`.
   `fleet-digest.service`. A failing box is a finding, not a unit failure.
 - `fleet-digest.service`: runs as the gateway user with the gateway's environment and
   delivers `/var/lib/fleet/latest-digest.txt` through `notify_admin`.
+- `fleet-backup-pull.timer` / `.service`: daily (07:30 Haiti) mirror of the observer's backup
+  copies onto the hub (`fleet backup-pull`).
+- `fleet-export.timer` / `.service`: nightly (03:00 Haiti) control-plane export, the hub's own
+  backup; the observer's `fleet-backup-mail` pulls and mails the newest bundle.
 - `uptime-kuma.service`: Uptime Kuma 2.x bound to the tailnet address only
   (`<tailnet-ip>` placeholder), data under `/library/uptime-kuma`.
 
 Install: copy to `/etc/systemd/system/`, `systemctl daemon-reload`,
-`systemctl enable --now fleet-check.timer uptime-kuma`.
+`systemctl enable --now fleet-check.timer fleet-backup-pull.timer fleet-export.timer` (and
+`uptime-kuma` where the monitor runs).
 
 ## Box-side units (installed by `fleet deploy-agent <id>` / `fleet deploy-watchdog <id>`)
 

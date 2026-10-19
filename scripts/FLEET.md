@@ -141,7 +141,8 @@ suspensions once paid. The backup mailer can also copy every bundle to object st
    accepts this machine's key, and prints the `iiab_hostname` / `erpnext_business_name`
    lines for the box's `local_vars.yml`.
 2. Add its host to `BOXES` in `/etc/iiab/fleet-backup.conf` on the box that runs
-   `fleet-backup-mail`, so its backup is pulled and mailed.
+   `fleet-backup-mail`, so its backup is pulled and mailed (a hub goes in as `hub=<address>`:
+   its nightly control-plane export is mailed instead of a site backup).
 3. `fleet check <id>`; in the fleet site, link the Managed Box to its Customer and start
    its Subscription; add its VPS and domain as Fleet Subscription rows.
 4. Inside its window: `fleet hostname <id>`.
@@ -167,9 +168,11 @@ today's arrivals, future and tentative bookings, housekeeping and a room out of 
   `fleet upgrade` reads `bench-upgrade.sh` from the repo, or `FLEET_UPGRADE_SCRIPT`)
   (it runs on a small venv: `uv venv /var/lib/fleet/venv && uv pip install --python
   /var/lib/fleet/venv/bin/python "python-socketio[client]" requests pyyaml websocket-client`).
-- Units: `fleet-check.service`, `fleet-check.timer`, `fleet-digest.service` (see the
-  private operations manual for the unit files; the digest unit runs as the gateway user
-  with the gateway's environment and calls `notify_admin`).
+- Units (`scripts/fleet-units/`): `fleet-check.timer` → `fleet-check.service` → `fleet-digest.service`
+  (the digest unit runs as the gateway user with the gateway's environment and calls
+  `notify_admin`); `fleet-backup-pull.timer` mirrors the observer's backup copies daily;
+  `fleet-export.timer` writes the nightly control-plane export, which is the hub's own backup:
+  the observer's `fleet-backup-mail` pulls and mails it (`BOXES` entry `hub=<hub address>`).
 - Uptime Kuma 2.x: `git clone -b <tag> https://github.com/louislam/uptime-kuma /opt/uptime-kuma`,
   `npm ci --omit=dev && npm run download-dist`, a dedicated system user, `DATA_DIR` under
   `/library`, bind the tailnet address only, then `fleet-kuma-seed`.
