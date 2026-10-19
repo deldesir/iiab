@@ -23,7 +23,8 @@ and the seeder live in scripts/ and scripts/fleet-units/.
 Demo and training: `demo-box.yml` (cloud-init for a Multipass VM; its `PROFILE` line picks
 shop or hotel), `demo-seed.py` (shop: wizard + ERPNext's demo catalogue + prices, stock, POS
 profile, website items; idempotent), `demo-hotel-seed.py` (hotel: wizard + a 12-room property
-in the Hospitality PMS with rate plans, posting profile, guests, stays, folio lines,
-housekeeping and maintenance; idempotent; needs the `hospitality_pms` app, see
+in the Hospitality PMS with rate plans, posting profile, guests, stays, folio lines, a bar and
+restaurant menu with an order signed to a room, a Bar POS profile, housekeeping and a room
+out of order; idempotent; needs the `hospitality_pms` app, see
 `vars/local_vars_demo_hotel.yml`) and `demo-seed-drill.sh` (proves the shop seed on a scratch
 site, then drops it).

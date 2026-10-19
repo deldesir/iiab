@@ -155,8 +155,8 @@ storefront, seeded with ERPNext's demo catalogue by `demo-seed.py`: wizard done,
 prices, stock, customers, a POS profile, website items) or `hotel` (the same plus the
 Hospitality PMS, `vars/local_vars_demo_hotel.yml`, seeded by `demo-hotel-seed.py`: a 12-room
 property, room types, rate plans, the posting profile, guests, guests in house with folio
-lines, today's arrivals, future and tentative bookings, housekeeping and a maintenance
-ticket). Snapshot it once, restore before each demo. It never joins the fleet.
+lines, a bar and restaurant menu with an order signed to a room and a Bar POS profile,
+today's arrivals, future and tentative bookings, housekeeping and a room out of order). Snapshot it once, restore before each demo. It never joins the fleet.
 `demo-seed-drill.sh` proves the shop seed on a scratch site of any bench. `sudo iiab` → key
 `x` offers the same two profiles on real hardware.
 
