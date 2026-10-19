@@ -1,0 +1,8 @@
+[Unit]
+Description=Mirror the fleet backup copies from the observer onto this hub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/fleet backup-pull
