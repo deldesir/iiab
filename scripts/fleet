@@ -9,7 +9,7 @@ Identity: every box has an id (box-NNN, given once at onboarding, never reused),
 (short slug the people use; may change) and a host (the customer's domain). Commands
 accept id, alias or host; output shows "id alias".
 
-  fleet list | status
+  fleet list | status | tailnet         inventory; last check per box; our nodes as the tailnet sees them
   fleet check [ID...|--all] [--no-push]   OK / WARN / CRIT / STALE per box with levelled
                                           findings; feeds the per-box monitors; writes
                                           /var/lib/fleet/checks/<id>/ and the digest
@@ -192,6 +192,22 @@ def select_boxes(inv: dict, ids: list[str], all_: bool) -> list[dict]:
 def label(b: dict) -> str:
     """How a box is named in output: 'box-003 malianova' (id, then alias when it differs)."""
     return f"{b['id']} {b['alias']}" if b.get("alias") and b["alias"] != b["id"] else b["id"]
+
+
+_COLORS = {"green": "32", "yellow": "33", "red": "31", "magenta": "35", "bold": "1", "dim": "2"}
+_STATE_COLOR = {"OK": "green", "WARN": "yellow", "CRIT": "red", "STALE": "magenta", "FAILED": "red", "INFO": "dim"}
+
+
+def paint(text: str, color: str) -> str:
+    """Colour on a terminal only: logs, Semaphore runs and mail get plain text (NO_COLOR respected)."""
+    if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
+        return text
+    return f"\033[{_COLORS[color]}m{text}\033[0m"
+
+
+def state(word: str, width: int = 0) -> str:
+    """A check state (OK / WARN / CRIT / STALE) coloured, padded to width before colouring."""
+    return paint(f"{word:<{width}}", _STATE_COLOR.get(word, "bold"))
 
 
 # ----------------------------------------------------------------------------- remote exec
@@ -758,7 +774,7 @@ def cmd_check(a, inv):
             write_check(r)
     for b in boxes:
         r = results[b["id"]]
-        print(f"== {label(b)} {b['host']} [{b['connectivity']}/{b['mode']}] {r['status']}")
+        print(f"== {label(b)} {b['host']} [{b['connectivity']}/{b['mode']}] {state(r['status'])}")
         if r.get("heads"):
             print("   " + " ".join(f"{k}={v[:7]}" for k, v in sorted(r["heads"].items())))
         if r.get("http"):
@@ -767,7 +783,7 @@ def cmd_check(a, inv):
               f" bak hub {fmt_age(r.get('hub_backup_age_h'))} box {fmt_age(r.get('box_backup_age_h'))} tls {fmt_days(r.get('tls_days_left'))}"
               f" domain {fmt_days(r.get('domain_days_left'))} ({r.get('domain_registrar') or '?'})")
         for x in r.get("findings", []):
-            print(f"   {x['level']:<5} {x['message']}")
+            print(f"   {state(x['level'], 5)} {x['message']}")
     apply_dunning(inv, results, apply=bool(inv.get("auto_suspend")))
     all_checks = latest_checks(inv)
     (STATE / "latest-digest.txt").write_text(build_digest(inv, all_checks) + "\n")
@@ -777,7 +793,8 @@ def cmd_check(a, inv):
     kuma_heartbeats(results, all_checks, whole_fleet=a.all)
     bad = [r["id"] for r in results.values() if r["status"] in ("CRIT", "STALE")]
     warn = [r["id"] for r in results.values() if r["status"] == "WARN"]
-    print(f"CHECK-{'FAILED ' + ','.join(bad) if bad else 'OK'}{(' (warnings: ' + ','.join(warn) + ')') if warn else ''}")
+    print(paint(f"CHECK-{'FAILED ' + ','.join(bad) if bad else 'OK'}", "red" if bad else "green")
+          + ((" (warnings: " + ",".join(warn) + ")") if warn else ""))
     return 1 if bad else 0
 
 
@@ -818,7 +835,50 @@ def cmd_status(a, inv):
         c = checks.get(b["id"], {})
         when = c.get("checked_at", "-")[:16].replace("T", " ")
         fx = "; ".join(f"{x['level']} {x['message']}" for x in c.get("findings", []) if x["level"] != "INFO") or "-"
-        print(f"{b['id']:<8} {b['alias']:<17} {b['host']:<22} {b['role']:<9} {b['connectivity']:<8} {b['status']:<10} {c.get('status', '-'):<6} {when:<17} {fx}")
+        print(f"{b['id']:<8} {b['alias']:<17} {b['host']:<22} {b['role']:<9} {b['connectivity']:<8} {b['status']:<10} {state(c.get('status', '-'), 6)} {when:<17} {fx}")
+    return 0
+
+
+def cmd_tailnet(a, inv):
+    """Our machines as the tailnet sees them from this hub: which inventory box each node is,
+    online or last seen, OS, relay, tag. The iiab-vpn peer table, keyed by box."""
+    r = subprocess.run(["tailscale", "status", "--json"], capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit("fleet: tailscale status failed: " + (r.stderr.strip() or r.stdout.strip())[-200:])
+    d = json.loads(r.stdout)
+    nodes = [d["Self"]] + list((d.get("Peer") or {}).values())
+    by_ip, by_name = {}, {b["id"]: b for b in inv["boxes"]}
+    for b in inv["boxes"]:
+        for addr in (b["host"], (b.get("reach") or {}).get("ssh", ""), (b.get("reach") or {}).get("http", "")):
+            addr = re.sub(r"^https?://", "", addr or "").split("/")[0].split(":")[0]
+            if addr:
+                by_ip[addr] = b
+
+    def root(tag: str) -> str:            # tag:blondel-ephem -> blondel
+        return tag.split(":", 1)[-1].split("-")[0]
+    rows, ours = [], {root(t) for t in d["Self"].get("Tags") or []}
+    for n in nodes:
+        ips = n.get("TailscaleIPs") or []
+        box = by_name.get(n.get("HostName")) or next((by_ip[i] for i in ips if i in by_ip), None)
+        if box:
+            ours |= {root(t) for t in n.get("Tags") or []}
+        rows.append((n, box))
+    mine = [(n, b) for n, b in rows if b or ({root(t) for t in n.get("Tags") or []} & ours)]
+    print(f"{'node':<20} {'address':<13} {'box':<24} {'state':<8} {'last seen':<17} {'os':<8} {'relay':<6} tag")
+    for n, b in sorted(mine, key=lambda t: (t[1] is None, (t[1] or {}).get("id", ""), t[0].get("HostName", ""))):
+        online = bool(n.get("Online"))
+        last = "" if online else (n.get("LastSeen") or "")[:16].replace("T", " ")
+        tag = ",".join(t.replace("tag:", "") for t in n.get("Tags") or []) or "-"
+        print(f"{n.get('HostName', '?'):<20} {(n.get('TailscaleIPs') or ['?'])[0]:<13} {(label(b) if b else '-'):<24} "
+              f"{paint(f'{'online' if online else 'offline':<8}', 'green' if online else 'red')} {last:<17} {n.get('OS', '?'):<8} {n.get('Relay') or '-':<6} {tag}")
+    seen = {b["id"] for _, b in mine if b}
+    missing = [b for b in inv["boxes"] if b["id"] not in seen and b.get("connectivity") == "tailnet"]
+    if missing:
+        print(paint("not on the tailnet: " + ", ".join(label(b) for b in missing), "red"))
+    unnamed = [n.get("HostName") for n, b in mine if not b and (n.get("OS") == "linux")]
+    others = len(rows) - len(mine)
+    print(f"\n{others} other members' nodes not shown." + (f"  Linux nodes under our tag without a box record: {', '.join(unnamed)} (fleet hostname <id> names a box's node; tailscale logout retires a stray one)" if unnamed else ""))
+    print("Check a node: tailscale ping <address>   tailscale whois <address>   Undo a join: tailscale logout (on that machine)")
     return 0
 
 
@@ -981,6 +1041,9 @@ def cmd_backup_pull(a, inv):
     r = subprocess.run(["rsync", "-a", "--delete", "-e", "ssh -o BatchMode=yes", src, str(dest) + "/"], capture_output=True, text=True)
     print(r.stderr.strip()[-300:] if r.returncode else f"backup copies mirrored from {_BACKUP_BOX['id']} to {dest}")
     log_action(f"backup-pull from={_BACKUP_BOX['id']} rc={r.returncode}")
+    if r.returncode == 0:
+        hub = next((b for b in inv["boxes"] if b.get("local")), None)
+        print(f"Check: ls {dest}" + (f"; fleet check {hub['id']}  (its 'bak hub' age reads this mirror)" if hub else ""))
     return r.returncode
 
 
@@ -1085,6 +1148,7 @@ def cmd_suspend(a, inv):
     print(msg)
     if ok:
         push(inv, quiet=True)
+        print(f"Check: {box['reach']['http']}/ shows the maintenance page\nUndo:  fleet resume {box['id']}")
     return 0 if ok else 1
 
 
@@ -1094,6 +1158,7 @@ def cmd_resume(a, inv):
     print(msg)
     if ok:
         push(inv, quiet=True)
+        print(f"Check: fleet check {box['id']}")
     return 0 if ok else 1
 
 
@@ -1228,6 +1293,8 @@ def cmd_deploy_agent(a, inv):
     print(out[-800:])
     log_action(f"deploy-agent {box['id']} rc={rc}")
     push(inv, quiet=True)
+    if rc == 0:
+        print(f"Check: fleet status  ({label(box)} reports within the hour; its push monitor in Uptime Kuma turns up)")
     return 0 if rc == 0 else 1
 
 
@@ -1258,6 +1325,8 @@ def cmd_deploy_watchdog(a, inv):
         inv["hub_watchdog_box"] = box["id"]
         save_inventory(inv)
         print(f"inventory: hub_watchdog_box = {box['id']} (the hub's check now reads its log)")
+        print(f"Next:  on {label(box)}, fill /etc/iiab/fleet-hub-watchdog.conf with the Contabo API credentials; it only logs until then\n"
+              f"Check: ssh {box['ssh_user']}@{box['reach']['ssh']} tail -n 5 /var/lib/fleet/hub-watchdog.log")
     return 0 if rc == 0 else 1
 
 
@@ -1502,6 +1571,7 @@ def cmd_onboard(a, inv):
     print(f"\nlocal_vars.yml on the box (before or after its install):\n  iiab_hostname: {new}\n  erpnext_business_name: \"{a.business}\"\n"
           f"next: fleet check {new}; fleet hostname {new} (inside its window); add {a.host} to BOXES in /etc/iiab/fleet-backup.conf"
           f" on the box that runs fleet-backup-mail" + (f"; fleet deploy-agent {new} (push mode)" if box["mode"] == "push" else ""))
+    print(f"Check: fleet check {new} once the box is installed; its monitors are in Uptime Kuma ({read_conf(PUSH_CONF).get('KUMA_URL') or 'KUMA_URL unset'})")
     return 0
 
 
@@ -1602,6 +1672,8 @@ def cmd_hostname(a, inv):
     tmp.unlink(missing_ok=True)
     print(out[-600:])
     log_action(f"hostname {box['id']} rc={rc}")
+    if rc == 0:
+        print(f"Check: ssh {box['ssh_user']}@{box['reach']['ssh']} hostname   # {box['id']}; fleet tailnet shows the node's name once its admins rename it")
     return 0 if rc == 0 else 1
 
 
@@ -1643,7 +1715,7 @@ def cmd_authorize_key(a, inv):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="fleet", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("list"); sub.add_parser("status")
+    sub.add_parser("list"); sub.add_parser("status"); sub.add_parser("tailnet")
     p = sub.add_parser("check"); p.add_argument("ids", nargs="*"); p.add_argument("--all", action="store_true"); p.add_argument("--no-push", action="store_true")
     p = sub.add_parser("digest"); p.add_argument("--send", action="store_true")
     p = sub.add_parser("manifest"); ps = p.add_subparsers(dest="action", required=True)
@@ -1673,7 +1745,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("authorize-key"); p.add_argument("file"); p.add_argument("ids", nargs="*"); p.add_argument("--all", action="store_true"); p.add_argument("--check", action="store_true")
     a = ap.parse_args(argv)
     inv = load_inventory()
-    return {"list": cmd_list, "status": cmd_status, "check": cmd_check, "digest": cmd_digest, "manifest": cmd_manifest,
+    return {"list": cmd_list, "status": cmd_status, "tailnet": cmd_tailnet, "check": cmd_check, "digest": cmd_digest, "manifest": cmd_manifest,
             "upgrade": cmd_upgrade, "suspend": cmd_suspend, "resume": cmd_resume, "offboard": cmd_offboard, "push": cmd_push,
             "agent-token": cmd_agent_token, "deploy-agent": cmd_deploy_agent, "deploy-watchdog": cmd_deploy_watchdog,
             "runrole": cmd_runrole, "vars": cmd_vars, "reboot": cmd_reboot, "backup-pull": cmd_backup_pull,
