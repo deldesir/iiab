@@ -333,10 +333,10 @@ def main() -> int:
                 "retryInterval": 3600, "maxretries": 0, "expiryNotification": False,
                 "description": "Fed by the nightly `fleet check --all` run; down means the check never ran"})
 
-    # 6. status page
-    if args.no_status_page:
+    # 6. status page (only when every box was seeded: its groups list exactly the monitors seen this run)
+    if args.no_status_page or wanted:
         sio.disconnect()
-        print(f"KUMA-SEED-OK {url} (no status page)")
+        print(f"KUMA-SEED-OK {url} ({'no status page' if args.no_status_page else 'subset run: status page left as it is'})")
         return 0
     slug = "fleet"
     r = sio.call("addStatusPage", ("Fleet status", slug), timeout=20)
