@@ -333,9 +333,20 @@ fi
 # explicit upgrading of collections (--upgrade / -U flag) in version "2.11"
 # with PR ansible/ansible#73336.  See also IIAB PRs #2647 #2652 #2653 #2655.
 echo -e "\n\nIIAB requires these ~4 Ansible Collections: (we upgrade them here if possible!)\n"
-ansible-galaxy collection install --force-with-deps \
-               -r /opt/iiab/iiab/collections.yml \
-               -p /usr/share/ansible/collections
+# A DNS or Galaxy hiccup during the install used to leave the collections missing, and the
+# first role then died on "couldn't resolve module/action 'ini_file'" (community.general).
+# Try a few times, and refuse to go on without them: every role needs them.
+for attempt in 1 2 3 4 5; do
+    ansible-galaxy collection install --force-with-deps \
+                   -r /opt/iiab/iiab/collections.yml \
+                   -p /usr/share/ansible/collections && break
+    echo -e "\nansible-galaxy failed (attempt $attempt of 5); retrying in 30 s...\n"
+    sleep 30
+done
+if ! ansible-galaxy collection list -p /usr/share/ansible/collections 2>/dev/null | grep -q '^community\.general'; then
+    echo -e "\nEXITING: the Ansible Collections could not be installed (is DNS / the Internet up?)\n" >&2
+    exit 1
+fi
 # 2021-02-24: 'ansible-galaxy collection list' lists those installed. (#2659)
 # 2020-11-28: The ~3 Ansible Collections used by IIAB (~37MB) once lived here:
 #    /root/.ansible/collections/ansible_collections
