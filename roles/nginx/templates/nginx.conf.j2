@@ -14,6 +14,11 @@ events {
 
 http {
 
+    # The scheme the client used: ours, unless a TLS-terminating proxy in front of this box
+    # (ngrok, Cloudflare tunnel) says https. Apps build absolute links from it (Frappe reads
+    # X-Forwarded-Proto), and a tunnelled demo otherwise mixes http into an https page.
+    map $http_x_forwarded_proto $fwd_proto { default $scheme; https https; }
+
     ##
     # Basic Settings
     ##

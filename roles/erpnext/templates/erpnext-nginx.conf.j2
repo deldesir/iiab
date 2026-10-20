@@ -1,3 +1,6 @@
+# Relative Location headers: the browser resolves them against the scheme it used (https through a tunnel)
+absolute_redirect off;
+
 # ERPNext Subdirectory Nginx Configuration for IIAB
 # Mounts ERPNext at /erp/ in accordance with IIAB subpath philosophy.
 #
@@ -24,7 +27,7 @@ location /erp/ {
     proxy_pass http://127.0.0.1:8000/;
 
     proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Proto $fwd_proto;   # the client's scheme, through a TLS-terminating proxy too
     proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
     proxy_set_header Host              $host;
     proxy_set_header X-Use-X-Accel-Redirect True;
@@ -66,6 +69,7 @@ location ^~ /erp/socket.io/ {
     proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
     proxy_set_header Origin $scheme://$http_host;
     proxy_set_header Host   $http_host;
+    proxy_set_header X-Forwarded-Proto $fwd_proto;
 }
 
 # ── Static assets ─────────────────────────────────────────────────────────────
@@ -187,6 +191,7 @@ location ^~ /hr/ {
     proxy_pass http://127.0.0.1:8000;
     proxy_set_header Host               $host;
     proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
+    proxy_set_header X-Forwarded-Proto $fwd_proto;
 }
 
 # ── Frappe CRM standalone SPA ──────────────────────────────────────────────────
@@ -221,6 +226,7 @@ location ^~ /socket.io/ {
     proxy_set_header X-Frappe-Site-Name {{ erpnext_site_name }};
     proxy_set_header Origin $scheme://$http_host;
     proxy_set_header Host   $http_host;
+    proxy_set_header X-Forwarded-Proto $fwd_proto;
 }
 
 # ── Private files (X-Accel-Redirect) ──────────────────────────────────────────
