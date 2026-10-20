@@ -622,6 +622,14 @@
   shell: chmod a+x /home/{{ erpnext_user_name }} /home/{{ erpnext_user_name }}/frappe-bench && chmod -R a+rX /home/{{ erpnext_user_name }}/frappe-bench/sites
   when: erpnext_enabled | bool
 
+- name: Ensure Nginx knows the client's scheme behind a TLS-terminating proxy ($fwd_proto map in the http context; boxes whose nginx.conf predates it)
+  lineinfile:
+    path: /etc/nginx/nginx.conf
+    regexp: '^\s*map \$http_x_forwarded_proto \$fwd_proto'
+    line: '    map $http_x_forwarded_proto $fwd_proto { default $scheme; https https; }'
+    insertafter: '^http \{'
+  when: erpnext_enabled | bool
+
 - name: Configure IIAB Nginx Sub-Path Proxy for ERPNext
   template:
     src: erpnext-nginx.conf.j2
