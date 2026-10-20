@@ -77,7 +77,7 @@ def set_business_date(value):
 # 1. The service items folio charges post to (non-stock)
 item_group = ensure("Item Group", {"item_group_name": "Hotel Services"}, {"parent_item_group": "All Item Groups", "is_group": 0})
 for code, name in (("ROOM-NIGHT", "Room night"), ("ROOM-SERVICE", "Room service"), ("MINIBAR", "Minibar"),
-                   ("LAUNDRY", "Laundry"), ("BREAKFAST", "Breakfast")):
+                   ("LAUNDRY", "Laundry"), ("BREAKFAST", "Breakfast"), ("DAY-USE", "Day use"), ("HOURLY", "Hourly stay")):
     ensure("Item", {"item_code": code}, {"item_name": name, "item_group": item_group, "stock_uom": "Nos",
                                          "is_stock_item": 0, "is_sales_item": 1, "is_purchase_item": 0})
 
@@ -128,6 +128,22 @@ ensure("Rate Plan", {"rate_plan_code": "CORP"}, {
                    for c, t in TYPES.items()],
 })
 
+# 3b. Rooms sold for part of a day: a day room (09:00-18:00) and blocks of three hours. The PMS
+# knows these kinds once it carries Rate Plan.stay_kind; an older PMS gets the night plans only.
+SHORT_STAYS = frappe.db.has_column("Rate Plan", "stay_kind")
+if SHORT_STAYS:
+    ensure("Rate Plan", {"rate_plan_code": "DAYUSE"}, {
+        "rate_plan_name": "Day use (09:00-18:00)", "property": PROPERTY, "rate_type": "Standard", "stay_kind": "Day Use",
+        "day_use_from": "09:00:00", "day_use_until": "18:00:00", "is_active": 1, "valid_from": add_days(today, -365),
+        "currency": currency, "is_refundable": 1,
+        "room_types": [{"room_type": c, "base_rate": round(t[2] * 0.55), "is_active": 1} for c, t in TYPES.items()],
+    })
+    ensure("Rate Plan", {"rate_plan_code": "HOURLY"}, {
+        "rate_plan_name": "Hourly (blocks of 3 h)", "property": PROPERTY, "rate_type": "Standard", "stay_kind": "Hourly",
+        "block_hours": 3, "is_active": 1, "valid_from": add_days(today, -365), "currency": currency, "is_refundable": 0,
+        "room_types": [{"room_type": c, "base_rate": round(t[2] * 0.3), "is_active": 1} for c, t in TYPES.items()],
+    })
+
 # 4. Folio charges become ERPNext sales invoices through this profile
 ensure("Posting Profile", {"profile_code": "DEMO-POST"}, {
     "profile_name": "Demo Hotel posting", "property": PROPERTY, "company": company, "is_active": 1,
@@ -137,6 +153,16 @@ ensure("Posting Profile", {"profile_code": "DEMO-POST"}, {
                      for ct, it in (("Room Charge", "ROOM-NIGHT"), ("Room Service", "ROOM-SERVICE"),
                                     ("Minibar", "MINIBAR"), ("Laundry", "LAUNDRY"))],
 })
+if SHORT_STAYS:   # the two short-stay charge types, added to a profile that predates them as well
+    profile = frappe.get_doc("Posting Profile", {"profile_code": "DEMO-POST"})
+    wanted = {"Day Use": "DAY-USE", "Hourly": "HOURLY"}
+    missing = [ct for ct in wanted if not any(row.charge_type == ct for row in profile.charge_items)]
+    if missing:
+        for ct in missing:
+            profile.append("charge_items", {"charge_type": ct, "item": wanted[ct], "income_account": income,
+                                            "cost_center": cost_center, "is_active": 1})
+        profile.save(ignore_permissions=True)
+        frappe.db.commit()
 
 # 5. Guests
 GUESTS = {}
@@ -153,7 +179,9 @@ for first, last, country, vip in (
 
 
 # 6. Reservations (keyed by an external reference so a rerun finds them instead of booking twice)
-def reservation(ref, guest, room_type, arrival, nights, *, rate_plan="BAR", kind="Individual", adults=2, requests=None):
+def reservation(ref, guest, room_type, arrival, nights, *, rate_plan="BAR", kind="Individual", adults=2, requests=None,
+                arrival_time=None, departure_time=None, blocks=1):
+    """nights 0 is a day-use or hourly stay: same-day, with its hours (the rate plan says which kind)."""
     name = frappe.db.get_value("Reservation", {"external_reference": ref}, "name")
     if name:
         return name
@@ -161,9 +189,11 @@ def reservation(ref, guest, room_type, arrival, nights, *, rate_plan="BAR", kind
         "doctype": "Reservation", "property": PROPERTY, "reservation_status": "Draft", "reservation_type": kind,
         "booking_source": "Direct", "external_reference": ref, "guest": GUESTS[guest],
         "arrival_date": arrival, "departure_date": add_days(arrival, nights), "rate_plan": rate_plan,
+        "arrival_time": arrival_time, "departure_time": departure_time,
         "special_requests": requests,
         "rooms": [{"room_type": room_type, "rooms": 1, "adults": adults, "arrival_date": arrival,
-                   "departure_date": add_days(arrival, nights), "rate_plan": rate_plan}],
+                   "departure_date": add_days(arrival, nights), "rate_plan": rate_plan,
+                   "arrival_time": arrival_time, "departure_time": departure_time, "blocks": blocks}],
     }).insert(ignore_permissions=True)
     frappe.db.commit()
     return doc.name
@@ -213,6 +243,12 @@ set_business_date(add_days(today, -1))
 in_house("DEMO-02", "Jean-Baptiste", "DLX", add_days(today, -1), 3, room="201", rate_plan="CORP", kind="Corporate",
          adults=1, charges=(("Minibar", "Minibar", 450),))
 set_business_date(today)
+if SHORT_STAYS:
+    # Patrick has a day room for the afternoon (charged at check-in); Carlos comes at 17:00 for two
+    # blocks of three hours, booked but not yet in.
+    in_house("DEMO-DAY", "Patrick", "STD", today, 0, room="103", rate_plan="DAYUSE", adults=1,
+             arrival_time="10:00:00", departure_time="16:00:00", requests="Day room, pool afternoon")
+    confirmed("DEMO-HOUR", "Carlos", "STD", today, 0, rate_plan="HOURLY", adults=2, arrival_time="17:00:00", blocks=2)
 confirmed("DEMO-01", "Marie-Claire", "STD", today, 2, room="101", requests="Ground floor, near the lobby")
 confirmed("DEMO-05", "Carlos", "DLX", today, 1, adults=1)
 confirmed("DEMO-04", "Patrick", "STD", add_days(today, 7), 1)
