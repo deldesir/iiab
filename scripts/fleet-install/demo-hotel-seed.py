@@ -314,16 +314,20 @@ for key, kind, number in (("Jean-Baptiste", "National ID", "HT-DEMO-0183"), ("Pa
 ensure_rows("Guest", GUESTS["Patrick"], "alerts", "alert", [{"alert_type": "Allergy", "severity": "Warning", "alert": "Peanut allergy: no peanut oil in room-service meals", "is_active": 1}])
 ensure_rows("Guest", GUESTS["Jean-Baptiste"], "alerts", "alert", [{"alert_type": "Payment", "severity": "Info", "alert": "Room and tax to the company (Caribe Trading); extras to the guest", "is_active": 1}])
 
-# 5b. The staff: users with the PMS roles, and their Employee records when HR is installed
+# 5b. The staff: users with the PMS roles, and their Employee records when HR is installed.
+# They work in French (the PMS, the desk and the server's messages follow the user's language);
+# the operator login stays in English so the written tour reads as it is shown.
 from frappe.utils.password import update_password
 USERS = {}
+STAFF_LANGUAGE = "fr"
 
 
 def user(key, email, first, last, roles):
     if not frappe.db.exists("User", email):
         frappe.get_doc({"doctype": "User", "email": email, "first_name": first, "last_name": last, "enabled": 1,
-                        "send_welcome_email": 0, "user_type": "System User",
+                        "send_welcome_email": 0, "user_type": "System User", "language": STAFF_LANGUAGE,
                         "roles": [{"role": r} for r in roles if frappe.db.exists("Role", r)]}).insert(ignore_permissions=True)
+    frappe.db.set_value("User", email, "language", STAFF_LANGUAGE, update_modified=False)
     update_password(email, DEMO_PASSWORD)
     USERS[key] = email
     return email
