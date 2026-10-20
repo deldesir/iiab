@@ -926,6 +926,22 @@ def log_action(text: str) -> None:
         fh.write(f"{dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds')} {text}\n")
 
 
+def box_log(box: dict, prefix: str) -> tuple[str, int]:
+    """The log a bench script will write on this box today, and how long it already is.
+
+    The scripts name their log by the box's own date, which is not the hub's date for part of
+    every day (Haiti and Berlin differ by six hours), and a second run on the same day appends to
+    the same file. Following the hub's guess once read yesterday's UPGRADE-OK off the wrong file
+    and declared a box done while its services were still stopped. So: ask the box for the date,
+    and read only the lines written after the run starts."""
+    rc, out = run_on(box, "date +%F")
+    today = out.strip() if rc == 0 and re.fullmatch(r"\d{4}-\d{2}-\d{2}", out.strip()) else f"{dt.date.today():%Y-%m-%d}"
+    log = f"/root/{prefix}-{today}.log"
+    rc, out = run_on(box, f"wc -l < {log} 2>/dev/null || echo 0")
+    start = int(out.strip()) if rc == 0 and out.strip().isdigit() else 0
+    return log, start
+
+
 def upgrade_box(box: dict, rid: str | None, preflight: bool, allow_discard: str | None) -> bool:
     if not UPGRADE_SCRIPT.exists():
         sys.exit(f"fleet: {UPGRADE_SCRIPT} missing")
@@ -939,7 +955,7 @@ def upgrade_box(box: dict, rid: str | None, preflight: bool, allow_discard: str 
     if allow_discard:
         env.append(f"--setenv=ALLOW_DISCARD={allow_discard}")
     unit = f"bench-upgrade-{int(time.time())}"
-    log = f"/root/bench-upgrade-{dt.date.today():%Y-%m-%d}.log"
+    log, start = box_log(box, "bench-upgrade")
     rc, out = run_on(box, f"systemd-run --unit={unit} --collect --setenv=HOME=/root {' '.join(env)} /bin/bash /root/bench-upgrade.sh")
     if rc != 0:
         print(f"   could not start the upgrade unit: {out}")
@@ -948,7 +964,7 @@ def upgrade_box(box: dict, rid: str | None, preflight: bool, allow_discard: str 
     deadline, last = time.time() + 3600, ""
     while time.time() < deadline:
         time.sleep(20)
-        rc, out = run_on(box, f"tail -n 3 {log}")
+        rc, out = run_on(box, f"tail -n +{start + 1} {log} 2>/dev/null | tail -n 3")
         tail = out.splitlines()[-1] if out else ""
         if tail != last:
             print(f"   {tail}")
@@ -1019,7 +1035,7 @@ def cmd_rollback(a, inv):
         return 0 if "ROLLBACK-PLAN-OK" in out else 1
     print(f"== {label(box)} {box['host']}: rollback {'to release ' + a.release if a.release else 'of the last upgrade'}{' (code only)' if a.no_restore else ''}")
     unit = f"bench-rollback-{int(time.time())}"
-    log = f"/root/bench-rollback-{dt.date.today():%Y-%m-%d}.log"
+    log, start = box_log(box, "bench-rollback")
     rc, out = run_on(box, f"systemd-run --unit={unit} --collect --setenv=HOME=/root {' '.join(env)} /bin/bash /root/bench-rollback.sh")
     if rc != 0:
         print(f"   could not start the rollback unit: {out}")
@@ -1028,7 +1044,7 @@ def cmd_rollback(a, inv):
     deadline, last, ok = time.time() + 3600, "", None
     while time.time() < deadline:
         time.sleep(20)
-        rc, out = run_on(box, f"tail -n 3 {log}")
+        rc, out = run_on(box, f"tail -n +{start + 1} {log} 2>/dev/null | tail -n 3")
         tail = out.splitlines()[-1] if out else ""
         if tail != last:
             print(f"   {tail}")
