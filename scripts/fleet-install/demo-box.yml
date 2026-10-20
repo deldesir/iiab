@@ -2,7 +2,9 @@
 # demo-box.yml — a throwaway ERPNext box for demos and training, built unattended inside a
 # Multipass VM (Linux, Windows or macOS host). Two profiles, chosen by the PROFILE line below:
 #   shop   ERPNext + POS + storefront with ERPNext's demo catalogue (the default)
-#   hotel  the same plus the Hospitality PMS, seeded with a 12-room hotel and a busy front desk
+#   hotel  the same plus the Hospitality PMS, seeded with a 12-room hotel, a week of history and a
+#          busy front desk (staff logins frontdesk@ housekeeping@ maintenance@ auditor@ manager@
+#          bar@ example.com, password demo1234)
 #
 #   multipass launch 24.04 -c 2 -m 4G -d 40G -n demo --cloud-init demo-box.yml
 #   multipass list                      # its address after a minute
@@ -56,7 +58,7 @@ write_files:
       rm -f /tmp/demo-seed.py /tmp/demo-seed.out
       {
         printf 'DEMO BOX READY (%s)\n  ERPNext    http://%s/erp        Administrator / demo1234\n' "$PROFILE" "$ip"
-        [ "$PROFILE" = hotel ] && printf '  Hotel PMS  http://%s/erp/pms\n' "$ip"
+        [ "$PROFILE" = hotel ] && printf '  Hotel PMS  http://%s/erp/pms    staff: frontdesk@ housekeeping@ maintenance@ auditor@ manager@ bar@ example.com / demo1234\n' "$ip"
         printf '  POS        http://%s/erp/pos\n  Storefront http://%s/\n' "$ip" "$ip"
       } | tee /etc/motd
       echo "=== $(date -Is) DEMO-BOX-READY http://$ip/erp"
