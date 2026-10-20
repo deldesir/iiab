@@ -57,7 +57,7 @@ write_files:
       {
         printf 'DEMO BOX READY (%s)\n  ERPNext    http://%s/erp        Administrator / demo1234\n' "$PROFILE" "$ip"
         [ "$PROFILE" = hotel ] && printf '  Hotel PMS  http://%s/erp/pms\n' "$ip"
-        printf '  POS        http://%s/erp/app/pos-next\n  Storefront http://%s/\n' "$ip" "$ip"
+        printf '  POS        http://%s/erp/pos\n  Storefront http://%s/\n' "$ip" "$ip"
       } | tee /etc/motd
       echo "=== $(date -Is) DEMO-BOX-READY http://$ip/erp"
 
