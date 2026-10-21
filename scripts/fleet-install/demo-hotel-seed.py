@@ -33,8 +33,12 @@
 # a real site.
 import unicodedata
 
+import re
+
 import frappe
-from frappe.utils import add_days, getdate, nowdate
+from datetime import timedelta
+
+from frappe.utils import add_days, flt, get_datetime, getdate, nowdate
 
 DEMO_PASSWORD = "demo1234"
 COMPANY, ABBR = "Demo Hotel", "DH"
@@ -291,7 +295,7 @@ for first, last, country, vip in (
     ("Rose", "Delva", "Haiti", "VIP"), ("Patrick", "Louis", "Haiti", ""), ("Carlos", "Mendez", "Dominican Republic", ""),
     ("Emily", "Carter", "United States", "Loyalty Member"), ("Nadège", "Charles", "Haiti", ""),
     ("Wesley", "Desrosiers", "Haiti", ""), ("Lucienne", "Augustin", "Haiti", "Repeat Guest"),
-    ("Fritz", "Moïse", "Haiti", ""), ("Rodrigue", "Saint-Fleur", "Haiti", ""),
+    ("Fritz", "Moïse", "Haiti", ""), ("Rodrigue", "Saint-Fleur", "Haiti", ""), ("Daniel", "Jean-Louis", "Haiti", ""),
 ):
     GUESTS[first] = ensure("Guest", {"first_name": first, "last_name": last}, {
         "nationality": country, "country": country, "preferred_language": "en", "guest_type": "Individual",
@@ -309,7 +313,8 @@ ensure_rows("Guest", GUESTS["Emily"], "identifications", "id_number", [{"id_type
 ensure_rows("Guest", GUESTS["Emily"], "preferences", "preference", [{"preference_category": "Food and Beverage", "preference": "Vegetarian breakfast"}])
 # the property asks for an identification document at check-in; the guests who check in have one
 for key, kind, number in (("Jean-Baptiste", "National ID", "HT-DEMO-0183"), ("Patrick", "National ID", "HT-DEMO-5520"), ("Wesley", "Driving Licence", "HT-DEMO-7741"),
-                          ("Lucienne", "National ID", "HT-DEMO-3307"), ("Rodrigue", "National ID", "HT-DEMO-6615"), ("Marie-Claire", "National ID", "HT-DEMO-1198")):
+                          ("Lucienne", "National ID", "HT-DEMO-3307"), ("Rodrigue", "National ID", "HT-DEMO-6615"), ("Marie-Claire", "National ID", "HT-DEMO-1198"),
+                          ("Daniel", "National ID", "HT-DEMO-2046")):
     ensure_rows("Guest", GUESTS[key], "identifications", "id_number", [{"id_type": kind, "id_number": number, "issuing_country": "Haiti"}])
 ensure_rows("Guest", GUESTS["Patrick"], "alerts", "alert", [{"alert_type": "Allergy", "severity": "Warning", "alert": "Peanut allergy: no peanut oil in room-service meals", "is_active": 1}])
 ensure_rows("Guest", GUESTS["Jean-Baptiste"], "alerts", "alert", [{"alert_type": "Payment", "severity": "Info", "alert": "Room and tax to the company (Caribe Trading); extras to the guest", "is_active": 1}])
@@ -408,6 +413,7 @@ def reservation(ref, guest, room_type, arrival, nights, *, rate_plan="BAR", kind
         "booking_source": source, "external_reference": ref, "guest": GUESTS[guest],
         "arrival_date": arrival, "departure_date": add_days(arrival, nights), "rate_plan": rate_plan,
         "arrival_time": arrival_time, "departure_time": departure_time,
+        "cancellation_policy": "FLEX48", "no_show_policy": "NOSHOW",
         "special_requests": requests,
         "rooms": [{"room_type": room_type, "rooms": 1, "adults": adults, "arrival_date": arrival,
                    "departure_date": add_days(arrival, nights), "rate_plan": rate_plan,
@@ -441,11 +447,11 @@ def stay_of(reservation_name):
     return frappe.db.get_value("Stay", {"reservation": reservation_name}, "name")
 
 
-def in_house(ref, *args, room, charges=(), payment=None, **kwargs):
+def in_house(ref, *args, room, charges=(), payment=None, billing_instructions=None, **kwargs):
     """A guest who has checked in, with a few folio lines. `payment` is an amount (cash) or (amount, method)."""
     name = confirmed(ref, *args, room=room, **kwargs)
     if status(name) != "Checked In":
-        stay_service.check_in(name, first_line(name), ROOMS[room], skip_id_check=True)
+        stay_service.check_in(name, first_line(name), ROOMS[room], skip_id_check=True, billing_instructions=billing_instructions)
         frappe.db.commit()
     folio = folio_service.get_folio_for_stay(stay_of(name))
     for i, (charge_type, description, amount) in enumerate(charges, start=1):
@@ -513,19 +519,25 @@ if not HISTORY_DONE:
     audit_and_close(D(-2))
     # D-1: Jean-Baptiste arrives for the company; Fritz never shows up and the audit marks him
     in_house("DEMO-02", "Jean-Baptiste", "DLX", D(-1), 3, room="201", rate_plan="CORP", kind="Corporate",
-             adults=1, charges=(("Minibar", "Minibar", 450),))
+             adults=1, charges=(("Minibar", "Minibar", 450),),
+             billing_instructions="Room and tax to Caribe Trading SA (account CTS, 30 days); extras paid by the guest")
+    # Daniel takes 102 for one night and leaves this morning: today's departure clean, and a
+    # third invoice in the books, dated today
+    in_house("DEMO-H3", "Daniel", "STD", D(-1), 1, room="102", adults=1)
     confirmed("DEMO-NS", "Fritz", "STD", D(-1), 1, adults=1)
     audit_and_close(D(-1))
 if business_date() != getdate(today):
     set_business_date(today)
 
-# Today
+# Today: Daniel checks out first thing (the check-out raises 102's departure clean)
+if frappe.db.exists("Reservation", {"external_reference": "DEMO-H3"}):
+    checked_out("DEMO-H3", "Cash")
 if SHORT_STAYS:
-    # Patrick has a day room for the afternoon (charged at check-in); Carlos comes at 17:00 for two
-    # blocks of three hours, booked but not yet in.
+    # Patrick has a day room for the afternoon (charged at check-in); Nadège comes at 17:00 for two
+    # blocks of three hours, booked but not yet in (103 is free again from 16:00).
     in_house("DEMO-DAY", "Patrick", "STD", today, 0, room="103", rate_plan="DAYUSE", adults=1,
              arrival_time="10:00:00", departure_time="16:00:00", requests="Day room, pool afternoon")
-    confirmed("DEMO-HOUR", "Carlos", "STD", today, 0, rate_plan="HOURLY", adults=2, arrival_time="17:00:00", blocks=2)
+    confirmed("DEMO-HOUR", "Nadège", "STD", today, 0, rate_plan="HOURLY", adults=2, arrival_time="17:00:00", blocks=2)
 confirmed("DEMO-01", "Marie-Claire", "STD", today, 2, room="101", requests="Ground floor, near the lobby")
 confirmed("DEMO-05", "Carlos", "DLX", today, 1, adults=1)
 confirmed("DEMO-04", "Patrick", "STD", D(7), 1)
@@ -656,6 +668,18 @@ if jb_stay and not frappe.db.exists("Room Service Order", {"stay": jb_stay, "ord
     kitchen_service.set_order_status(order, "Preparing")
     frappe.db.commit()
 
+# 6c. Jean-Baptiste's lunch at the bar, put on his room: a till sale on account (no payment row,
+# the way POS Next's "Pay on Account" sends it), which the PMS bridge charges to his folio.
+jb_customer = frappe.db.get_value("Guest", GUESTS["Jean-Baptiste"], "customer")
+if jb_stay and jb_customer and frappe.db.exists("POS Profile", "Bar") and not frappe.db.exists("Sales Invoice", {"customer": jb_customer, "is_pos": 1, "docstatus": 1}):
+    lunch = frappe.get_doc({"doctype": "Sales Invoice", "company": company, "customer": jb_customer, "is_pos": 1, "pos_profile": "Bar",
+                            "update_stock": 1, "set_warehouse": bar_store, "posting_date": today, "set_posting_time": 1,
+                            "items": [{"item_code": "BAR-PRESTIGE", "qty": 2, "warehouse": bar_store}, {"item_code": "BAR-CLUB", "qty": 1, "warehouse": bar_store}]})
+    lunch.flags.ignore_permissions = True
+    lunch.flags.pos_next_credit_sale = 1
+    lunch.insert()
+    lunch.submit()
+    frappe.db.commit()
 # 7. What the guests asked for, and a complaint
 marie = frappe.db.get_value("Reservation", {"external_reference": "DEMO-01"}, "name")
 
@@ -679,7 +703,7 @@ def request(subject, *, assignee=None, progress="open", resolution=None, **kwarg
 request("Two extra pillows", description="Feather-free, please", category="Housekeeping", stay=rose_stay, room=ROOMS["301"],
         guest=GUESTS["Rose"], department=DEPARTMENTS["HK"], assignee=USERS["housekeeping"], progress="completed",
         resolution="Two feather-free pillows delivered at 15:20")
-request("Wake-up call at 06:00", description="Early flight to Miami", category="Front Office", stay=jb_stay, room=ROOMS["201"],
+request("Wake-up call at 06:00", description="Early meeting in Port-au-Prince", category="Front Office", stay=jb_stay, room=ROOMS["201"],
         guest=GUESTS["Jean-Baptiste"], department=DEPARTMENTS["FO"], assignee=USERS["frontdesk"], progress="assigned")
 request("Wi-Fi drops every few minutes in 201", description="The guest works from the room and cannot hold a video call",
         category="Maintenance", request_type="Complaint", priority="High", stay=jb_stay, room=ROOMS["201"],
@@ -689,8 +713,8 @@ request("Airport pickup at 15:00", description="Flight from Miami lands at 14:10
 frappe.db.commit()
 
 # 8. Housekeeping and maintenance, so the boards show every state
-if frappe.db.get_value("Hotel Room", ROOMS["102"], "housekeeping_status") == "Clean":
-    room_service.set_status(ROOMS["102"], room_service.HOUSEKEEPING, "Dirty", reason="Demo: checked out this morning")
+if frappe.db.get_value("Hotel Room", ROOMS["102"], "housekeeping_status") == "Clean":   # only if the check-out did not
+    room_service.set_status(ROOMS["102"], room_service.HOUSEKEEPING, "Dirty", reason="Daniel Jean-Louis checked out this morning")
     frappe.db.commit()
 
 
@@ -705,8 +729,8 @@ def open_task(room, task_type="Departure Clean", **kwargs):
 task, new = open_task("102", task_type="Departure Clean", priority="High")
 if frappe.db.get_value("Housekeeping Task", task, "task_status") == "Pending":
     housekeeping_service.assign(task, USERS["housekeeping"])
-# the rooms the week's departures left: one cleaned and inspected, one being cleaned
-for room, finish in (("203", True), ("202", False)):
+# the rooms the week's departures left, cleaned and inspected days ago
+for room, finish in (("203", True), ("202", True)):
     task, new = open_task(room, task_type="Departure Clean")
     state = frappe.db.get_value("Housekeeping Task", task, "task_status")
     if state == "Pending":
@@ -719,7 +743,14 @@ for room, finish in (("203", True), ("202", False)):
     if finish and state == "Inspection Pending":
         housekeeping_service.inspect(task, passed=True, notes="Ready for the next guest", score=9)
     frappe.db.commit()
-# Rose does not want to be disturbed this morning
+# the stayover clean of 201 is being done now; Rose does not want to be disturbed this morning
+task, new = open_task("201", task_type="Stayover Clean", source_stay=jb_stay)
+state = frappe.db.get_value("Housekeeping Task", task, "task_status")
+if state == "Pending":
+    housekeeping_service.assign(task, USERS["housekeeping"]); state = "Assigned"
+if state == "Assigned":
+    housekeeping_service.start(task)
+frappe.db.commit()
 task, new = open_task("301", task_type="Stayover Clean", source_stay=rose_stay)
 if frappe.db.get_value("Housekeeping Task", task, "task_status") in ("Pending", "Assigned"):
     housekeeping_service.set_do_not_disturb(task)
@@ -746,11 +777,115 @@ if not frappe.get_doc("Maintenance Ticket", ticket).get("work_logs"):
                                  minutes=45, parts="Run capacitor 35 µF")
     frappe.db.commit()
 TAP_TITLE = "Dripping tap in the bathroom"
-if not frappe.db.exists("Maintenance Ticket", {"room": ROOMS["203"], "title": TAP_TITLE}):
-    maintenance_service.create_ticket(PROPERTY, title=TAP_TITLE, room=ROOMS["203"], description="Reported by housekeeping after the departure clean.",
+if not frappe.db.exists("Maintenance Ticket", {"room": ROOMS["102"], "title": TAP_TITLE}):
+    maintenance_service.create_ticket(PROPERTY, title=TAP_TITLE, room=ROOMS["102"], description="Mentioned by the departing guest at check-out this morning.",
                                       category="Plumbing", priority="Low")
     frappe.db.commit()
 
+# 8b. Times that follow the story. Everything above was written in one minute; the records keep
+# the business dates they belong to, but their timestamps all say "now". Guests check in in the
+# afternoon, leave in the morning, audits close after midnight, and the logs follow suit, so a
+# trainer who opens a stay, an audit or a folio journal reads a real week.
+def at(date, hhmm):
+    return get_datetime(f"{getdate(date)} {hhmm}:00")
+def stamp(doctype, name, values):
+    frappe.db.set_value(doctype, name, {k: v for k, v in values.items() if frappe.db.has_column(doctype, k)}, update_modified=False)
+for order in frappe.get_all("Room Service Order", filters={"property": PROPERTY}, fields=["name", "order_status"]):
+    if order.order_status == "Delivered":
+        stamp("Room Service Order", order.name, {"creation": at(D(-1), "19:40"), "ordered_on": at(D(-1), "19:40"), "delivered_on": at(D(-1), "20:25")})
+    else:
+        stamp("Room Service Order", order.name, {"creation": at(today, "12:05"), "ordered_on": at(today, "12:05")})
+for stay in frappe.get_all("Stay", filters={"property": PROPERTY}, fields=["name", "arrival_date", "departure_date", "stay_status", "reservation", "folio"]):
+    res = frappe.db.get_value("Reservation", stay.reservation, ["reservation_type", "arrival_time"], as_dict=True)
+    kind = res.reservation_type
+    if res.arrival_time:
+        arrived = get_datetime(f"{getdate(stay.arrival_date)} {str(res.arrival_time)[:5]}:00") + timedelta(minutes=5)
+    else:
+        arrived = at(stay.arrival_date, "09:40" if kind == "Walk In" else "14:05")
+    left = at(stay.departure_date, "11:20") if stay.stay_status == "Checked Out" else None
+    booked = arrived if kind == "Walk In" else at(add_days(stay.arrival_date, -3), "10:15")
+    stamp("Stay", stay.name, {"checked_in_on": arrived, "checked_out_on": left, "creation": arrived})
+    stamp("Reservation", stay.reservation, {"checked_in_on": arrived, "checked_out_on": left, "booked_on": booked, "confirmed_on": booked, "creation": booked})
+    if not stay.folio:
+        continue
+    stamp("Guest Folio", stay.folio, {"opened_on": arrived, "closed_on": left, "creation": arrived})
+    posted = {}      # charge row -> when it was posted
+    for row in frappe.get_all("Folio Charge", filters={"parent": stay.folio}, fields=["name", "business_date", "charge_type", "total_amount", "description"], order_by="idx asc"):
+        business = row.business_date
+        if row.charge_type == "Room Charge":
+            when = at(business, "23:35")
+        elif row.charge_type in ("Day Use", "Hourly"):
+            when = arrived
+        elif row.charge_type == "Point of Sale":
+            when = at(business, "13:20")
+        elif row.charge_type == "Room Service" and "HPMS-RSO" in (row.description or ""):
+            order = re.search(r"HPMS-RSO-[0-9-]+", row.description).group(0)
+            when = frappe.db.get_value("Room Service Order", order, "delivered_on") or at(business, "15:10")
+            business = getdate(when)
+        else:
+            when = arrived + timedelta(minutes=65)
+        posted[row.name] = (when, flt(row.total_amount))
+        stamp("Folio Charge", row.name, {"posted_on": when, "charge_date": business, "business_date": business})
+    received = {}
+    for row in frappe.get_all("Folio Payment", filters={"parent": stay.folio}, fields=["name", "business_date", "amount"], order_by="idx asc"):
+        if left and getdate(row.business_date) == getdate(stay.departure_date):
+            when = left
+        elif getdate(row.business_date) == getdate(stay.arrival_date):
+            when = arrived + timedelta(minutes=25)
+        else:
+            when = at(row.business_date, "14:30")
+        received[row.name] = (when, flt(row.amount))
+        stamp("Folio Payment", row.name, {"received_on": when, "payment_date": row.business_date})
+    charges_left, payments_left = list(posted.values()), list(received.values())
+    for log in frappe.get_all("Folio Log", filters={"folio": stay.folio}, fields=["name", "action", "amount"], order_by="changed_at asc, name asc"):
+        when = None
+        if log.action.startswith("Charge posted"):
+            hit = next((c for c in charges_left if abs(c[1] - flt(log.amount)) < 0.01), None)
+            if hit:
+                charges_left.remove(hit); when = hit[0]
+        elif log.action.startswith("Point of sale"):
+            when = next((c[0] for c in posted.values() if abs(c[1] - flt(log.amount)) < 0.01), None)
+        elif log.action.startswith("Payment recorded"):
+            hit = next((p for p in payments_left if abs(p[1] - flt(log.amount)) < 0.01), None)
+            if hit:
+                payments_left.remove(hit); when = hit[0]
+        elif log.action in ("Status changed", "Checked out with open balance"):
+            when = left or arrived
+        else:
+            when = arrived
+        if when:
+            stamp("Folio Log", log.name, {"changed_at": when, "creation": when})
+for res in frappe.get_all("Reservation", filters={"property": PROPERTY, "reservation_status": ("in", ("Confirmed", "Guaranteed", "Tentative", "Cancelled", "No Show", "Draft"))},
+                          fields=["name", "arrival_date", "reservation_status"]):
+    booked = at(add_days(res.arrival_date, -6), "10:15")
+    values = {"booked_on": booked, "creation": booked, "confirmed_on": booked if res.reservation_status not in ("Tentative", "Draft") else None}
+    if res.reservation_status == "No Show":
+        values["no_show_on"] = at(add_days(res.arrival_date, 1), "00:16")
+    if res.reservation_status == "Cancelled":
+        values["cancelled_on"] = at(today, "09:05")
+    stamp("Reservation", res.name, values)
+for audit in frappe.get_all("Night Audit", filters={"property": PROPERTY, "audit_status": "Closed"}, fields=["name", "business_date"]):
+    night = add_days(audit.business_date, 1)
+    stamp("Night Audit", audit.name, {"creation": at(night, "00:05"), "started_on": at(night, "00:05"), "review_completed_on": at(night, "00:12"),
+                                       "no_shows_completed_on": at(night, "00:16"), "posting_completed_on": at(night, "00:22"),
+                                       "due_outs_completed_on": at(night, "00:25"), "reconciliation_completed_on": at(night, "00:31"), "closed_on": at(night, "00:38")})
+for task in frappe.get_all("Housekeeping Task", filters={"property": PROPERTY}, fields=["name", "scheduled_date", "task_status"]):
+    d = task.scheduled_date or today
+    values = {"creation": at(d, "07:45"), "assigned_on": at(d, "07:50") if task.task_status != "Pending" else None}
+    if task.task_status in ("In Progress", "Inspection Pending", "Completed"):
+        values["started_on"] = at(d, "09:05")
+    if task.task_status in ("Inspection Pending", "Completed"):
+        values["completed_on"] = at(d, "09:40")
+    if task.task_status == "Completed":
+        values["inspected_on"] = at(d, "10:15")
+    stamp("Housekeeping Task", task.name, values)
+for ticket in frappe.get_all("Maintenance Ticket", filters={"property": PROPERTY}, fields=["name", "ticket_status"]):
+    reported = at(D(-1), "16:40") if ticket.ticket_status == "In Progress" else at(today, "11:25")
+    values = {"creation": reported, "reported_on": reported}
+    if ticket.ticket_status == "In Progress":
+        values.update({"assigned_on": at(D(-1), "17:00"), "started_on": at(today, "08:30")})
+    stamp("Maintenance Ticket", ticket.name, values)
+frappe.db.commit()
 # 9. Keys, registrations, notes: the small things a desk does all day
 ensure("Hardware Device", {"device_code": "FD-ENC-1"}, {"device_name": "Front desk key encoder", "property": PROPERTY, "device_type": "Key Card Encoder",
                                                         "is_active": 1, "location": "Front desk", "device_status": "Online",
