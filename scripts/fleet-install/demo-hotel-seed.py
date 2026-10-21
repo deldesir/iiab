@@ -327,6 +327,11 @@ def user(key, email, first, last, roles):
         frappe.get_doc({"doctype": "User", "email": email, "first_name": first, "last_name": last, "enabled": 1,
                         "send_welcome_email": 0, "user_type": "System User", "language": STAFF_LANGUAGE,
                         "roles": [{"role": r} for r in roles if frappe.db.exists("Role", r)]}).insert(ignore_permissions=True)
+    else:  # a rerun gives an existing user the roles added since
+        existing = frappe.get_doc("User", email)
+        missing = [r for r in roles if frappe.db.exists("Role", r) and r not in {x.role for x in existing.roles}]
+        if missing:
+            existing.add_roles(*missing)
     frappe.db.set_value("User", email, "language", STAFF_LANGUAGE, update_modified=False)
     update_password(email, DEMO_PASSWORD)
     USERS[key] = email
@@ -336,9 +341,12 @@ def user(key, email, first, last, roles):
 user("frontdesk", "frontdesk@example.com", "Yolande", "Prosper", ["Front Office Agent", "Reservation Agent", "Guest Relations Officer"])
 user("housekeeping", "housekeeping@example.com", "Mirlande", "Joseph", ["Housekeeping Supervisor"])
 user("maintenance", "maintenance@example.com", "Ernst", "Bélizaire", ["Maintenance Manager"])
-user("auditor", "auditor@example.com", "Guerdy", "Lafontant", ["Night Auditor", "Finance Manager"])
+user("auditor", "auditor@example.com", "Guerdy", "Lafontant", ["Night Auditor", "Finance Manager", "Accounts User"])
 user("manager", "manager@example.com", "Dominique", "Étienne", ["Hotel Manager", "Front Office Manager", "Reservation Manager",
-                                                                "Revenue Manager", "Housekeeping Manager", "Kitchen Manager", "Maintenance Manager"])
+                                                                "Revenue Manager", "Housekeeping Manager", "Kitchen Manager", "Maintenance Manager",
+                                                                # the setup records, the users, the till, the books
+                                                                "Hospitality Administrator", "System Manager", "Accounts Manager",
+                                                                "Stock Manager", "Sales Manager"])
 user("bar", "bar@example.com", "Kervens", "Alexis", ["Kitchen User", "Sales User", "Accounts User", "Stock User"])
 frappe.db.commit()
 for code, key in (("FO", "frontdesk"), ("HK", "housekeeping"), ("MT", "maintenance"), ("FB", "bar"), ("KT", "bar")):
@@ -609,14 +617,19 @@ if frappe.db.get_value("POS Profile", "Bar", "warehouse") == warehouse:   # the 
 # pos bridge, through this POS Profile flag) and POS Next must allow the sale on account.
 if frappe.db.has_column("POS Profile", "hpms_charge_to_room"):
     frappe.db.set_value("POS Profile", "Bar", "hpms_charge_to_room", 1, update_modified=False)
+# The till sells the bar's menu only: without item groups it lists every sales item, room nights
+# and laundry included, at zero.
+ensure_rows("POS Profile", "Bar", "item_groups", "item_group", [{"item_group": bar_group}])
 if frappe.db.exists("DocType", "POS Settings"):
     ensure("POS Settings", {"pos_profile": "Bar"}, {"enabled": 1, "allow_credit_sale": 1})
     frappe.db.set_value("POS Settings", {"pos_profile": "Bar"}, "allow_credit_sale", 1, update_modified=False)
 # Walk-ins at the pool or the bar buy at the same till for cash: a day pass is an ordinary item
-ensure("Item", {"item_code": "POOL-DAY"}, {"item_name": "Pool day pass", "item_group": item_group, "stock_uom": "Nos",
+ensure("Item", {"item_code": "POOL-DAY"}, {"item_name": "Pool day pass", "item_group": bar_group, "stock_uom": "Nos",
                                             "is_stock_item": 0, "is_sales_item": 1, "is_purchase_item": 0,
                                             "standard_rate": 1500})
 ensure("Item Price", {"item_code": "POOL-DAY", "price_list": price_list}, {"price_list_rate": 1500, "selling": 1})
+if frappe.db.get_value("Item", "POOL-DAY", "item_group") != bar_group:   # sold at the bar till, so in the bar's group
+    frappe.db.set_value("Item", "POOL-DAY", "item_group", bar_group, update_modified=False)
 # The bar is stocked from the stores through a kitchen requisition (an ERPNext stock transfer
 # behind it; the till sells from the bar's own warehouse), and what spoiled is written off
 if not frappe.db.exists("Kitchen Requisition", {"property": PROPERTY, "to_warehouse": bar_store}):
