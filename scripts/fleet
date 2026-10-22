@@ -879,21 +879,45 @@ def cmd_digest(a, inv):
             print("(handed to fleet-digest.service: the gateway's admin notification)")
         else:
             conf = load_push_conf()
-            if not conf:
-                print("(no delivery path: no gateway here and no fleet site configured)")
-                return 1
-            import requests
-            try:
-                r = requests.post(f"{conf['FLEET_SITE_URL'].rstrip('/')}/api/method/fleet_ops.api.notify",
-                                  json={"subject": "Fleet digest: " + text.splitlines()[0], "text": text, **({"to": conf["DIGEST_TO"]} if conf.get("DIGEST_TO") else {})},
-                                  headers={"Authorization": f"token {conf['FLEET_API_KEY']}:{conf['FLEET_API_SECRET']}", "Host": conf["FLEET_SITE_NAME"],
-                                           "X-Frappe-Site-Name": conf["FLEET_SITE_NAME"]}, timeout=60)
-                r.raise_for_status()
-                print(f"(sent through the fleet site: {r.json().get('message')})")
-            except Exception as e:
-                print(f"(fleet site mail failed: {e})")
+            sent = False
+            if conf:
+                import requests
+                try:
+                    r = requests.post(f"{conf['FLEET_SITE_URL'].rstrip('/')}/api/method/fleet_ops.api.notify",
+                                      json={"subject": "Fleet digest: " + text.splitlines()[0], "text": text, **({"to": conf["DIGEST_TO"]} if conf.get("DIGEST_TO") else {})},
+                                      headers={"Authorization": f"token {conf['FLEET_API_KEY']}:{conf['FLEET_API_SECRET']}", "Host": conf["FLEET_SITE_NAME"],
+                                               "X-Frappe-Site-Name": conf["FLEET_SITE_NAME"]}, timeout=60)
+                    r.raise_for_status()
+                    print(f"(sent through the fleet site: {r.json().get('message')})")
+                    sent = True
+                except Exception as e:
+                    print(f"(fleet site mail failed: {e})")
+            if not sent:
+                sent = digest_via_observer(inv, text)
+            if not sent:
+                print("(no delivery path worked: no gateway here, the fleet site could not mail, no observer with the digest unit)")
                 return 1
     return 0
+
+
+def digest_via_observer(inv: dict, text: str) -> bool:
+    """Hand the digest to the observer's gateway notification path (fleet-digest.service there),
+    the delivery that works without any mail account on the hub. False when there is no such box
+    or the unit did not deliver."""
+    obs = next((b for b in inv["boxes"] if b.get("role") == "observer" and not b.get("local") and b.get("status") != "offboarded"), None)
+    if not obs:
+        return False
+    rc, out = run_on(obs, "test -f /etc/systemd/system/fleet-digest.service && echo unit || echo none")
+    if rc != 0 or "unit" not in out:
+        print(f"({label(obs)} has no digest unit)")
+        return False
+    tmp = STATE / "digest-handoff.txt"
+    tmp.write_text(text + "\n")
+    scp_to(obs, tmp, "/var/lib/fleet/latest-digest.txt", "0644")
+    rc, out = run_on(obs, "systemctl start fleet-digest.service && systemctl is-failed fleet-digest.service", timeout=120)
+    ok = "inactive" in out and "failed" not in out.replace("is-failed", "")
+    print(f"(handed to {label(obs)}'s fleet-digest.service: {'delivered' if ok else 'FAILED ' + out[-80:]})")
+    return ok
 
 
 def cmd_status(a, inv):
