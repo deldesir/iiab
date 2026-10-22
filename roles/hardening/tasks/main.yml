@@ -29,3 +29,21 @@
     enabled: yes
     state: started
   become: yes
+
+# The host firewall is IIAB's own: /usr/bin/iiab-gen-iptables (roles/network), driven by
+# ports_externally_visible in local_vars.yml (2 on the fleet: ssh, http, https). Nothing else
+# (ufw and the like) may touch iptables on a box: the generator flushes and rebuilds.
+
+# ---------------------------------------------------------------- boot network wait
+- name: Wait for any configured link at boot, not every interface
+  copy:
+    src: wait-online-any.conf
+    dest: /etc/systemd/system/systemd-networkd-wait-online.service.d/any.conf
+    mode: '0644'
+  become: yes
+  register: wait_online_dropin
+
+- name: Reload systemd and clear the unit's stale failed state
+  shell: systemctl daemon-reload && systemctl reset-failed systemd-networkd-wait-online.service || true
+  become: yes
+  when: wait_online_dropin.changed

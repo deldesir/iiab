@@ -240,6 +240,57 @@ if [ "$wan" != "none" ]; then
     fi
 fi
 
+# ---------------------------------------------------------------------- IPv6
+# Everything above is IPv4. A box with a public IPv6 address answered on every listener over
+# IPv6 (seen 2026-10-22: ssh, the library, the wiki server, the socket server). Mirror the WAN
+# policy for IPv6 with the same levels: loopback, ICMPv6 (IPv6 does not work without it),
+# established flows, the tailnet interface, the LAN, the WAN ports of the level, and a drop of
+# everything else arriving on the WAN. Databases and internal backends listen on IPv4 loopback
+# only; the WAN drop covers them regardless.
+IP6TABLES=/sbin/ip6tables
+if [ -x $IP6TABLES ]; then
+    $IP6TABLES -F
+    $IP6TABLES -X
+    $IP6TABLES -A INPUT -i lo -j ACCEPT
+    $IP6TABLES -A INPUT -p ipv6-icmp -j ACCEPT
+    $IP6TABLES -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    $IP6TABLES -A INPUT -i tailscale0 -j ACCEPT
+    if [ "$lan" != "none" ]; then
+        $IP6TABLES -A INPUT -m state --state NEW -i $lan -j ACCEPT
+    fi
+    if [ "$wan" != "none" ]; then
+        if [ "$ports_externally_visible" -ge 1 ]; then
+            $IP6TABLES -A INPUT -p tcp --dport $sshd_port -m state --state NEW -i $wan -j ACCEPT
+        fi
+        if [ "$ports_externally_visible" -ge 2 ]; then
+            $IP6TABLES -A INPUT -p tcp --dport $gui_port -m state --state NEW -i $wan -j ACCEPT
+            $IP6TABLES -A INPUT -p tcp --dport 443 -m state --state NEW -i $wan -j ACCEPT
+        fi
+        if [ "$ports_externally_visible" -ge 3 ]; then
+            for port in $azuracast_ports $azuracast_http_port $azuracast_https_port $calibre_port $calibreweb_port \
+                        $cups_port $internetarchive_port $jupyterhub_port $kalite_server_port $kiwix_port \
+                        $kolibri_http_port $mosquitto_port $nodered_port $sugarizer_port \
+                        $transmission_http_port $transmission_peer_port; do
+                $IP6TABLES -A INPUT -p tcp --dport $port -m state --state NEW -i $wan -j ACCEPT
+            done
+            $IP6TABLES -A INPUT -p udp --dport $luanti_port -m state --state NEW -i $wan -j ACCEPT
+            if [ "$pbx_enabled" == "True" ]; then
+                $IP6TABLES -A INPUT -p tcp --dport $pbx_http_port -m state --state NEW -i $wan -j ACCEPT
+                $IP6TABLES -A INPUT -p udp --dport $pbx_signaling_ports_chan_sip -m state --state NEW -i $wan -j ACCEPT
+                $IP6TABLES -A INPUT -p udp --dport $pbx_signaling_ports_chan_pjsip -m state --state NEW -i $wan -j ACCEPT
+                $IP6TABLES -A INPUT -p udp --dport $pbx_data_ports -m state --state NEW -i $wan -j ACCEPT
+            fi
+        fi
+        if [ "$ports_externally_visible" -ge 4 ]; then
+            $IP6TABLES -A INPUT -p udp --dport $samba_udp_ports -m state --state NEW -i $wan -j ACCEPT
+            $IP6TABLES -A INPUT -p tcp -m multiport --dports $samba_tcp_mports -m state --state NEW -i $wan -j ACCEPT
+        fi
+        if [ "$ports_externally_visible" -lt 5 ]; then
+            $IP6TABLES -A INPUT -i $wan -j DROP
+        fi
+    fi
+fi
+
 # TCP & UDP block of DNS port 53 if truly nec
 if [ "$block_DNS" == "True" ]; then
     $IPTABLES -t nat -A PREROUTING -i $lan -p tcp --dport 53 ! -d $lan_ip -j DNAT --to $lan_ip:53
