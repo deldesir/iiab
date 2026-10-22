@@ -166,9 +166,9 @@ backup_hub() {
   mtime=$(on "$host" "stat -c %Y '$bundle'") || return 1
   age_h=$(( ( $(date +%s) - mtime ) / 3600 ))
   [ "$age_h" -ge "$STALE_HOURS" ] && warn="STALE ${age_h}h - "
-  local copy=$WORK/$(basename "$bundle"); cp -a "$out/$(basename "$bundle")" "$copy"
+  local copy; copy=$WORK/$(basename "$bundle"); cp -a "$out/$(basename "$bundle")" "$copy"
   echo "  $(basename "$bundle") ($(human "$(stat -c %s "$copy")"), ${age_h}h old)"
-  local body="Encrypted export of the fleet hub ($label): inventory, releases, local_vars copies, fleet site database + files, Semaphore; taken ${age_h}h before mailing.
+  local body; body="Encrypted export of the fleet hub ($label): inventory, releases, local_vars copies, fleet site database + files, Semaphore; taken ${age_h}h before mailing.
 
 Decrypt with the fleet passphrase (kept on the hub: $PASSFILE):
   gpg -d $(basename "$bundle") | tar x
@@ -246,7 +246,7 @@ A copy is also in object storage: $RCLONE_REMOTE/$label/ (kept $RCLONE_KEEP_DAYS
   local dbsize; dbsize=$(stat -c %s "$out/$(basename "$db")")
   echo "  $(basename "$db") ($(human "$dbsize"), ${age_h}h old) -> bundle $(human "$size")"
 
-  local body="Encrypted backup of $label: database $(human "$dbsize") taken ${age_h}h before bundling, site config, uploaded files.
+  local body; body="Encrypted backup of $label: database $(human "$dbsize") taken ${age_h}h before bundling, site config, uploaded files.
 
 Decrypt with the backup passphrase (kept on the hub: $passfile):
   gpg -d $(basename "$bundle") | tar x
