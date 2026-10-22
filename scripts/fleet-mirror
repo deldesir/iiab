@@ -16,7 +16,7 @@ LOG=/var/lib/fleet/fleet-mirror.log
 export GIT_TERMINAL_PROMPT=0
 mkdir -p "$MIRROR_DIR" "$(dirname "$LOG")"
 [ -r "$LIST" ] || { echo "fleet-mirror: no list at $LIST"; exit 2; }
-repos=$(grep -vE '^\s*(#|$)' "$LIST" | tr -d '[:space:]' | sed 's/,/\n/g' | tr -d '\r')
+repos=$(sed 's/#.*//; s/[[:space:]]//g; s/,/\n/g' "$LIST" | grep -v '^$')
 [ -n "$repos" ] || { echo "fleet-mirror: empty list"; exit 2; }
 if [ "${1:-}" = "--check" ]; then
   bad=0
