@@ -60,7 +60,9 @@ def set_kv(p: Path, key: str, value: str) -> None:
             break
     else:
         lines.append(f"{key}={value}")
-    p.write_text("\n".join(lines) + "\n")
+    fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)   # created private, no 0644 window
+    with os.fdopen(fd, "w") as fh:
+        fh.write("\n".join(lines) + "\n")
     os.chmod(p, 0o600)
 
 

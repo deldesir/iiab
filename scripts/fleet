@@ -108,6 +108,14 @@ def read_conf(p: Path) -> dict:
     return parse_conf(p.read_text()) if p.exists() else {}
 
 
+def write_private(p: Path, text: str) -> None:
+    """Write a file that holds a secret: created 0600, never world-readable for a moment."""
+    fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(text)
+    os.chmod(p, 0o600)
+
+
 def set_conf(p: Path, key: str, value: str) -> None:
     lines = p.read_text().splitlines() if p.exists() else []
     for i, line in enumerate(lines):
@@ -116,8 +124,7 @@ def set_conf(p: Path, key: str, value: str) -> None:
             break
     else:
         lines.append(f"{key}={value}")
-    p.write_text("\n".join(lines) + "\n")
-    os.chmod(p, 0o600)
+    write_private(p, "\n".join(lines) + "\n")
 
 
 def load_catalog() -> dict:
@@ -171,6 +178,12 @@ def save_inventory(inv: dict) -> None:
     tmp.write_text(header + yaml.safe_dump(body, sort_keys=False, allow_unicode=True, width=100))
     os.chmod(tmp, 0o640)
     tmp.replace(INVENTORY)
+
+
+def require_targets(a) -> None:
+    """A command that changes boxes names them or says --all; nothing mutating runs fleet-wide by omission."""
+    if not a.ids and not a.all:
+        sys.exit("fleet: name the box(es) or pass --all (this command changes boxes)")
 
 
 def select_boxes(inv: dict, ids: list[str], all_: bool) -> list[dict]:
@@ -464,11 +477,17 @@ def collect_pull(box: dict, catalog: dict) -> dict:
         rc, out = run_on(box, "cat /etc/iiab/second-brain-offsite.conf 2>/dev/null")
         oc = parse_conf(out) if rc == 0 else {}
         if oc.get("OFFSITE_HOST"):
-            target = {"ssh_user": "root", "reach": {"ssh": oc["OFFSITE_HOST"]}, "local": oc["OFFSITE_HOST"] in local_addresses()}
-            rc, out = run_on(target,
-                             f"f=$(ls -t {oc.get('OFFSITE_DIR', '/library/backups/hub-offsite')}/second-brain-*.tar.gpg 2>/dev/null | head -1); [ -n \"$f\" ] && echo $(( ($(date +%s) - $(stat -c %Y \"$f\")) / 3600 )) || echo none")
-            raw["offsite_copy_age_h"] = out.strip() if rc == 0 else "unreachable"
-            raw["offsite_host"] = oc["OFFSITE_HOST"]
+            # values read from a box's file: validated and quoted before they become a command elsewhere
+            host, odir = oc["OFFSITE_HOST"], oc.get("OFFSITE_DIR", "/library/backups/hub-offsite")
+            if not re.fullmatch(r"[A-Za-z0-9.:-]+", host) or not re.fullmatch(r"/[\w./-]+", odir):
+                raw["offsite_copy_age_h"] = "invalid offsite configuration"
+                raw["offsite_host"] = host[:40]
+            else:
+                target = {"ssh_user": "root", "reach": {"ssh": host}, "local": host in local_addresses()}
+                rc, out = run_on(target,
+                                 f"f=$(ls -t {shlex.quote(odir)}/second-brain-*.tar.gpg 2>/dev/null | head -1); [ -n \"$f\" ] && echo $(( ($(date +%s) - $(stat -c %Y \"$f\")) / 3600 )) || echo none")
+                raw["offsite_copy_age_h"] = out.strip() if rc == 0 else "unreachable"
+                raw["offsite_host"] = host
     # HTTP probes from the catalog
     base = box["reach"]["http"].rstrip("/")
     probes = []
@@ -788,7 +807,13 @@ def cmd_check(a, inv):
     with cf.ThreadPoolExecutor(max_workers=6) as ex:
         futs = {ex.submit(check_box, b, inv, catalog): b for b in boxes}
         for fu in cf.as_completed(futs):
-            r = fu.result()
+            b = futs[fu]
+            try:
+                r = fu.result()
+            except BaseException as e:   # SystemExit included: a worker must not take the whole check down
+                r = evaluate(b, {"unreachable": True, "check_error": f"{e.__class__.__name__}: {str(e)[:160]}"}, inv, catalog)
+                r["findings"].append({"level": "CRIT", "code": "exception", "message": f"check failed: {e.__class__.__name__}: {str(e)[:120]}"})
+                r["status"] = "CRIT"
             results[r["id"]] = r
             write_check(r)
     for b in boxes:
@@ -953,7 +978,9 @@ def upgrade_box(box: dict, rid: str | None, preflight: bool, allow_discard: str 
     if preflight:
         env.append("--setenv=PREFLIGHT_ONLY=1")
     if allow_discard:
-        env.append(f"--setenv=ALLOW_DISCARD={allow_discard}")
+        if not re.fullmatch(r"[A-Za-z0-9_.|()^$*+?\[\]{}/-]+", allow_discard):
+            sys.exit("fleet: --allow-discard must be a plain regular expression (letters, digits, and . _ | ( ) ^ $ * + ? [ ] { } / -)")
+        env.append(shlex.quote(f"--setenv=ALLOW_DISCARD={allow_discard}"))
     unit = f"bench-upgrade-{int(time.time())}"
     log, start = box_log(box, "bench-upgrade")
     rc, out = run_on(box, f"systemd-run --unit={unit} --collect --setenv=HOME=/root {' '.join(env)} /bin/bash /root/bench-upgrade.sh")
@@ -977,6 +1004,7 @@ def upgrade_box(box: dict, rid: str | None, preflight: bool, allow_discard: str 
 
 def cmd_upgrade(a, inv):
     catalog = load_catalog()
+    require_targets(a)
     boxes = select_boxes(inv, a.ids, a.all)
     rid = a.release or inv.get("current_release") or None
     if rid:
@@ -1316,8 +1344,7 @@ def cmd_deploy_agent(a, inv):
     box = select_boxes(inv, [a.id], False)[0]
     units = SCRIPTS / "fleet-units"
     tmp = STATE / f"agent-{box['id']}.conf"
-    tmp.write_text(agent_conf_text(box))
-    os.chmod(tmp, 0o600)
+    write_private(tmp, agent_conf_text(box))
     scp_to(box, SCRIPTS / "fleet-agent", "/usr/local/sbin/fleet-agent")
     scp_to(box, UPGRADE_SCRIPT, "/root/bench-upgrade.sh")
     scp_to(box, tmp, "/etc/iiab/fleet-agent.conf", "0600")
@@ -1347,8 +1374,7 @@ def cmd_deploy_watchdog(a, inv):
             f"HUB_PING_URL=https://{hub['host']}/erp/api/method/ping\nHUB_PUBLIC_HOST={hub['host']}\nFAIL_THRESHOLD=3\nCOOLDOWN_MIN=30\n"
             f"CONTABO_CLIENT_ID=\nCONTABO_CLIENT_SECRET=\nCONTABO_API_USER=\nCONTABO_API_PASSWORD=\nCONTABO_INSTANCE_ID=\n")
     tmp = STATE / f"watchdog-{box['id']}.conf"
-    tmp.write_text(conf)
-    os.chmod(tmp, 0o600)
+    write_private(tmp, conf)
     rc, out = run_on(box, "test -f /etc/iiab/fleet-hub-watchdog.conf && echo exists || echo new")
     if "exists" not in out:
         scp_to(box, tmp, "/etc/iiab/fleet-hub-watchdog.conf", "0600")
@@ -1415,6 +1441,7 @@ def cmd_vars(a, inv):
     (diff). Pushing is deliberate and manual: `fleet vars show <id>` prints the path to copy."""
     store = Path("/etc/iiab/fleet-vars")
     store.mkdir(mode=0o700, exist_ok=True)
+    require_targets(a)
     boxes = select_boxes(inv, a.ids, a.all)
     rc_all = 0
     for b in boxes:
@@ -1721,6 +1748,7 @@ def cmd_authorize_key(a, inv):
         sys.exit("fleet: expected one OpenSSH public key line in the file")
     key = pub[0]
     keytype, blob = key.split()[:2]
+    require_targets(a)
     rc_all = 0
     for b in select_boxes(inv, a.ids, a.all):
         probe = f"grep -qsF {shlex.quote(blob)} /root/.ssh/authorized_keys && echo PRESENT || echo ABSENT"
