@@ -204,15 +204,22 @@
     mode: '0644'
   when: erpnext_enabled | bool
 
-# systemctl is limited to the bench's own units: an unrestricted systemctl is root.
+# systemctl is limited to the bench's own targets, each spelled out: an unrestricted systemctl is
+# root, and sudo-rs (the default sudo since Ubuntu 26.04) refuses wildcards in command arguments.
 - name: Grant frappe user passwordless sudo for bench tooling
   copy:
     dest: /etc/sudoers.d/frappe
     content: |
+      {% set cmds = ['/usr/bin/systemctl daemon-reload'] %}
+      {% for unit in ['frappe-bench.target', 'frappe-bench-web.target', 'frappe-bench-workers.target', 'frappe-bench-redis.target'] %}
+      {% for verb in ['start', 'stop', 'restart', 'reload', 'status'] %}
+      {% set _ = cmds.append('/usr/bin/systemctl ' ~ verb ~ ' ' ~ unit) %}
+      {% endfor %}
+      {% endfor %}
+      Cmnd_Alias BENCH_UNITS = {{ cmds | join(', ') }}
       {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl
       {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/sbin/nginx
-      {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl daemon-reload
-      {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl start frappe-bench*, /usr/bin/systemctl stop frappe-bench*, /usr/bin/systemctl restart frappe-bench*, /usr/bin/systemctl reload frappe-bench*, /usr/bin/systemctl status frappe-bench*
+      {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: BENCH_UNITS
     mode: '0440'
     validate: 'visudo -cf %s'
   when: erpnext_enabled | bool
