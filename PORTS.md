@@ -18,7 +18,6 @@ services); `—` = not explicitly dropped (LAN-served, e.g. via Nginx/HTTP).
 | 1880 | `nodered_port` | — |
 | 1883 | `mosquitto_port` | — |
 | 3000 | `kiwix_port` | — |
-| 3030 | `openclaw_port` | — |
 | 4244 | `internetarchive_port` | — |
 | 6806 | `siyuan_port` | DROP |
 | 8000 | `jupyterhub_port` | — |

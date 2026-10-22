@@ -117,10 +117,6 @@ erpnext_install: True
 erpnext_enabled: True
 erpnext_admin_password: "demo1234"
 erpnext_business_name: "Demo Shop"
-bagisto_install: False
-bagisto_enabled: False
-bagisto_headless_install: False
-bagisto_headless_enabled: False
 rapidpro_install: False
 rapidpro_enabled: False
 rapidpro_aws_enabled: False
@@ -128,8 +124,6 @@ wuzapi_install: False
 wuzapi_enabled: False
 ai_gateway_install: False
 ai_gateway_enabled: False
-openclaw_install: False
-openclaw_enabled: False
 hermes_agent_install: False
 hermes_agent_enabled: False
 mempalace_install: False
