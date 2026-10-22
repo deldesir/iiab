@@ -26,3 +26,12 @@ Install: copy to `/etc/systemd/system/`, `systemctl daemon-reload`,
 - `fleet-hub-watchdog.timer` / `.service`: every 5 minutes on a non-hub box; after 3 failed probes
   of the hub it asks Contabo for the instance status and sends `start` if it is stopped
   (credentials in `/etc/iiab/fleet-hub-watchdog.conf`, which the operator fills by hand).
+
+## fleet-mirror (observer)
+
+`fleet-mirror.service` + `.timer`: nightly bare mirrors of every repository in
+`/etc/iiab/fleet-forks.txt` (shape: `scripts/fleet-forks.sample.txt`) under `/library/mirrors`,
+so a hosting outage or an account problem never blocks a rebuild. Install the script to
+`/usr/local/sbin/fleet-mirror`, run `gh auth setup-git` once as root for the private
+repositories, then `systemctl enable --now fleet-mirror.timer`. `fleet-mirror --check` reports
+missing or stale mirrors for the nightly check.

@@ -1,0 +1,45 @@
+#!/bin/bash
+# fleet-mirror — keep bare mirrors of the repositories the fleet deploys from, so a hosting
+# outage, an account problem or an upstream deletion never blocks a rebuild.
+#
+#   fleet-mirror            update every mirror listed in /etc/iiab/fleet-forks.txt
+#   fleet-mirror --check    report mirrors older than a day or missing, exit 1 if any
+#
+# The list holds one owner/repo per line (# comments allowed); the sample next to this script
+# shows the shape. Mirrors live under MIRROR_DIR as <repo>.git. Private repositories need the
+# hosting CLI's credential helper for root (`gh auth setup-git`), nothing else is prompted.
+# Logs to /var/lib/fleet/fleet-mirror.log; the nightly check reads the --check output.
+set -uo pipefail
+LIST=${FLEET_FORKS:-/etc/iiab/fleet-forks.txt}
+MIRROR_DIR=${MIRROR_DIR:-/library/mirrors}
+LOG=/var/lib/fleet/fleet-mirror.log
+export GIT_TERMINAL_PROMPT=0
+mkdir -p "$MIRROR_DIR" "$(dirname "$LOG")"
+[ -r "$LIST" ] || { echo "fleet-mirror: no list at $LIST"; exit 2; }
+repos=$(sed 's/#.*//; s/[[:space:]]//g; s/,/\n/g' "$LIST" | grep -v '^$')
+[ -n "$repos" ] || { echo "fleet-mirror: empty list"; exit 2; }
+if [ "${1:-}" = "--check" ]; then
+  bad=0
+  for r in $repos; do
+    d="$MIRROR_DIR/${r##*/}.git"
+    if [ ! -d "$d" ]; then echo "MISSING $r"; bad=$((bad+1)); continue; fi
+    age=$(( $(date +%s) - $(stat -c %Y "$d/.mirrored" 2>/dev/null || echo 0) ))
+    [ $age -gt 100000 ] && { echo "STALE $r ($((age/3600))h)"; bad=$((bad+1)); }
+  done
+  [ $bad -eq 0 ] && echo "MIRROR-OK $(echo "$repos" | wc -l) repositories" || echo "MIRROR-CHECK: $bad problem(s)"
+  exit $(( bad > 0 ))
+fi
+ok=0; failed=0
+{
+  echo "=== $(date '+%F %T') fleet-mirror"
+  for r in $repos; do
+    d="$MIRROR_DIR/${r##*/}.git"
+    if [ -d "$d" ]; then
+      if git -C "$d" remote update --prune >/dev/null 2>&1; then echo "updated $r"; touch "$d/.mirrored"; ok=$((ok+1)); else echo "FAILED update $r"; failed=$((failed+1)); fi
+    else
+      if git clone -q --mirror "https://github.com/$r.git" "$d" 2>/dev/null; then echo "cloned $r"; touch "$d/.mirrored"; ok=$((ok+1)); else echo "FAILED clone $r"; failed=$((failed+1)); fi
+    fi
+  done
+  echo "MIRROR-DONE ok=$ok failed=$failed"
+} | tee -a "$LOG"
+exit $(( failed > 0 ))

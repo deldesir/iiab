@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly mirror of the fleet's repositories
+
+[Timer]
+OnCalendar=*-*-* 04:10:00
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
