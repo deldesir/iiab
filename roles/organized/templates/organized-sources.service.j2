@@ -5,6 +5,8 @@ Documentation=https://github.com/sws2apps/meeting-schedules-parser
 After=network.target
 
 [Service]
+# Trust the OS certificate store, not Node's bundled roots (see the hardening notes).
+Environment=NODE_OPTIONS=--use-openssl-ca
 Type=oneshot
 User={{ organized_user }}
 Group={{ organized_user }}
