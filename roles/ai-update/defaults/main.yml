@@ -91,7 +91,6 @@ ai_update_go_courier_dest: /usr/local/bin/courier
 ai_update_go_mailroom_dest: /usr/local/bin/mailroom
 
 
-
 # ── WuzAPI static assets ───────────────────────────────────────────
 ai_update_wuzapi_src_repo: "https://github.com/deldesir/wuzapi.git"
 ai_update_wuzapi_src_dir: /opt/iiab/wuzapi-src

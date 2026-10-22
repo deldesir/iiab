@@ -1,0 +1,38 @@
+name: fork-checks
+# The fork's own files, checked on every push and pull request: the roles it added, the fleet
+# tooling and the installer scripts. Upstream's files have upstream's workflows.
+on:
+  push:
+    branches: [master]
+  pull_request:
+env:
+  FORK_ROLES: ai-gateway ai-update anki email-bridge erpnext hardening hermes-agent mempalace organized rapidpro rivebot siyuan social-code ssl wuzapi
+  FORK_PY: scripts/fleet scripts/fleet-agent scripts/fleet-kuma-seed scripts/fleet-hub-watchdog scripts/fleet-install/demo-seed.py scripts/fleet-install/demo-hotel-seed.py scripts/fleet-install/semaphore-seed.py scripts/fleet-install/semaphore-run.py
+  FORK_SH: scripts/fleet-mirror scripts/install-release-binary.sh scripts/build-go-release.sh scripts/bench-upgrade.sh scripts/bench-rollback.sh scripts/bench-smoke.sh scripts/go-fork-tests.sh scripts/temba-fork-tests.sh scripts/maintain_patch.sh update_frappe_forks.sh
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q ansible-lint yamllint ruff && sudo apt-get install -y -q shellcheck >/dev/null
+      - name: yamllint on the fork roles
+        run: yamllint -f parsable $(for r in $FORK_ROLES; do echo roles/$r; done)
+      - name: every fork task file parses by import (not only by role)
+        run: |
+          for f in $(for r in $FORK_ROLES; do ls roles/$r/tasks/*.yml; done); do
+            printf -- "- hosts: localhost\n  gather_facts: no\n  tasks:\n    - import_tasks: $PWD/$f\n" > /tmp/syntax.yml
+            ansible-playbook --syntax-check /tmp/syntax.yml >/dev/null || { echo "syntax: $f"; exit 1; }
+          done
+      - name: ansible-lint, production profile, on the fork roles
+        run: |
+          printf 'profile: production\nskip_list: [role-name]\n' > /tmp/lint.yml
+          ansible-lint --offline -c /tmp/lint.yml $(for r in $FORK_ROLES; do echo roles/$r; done)
+      - name: ruff on the fleet tooling
+        run: ruff check --config scripts/ruff.toml $FORK_PY
+      - name: shellcheck on the fork scripts
+        run: shellcheck -S warning scripts/fleet-install/*.sh scripts/fleet-tasks/*.sh $FORK_SH
+      - name: no address, hostname, business name or phone number in the fork's files
+        run: python3 scripts/check-no-addresses.py $FORK_ROLES scripts vars/local_vars_fleet_hub.yml vars/local_vars_fleet_box.yml vars/local_vars_fleet_box_hotel.yml vars/local_vars_demo.yml vars/local_vars_demo_hotel.yml vars/local_vars_deldesir.yml roles/network/templates/gateway/iiab-gen-iptables

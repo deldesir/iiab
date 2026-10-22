@@ -3,7 +3,6 @@
 inventory, one template per runbook wrapper with survey variables (env target). Idempotent by
 name. Credentials from /etc/iiab/fleet.conf; nothing secret is printed."""
 import json
-import sys
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -37,7 +36,7 @@ class Api:
                 return json.loads(data) if data and not raw else data
         except urllib.error.HTTPError as e:
             body = e.read().decode(errors="replace")[:200]
-            raise SystemExit(f"{method} {path} -> {e.code}: {body}")
+            raise SystemExit(f"{method} {path} -> {e.code}: {body}") from e
 
 
 api = Api()

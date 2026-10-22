@@ -22,6 +22,7 @@ FLEET_API_SECRET=
 CONF
   chmod 0600 "$CONF"
 fi
+# shellcheck source=/dev/null
 . "$CONF"
 asf() { sudo -u frappe -H bash -lc "cd $B && $*"; }
 echo "=== $(date +%T) database + user"

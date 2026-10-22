@@ -158,9 +158,6 @@ sync_one() {
     OVERALL_RC=1
     return
   fi
-
-  local merged_log
-  merged_log="$("${g[@]}" log --oneline origin/"$up_branch"..HEAD | head -8)"
   say "${G}clean merge of ${behind} upstream commit(s).${Z}"
 
   case "$MODE" in
@@ -177,7 +174,8 @@ sync_one() {
       fi
       ;;
     pr)
-      local sync_branch="upstream-sync-$(date +%Y%m%d)"
+      local sync_branch
+      sync_branch="upstream-sync-$(date +%Y%m%d)"
       say "pushing sync branch '${sync_branch}' and opening PR…"
       if "${g[@]}" push -q -f origin "HEAD:${sync_branch}" 2>/dev/null \
          && gh -R "${GH_USER}/${fork}" pr create --base "$up_branch" --head "$sync_branch" \
