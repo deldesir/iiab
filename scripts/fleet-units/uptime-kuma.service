@@ -6,6 +6,9 @@ Wants=network-online.target
 [Service]
 # Tailnet bind only: this box has a public IP and the monitor must never sit on it.
 Environment=NODE_ENV=production
+# Node ships its own root bundle and lags the system store when a CA is distrusted
+# (the eMudhra roots of 2026-10); trust what the OS trusts.
+Environment=NODE_OPTIONS=--use-openssl-ca
 Environment=DATA_DIR=/library/uptime-kuma/
 Environment=UPTIME_KUMA_HOST=<tailnet-ip>
 Environment=UPTIME_KUMA_PORT=3001
