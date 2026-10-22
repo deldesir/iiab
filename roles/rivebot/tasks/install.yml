@@ -85,12 +85,14 @@
   register: rivebot_gateway_key_probe
   changed_when: false
   failed_when: false
+  no_log: true
   become: yes
   when: not (rivebot_gateway_internal_key | default(''))
 
 - name: Adopt the probed gateway internal key
   set_fact:
     rivebot_gateway_internal_key: "{{ rivebot_gateway_key_probe.stdout }}"
+  no_log: true
   when:
     - not (rivebot_gateway_internal_key | default(''))
     - rivebot_gateway_key_probe.stdout | default('')
