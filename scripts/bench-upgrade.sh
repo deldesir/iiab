@@ -64,7 +64,7 @@ if [ "${PREFLIGHT_ONLY:-0}" != 1 ]; then
   {
     echo "STAMP=$(date +%Y%m%dT%H%M%S)"; echo "SITE=$SITE"
     echo "DB_BACKUP=$(ls -t $bk/*-database*.sql.gz 2>/dev/null | head -1)"
-    echo "FILES_BACKUP=$(ls -t $bk/*-files*.tar 2>/dev/null | grep -v -- '-private-files' | head -1)"
+    echo "FILES_BACKUP=$(find "$bk" -maxdepth 1 -name '*-files*.tar' ! -name '*-private-files*' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)"
     echo "PRIVATE_BACKUP=$(ls -t $bk/*-private-files*.tar 2>/dev/null | head -1)"
     printf 'PREV_HEADS="'; for a in $APPS; do printf '%s=%s ' "$a" "$(val "git -C apps/$a rev-parse HEAD")"; done; printf '"\n'
     echo "RELEASE=$([ -n "$MANIFEST" ] && awk -F= '$1=="release"{print $2}' "$MANIFEST")"

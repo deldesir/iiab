@@ -375,4 +375,3 @@
     path: "{{ iiab_state_file }}"
     regexp: '^ai_gateway_installed'
     line: 'ai_gateway_installed: True'
-

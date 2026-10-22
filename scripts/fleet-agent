@@ -103,8 +103,8 @@ def report(c: dict) -> int:
     if c.get("KUMA_PUSH_URL"):
         try:
             urllib.request.urlopen(c["KUMA_PUSH_URL"] + "?" + urllib.parse.urlencode({"status": "up", "msg": "reported" if ok else "report failed"}), timeout=10)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"heartbeat not delivered: {e.__class__.__name__}")
     return 0 if ok else 1
 
 

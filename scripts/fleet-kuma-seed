@@ -138,8 +138,8 @@ def main() -> int:
             try:
                 if requests.get(f"{url}/api/entry-page", timeout=5).json().get("type") != "setup-database":
                     break
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"   monitor not answering yet: {e.__class__.__name__}")
         else:
             sys.exit("fleet-kuma-seed: server did not come back after database setup")
 
@@ -166,8 +166,8 @@ def main() -> int:
             print(f"waiting for the socket server ({e.__class__.__name__}), attempt {attempt + 1}")
             try:
                 sio.disconnect()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"   disconnect: {e.__class__.__name__}")
             time.sleep(5)
     if need is None:
         sys.exit("fleet-kuma-seed: socket server never answered")

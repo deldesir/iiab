@@ -85,6 +85,6 @@ PrivateTmp=true
 WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload; systemctl enable -q --now semaphore
-for i in $(seq 1 20); do curl -s -o /dev/null -m 3 "http://$TAILIP:$PORT/api/ping" && break; sleep 2; done
+for _ in $(seq 1 20); do curl -s -o /dev/null -m 3 "http://$TAILIP:$PORT/api/ping" && break; sleep 2; done
 echo "ping: $(curl -s -m 5 http://$TAILIP:$PORT/api/ping)"
 echo "=== $(date +%T) SEMAPHORE-INSTALL-OK http://$TAILIP:$PORT"

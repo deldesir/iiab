@@ -16,4 +16,3 @@ dependencies:
     vars:
       postgresql_install: true
       postgresql_enabled: true
-

@@ -40,9 +40,11 @@ if [ -n "$MANIFEST" ]; then
   [ -r "$MANIFEST" ] || fail "manifest $MANIFEST unreadable"
   RELEASE=$(awk -F= '$1=="release"{print $2}' "$MANIFEST")
   for a in $APPS; do pin=$(awk -F= -v a="$a" '$1==a{print $2}' "$MANIFEST"); [ -n "$pin" ] && TARGET[$a]=$pin; done
+  # shellcheck source=/dev/null
   if [ "$RESTORE" = 1 ] && [ -r "$LAST_ENV" ]; then . "$LAST_ENV"; fi
 else
   [ -r "$LAST_ENV" ] || fail "no $LAST_ENV on this box (no upgrade recorded here) and no MANIFEST"
+  # shellcheck source=/dev/null
   . "$LAST_ENV"
   for kv in $PREV_HEADS; do TARGET[${kv%%=*}]=${kv#*=}; done
 fi

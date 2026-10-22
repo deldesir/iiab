@@ -57,18 +57,18 @@ email_bridge_allowed_senders: "{{ (ai_gateway_authorized_users | default('')).sp
 # back to smtp.<domain> / imap.<domain>, which is correct for most hosted mail
 # and cPanel/Plesk setups. Add an entry to extend.
 email_bridge_known_providers:
-  gmail.com:      { smtp: smtp.gmail.com,        imap: imap.gmail.com }
-  googlemail.com: { smtp: smtp.gmail.com,        imap: imap.gmail.com }
-  outlook.com:    { smtp: smtp-mail.outlook.com, imap: outlook.office365.com }
-  hotmail.com:    { smtp: smtp-mail.outlook.com, imap: outlook.office365.com }
-  live.com:       { smtp: smtp-mail.outlook.com, imap: outlook.office365.com }
-  office365.com:  { smtp: smtp.office365.com,     imap: outlook.office365.com }
-  yahoo.com:      { smtp: smtp.mail.yahoo.com,    imap: imap.mail.yahoo.com }
-  fastmail.com:   { smtp: smtp.fastmail.com,      imap: imap.fastmail.com }
-  icloud.com:     { smtp: smtp.mail.me.com,       imap: imap.mail.me.com }
-  zoho.com:       { smtp: smtp.zoho.com,          imap: imap.zoho.com }
-  gmx.com:        { smtp: mail.gmx.com,           imap: imap.gmx.com }
-  yandex.com:     { smtp: smtp.yandex.com,        imap: imap.yandex.com }
+  gmail.com: { smtp: smtp.gmail.com, imap: imap.gmail.com }
+  googlemail.com: { smtp: smtp.gmail.com, imap: imap.gmail.com }
+  outlook.com: { smtp: smtp-mail.outlook.com, imap: outlook.office365.com }
+  hotmail.com: { smtp: smtp-mail.outlook.com, imap: outlook.office365.com }
+  live.com: { smtp: smtp-mail.outlook.com, imap: outlook.office365.com }
+  office365.com: { smtp: smtp.office365.com, imap: outlook.office365.com }
+  yahoo.com: { smtp: smtp.mail.yahoo.com, imap: imap.mail.yahoo.com }
+  fastmail.com: { smtp: smtp.fastmail.com, imap: imap.fastmail.com }
+  icloud.com: { smtp: smtp.mail.me.com, imap: imap.mail.me.com }
+  zoho.com: { smtp: smtp.zoho.com, imap: imap.zoho.com }
+  gmx.com: { smtp: mail.gmx.com, imap: imap.gmx.com }
+  yandex.com: { smtp: smtp.yandex.com, imap: imap.yandex.com }
 
 # ── courier (RapidPro External channel) wiring ──────────────────────────────
 # Auto-created by the role (idempotent get-or-create) when this is empty. Set a

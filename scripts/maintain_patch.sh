@@ -21,7 +21,6 @@ set -e
 # Configuration & Defaults
 # ===================================================================================
 
-SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 WORK_DIR="/tmp/iiab-patch-work-$(id -u)"
 
 # Colors

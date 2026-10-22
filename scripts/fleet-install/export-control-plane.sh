@@ -31,7 +31,9 @@ echo "=== app source (private repository)"
 rsync -a --exclude __pycache__ --exclude .git $B/apps/fleet_ops/ "$T/app/fleet_ops/"
 git -C $B/apps/fleet_ops rev-parse HEAD > "$T/app/fleet_ops.commit" 2>/dev/null || true
 if [ -f /etc/semaphore/config.json ]; then
-  echo "=== semaphore"; cp -a /etc/semaphore/config.json "$T/semaphore/"; sudo -u postgres pg_dump -Fc semaphore > "$T/semaphore/semaphore.pgdump"
+  echo "=== semaphore"; cp -a /etc/semaphore/config.json "$T/semaphore/"
+  # shellcheck disable=SC2024  # the redirect runs as root on purpose: the postgres user cannot write root's temp dir
+  sudo -u postgres pg_dump -Fc semaphore > "$T/semaphore/semaphore.pgdump"
 fi
 [ -f /etc/nginx/sites-enabled/fleet-tailnet.conf ] && cp -a /etc/nginx/sites-enabled/fleet-tailnet.conf "$T/nginx/"
 if [ "${WITH_KUMA:-0}" = 1 ] && [ -d /library/uptime-kuma ]; then

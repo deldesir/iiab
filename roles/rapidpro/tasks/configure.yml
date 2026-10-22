@@ -53,9 +53,6 @@
   become: yes
 
 
-
-
-
 - name: Copy prebuilt database dump (Android)
   copy:
     src: rapidpro_android_seed.dump
@@ -259,7 +256,6 @@
   become: yes
 
 
-
 # Mailroom and courier embed the DB URL (with password) in Environment=
 # lines — systemd only needs root to read unit files, so keep these two
 # out of reach of other local accounts.
@@ -278,7 +274,6 @@
     dest: /etc/systemd/system/rapidpro-courier.service
     mode: '0600'
   become: yes
-
 
 
 - name: Create Celery systemd service

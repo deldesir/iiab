@@ -608,7 +608,6 @@
 # either manually or via a post-setup hook.
 
 
-
 - name: Enable scheduler for the site
   become: yes
   become_user: "{{ erpnext_user_name }}"
