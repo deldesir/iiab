@@ -264,6 +264,8 @@
     - second-brain-backup.timer
     - fleet-backup-mail.service
     - fleet-backup-mail.timer
+    - fleet-backup-mail-hub.service
+    - fleet-backup-mail-hub.timer
   become: yes
 
 - name: Install pipeline maintenance scripts
@@ -332,12 +334,15 @@
     path: /etc/iiab/fleet-backup.conf
   register: fleet_backup_conf
 
-- name: Enable the emailed fleet-backup timer on the hub
+- name: Enable the emailed fleet-backup timers on the hub (the morning run, and the afternoon hub-only retry)
   systemd:
-    name: fleet-backup-mail.timer
+    name: "{{ item }}"
     enabled: yes
     state: started
     daemon_reload: yes
+  loop:
+    - fleet-backup-mail.timer
+    - fleet-backup-mail-hub.timer
   when: fleet_backup_conf.stat.exists
   become: yes
 

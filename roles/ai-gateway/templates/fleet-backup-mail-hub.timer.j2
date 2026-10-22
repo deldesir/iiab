@@ -1,0 +1,10 @@
+[Unit]
+Description=Afternoon retry of the hub export copy (hub entries only)
+
+[Timer]
+OnCalendar=*-*-* 15:00:00 America/Port-au-Prince
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

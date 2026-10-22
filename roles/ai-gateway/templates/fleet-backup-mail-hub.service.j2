@@ -1,0 +1,11 @@
+[Unit]
+Description=Afternoon retry of the hub's control-plane export copy (the hub laptop is often off at the morning run)
+OnFailure=notify-failure@%n.service
+After=network-online.target email-bridge.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/fleet-backup-mail run hub
+StandardOutput=journal
+StandardError=journal
