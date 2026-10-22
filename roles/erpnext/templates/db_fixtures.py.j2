@@ -41,7 +41,7 @@ def run():
             "label": "Webshop",
             "title": "Webshop",
             "module": "Webshop",
-            "app": "Webshop",  # Capital W to match novadah exactly
+            "app": "Webshop",  # Capital W to match the storefront exactly
             "icon": "getting-started",
             "indicator_color": "green",
             "public": 1,
@@ -55,7 +55,7 @@ def run():
         })
         ws.insert(ignore_permissions=True)
         
-        # 2. Force parent_page="Webshop" directly via database bypass update to match novadah exactly
+        # 2. Force parent_page="Webshop" directly via database bypass update to match the storefront exactly
         frappe.db.set_value("Workspace", "Webshop", "parent_page", "Webshop")
         print("✓ Created Webshop Workspace with exact parent_page and roles settings")
     except Exception as e:

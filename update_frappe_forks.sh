@@ -2,7 +2,7 @@
 #
 # update_frappe_forks.sh — sync deldesir/* Frappe-app forks with upstream.
 #
-# Companion to update_rapidpro_binaries.sh, but for the Frappe/ERPNext apps the
+# For the Frappe/ERPNext apps (the Go services have scripts/build-go-release.sh); the
 # erpnext role installs. Unlike the Go services, Frappe apps ship as *source*,
 # not binaries — there is nothing to compile or release. The "release" is simply
 # the updated fork branch that `bench get-app` / the erpnext role pulls on the

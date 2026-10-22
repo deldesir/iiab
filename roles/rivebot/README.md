@@ -27,7 +27,7 @@ invocation in the IIAB AI Gateway.
 Set these in `local_vars.yml` to enable automatic brain sync from SiYuan:
 
 ```yaml
-rivebot_siyuan_api_url: "http://100.64.0.11:56260"
+rivebot_siyuan_api_url: "http://<hub-tailnet-address>:56260"
 rivebot_siyuan_api_token: "your-token-here"
 rivebot_siyuan_notebook_id: "20260321012908-iej1pzy"
 ```
@@ -41,7 +41,7 @@ blocks in SiYuan and the brains reload automatically.
 ```yaml
 rivebot_install: True
 rivebot_enabled: True
-rivebot_siyuan_api_url: "http://100.64.0.11:56260"
+rivebot_siyuan_api_url: "http://<hub-tailnet-address>:56260"
 rivebot_siyuan_api_token: "59973h7dz4jr4moa"
 rivebot_siyuan_notebook_id: "20260321012908-iej1pzy"
 ```

@@ -16,3 +16,4 @@ roles/rapidpro/RAPIDPRO_TECHNICAL_EVOLUTION.md
 *plan.md*
 *.doc
 __pycache__/
+*.tar.gz
