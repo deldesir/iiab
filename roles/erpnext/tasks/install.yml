@@ -204,13 +204,15 @@
     mode: '0644'
   when: erpnext_enabled | bool
 
+# systemctl is limited to the bench's own units: an unrestricted systemctl is root.
 - name: Grant frappe user passwordless sudo for bench tooling
   copy:
     dest: /etc/sudoers.d/frappe
     content: |
       {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl
       {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/sbin/nginx
-      {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl
+      {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl daemon-reload
+      {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/bin/systemctl start frappe-bench*, /usr/bin/systemctl stop frappe-bench*, /usr/bin/systemctl restart frappe-bench*, /usr/bin/systemctl reload frappe-bench*, /usr/bin/systemctl status frappe-bench*
     mode: '0440'
     validate: 'visudo -cf %s'
   when: erpnext_enabled | bool
@@ -429,6 +431,7 @@
 - name: Create ERPNext Site
   become: yes
   become_user: "{{ erpnext_user_name }}"
+  no_log: true   # the command line carries the admin and database passwords
   command: ~/.local/bin/bench new-site {{ erpnext_site_name }} --admin-password {{ erpnext_admin_password }} --db-name {{ erpnext_db_name }} --db-password {{ erpnext_db_password }} --no-setup-db --force
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
@@ -438,6 +441,7 @@
   when: erpnext_enabled | bool
 
 - name: Ensure site_config.json has the correct database password (prevents Access Denied if password changed in local_vars.yml)
+  no_log: true   # the inline script carries the database password
   become: yes
   become_user: "{{ erpnext_user_name }}"
   shell: |

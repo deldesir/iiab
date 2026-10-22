@@ -53,10 +53,11 @@
     state: directory
   become: yes
 
-- name: Install Wuzapi systemd service
+- name: Install Wuzapi systemd service (0600: the unit carries the encryption, HMAC and admin keys)
   template:
     src: wuzapi.service.j2
     dest: /etc/systemd/system/wuzapi.service
+    mode: '0600'
   become: yes
 
 # /etc/iiab is world-traversable (0755), so the lookup('password')-generated
