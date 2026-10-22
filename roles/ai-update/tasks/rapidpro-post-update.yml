@@ -11,10 +11,10 @@
     state: started
   become: yes
 
-- name: Backup RapidPro database before migration
+- name: Backup RapidPro database before migration (a failed dump stops the update, migrate never runs without one)
   shell: sudo -u postgres pg_dump -Fc temba > /var/backups/temba-pre-update-$(date +%Y%m%d%H%M).dump
   become: yes
-  ignore_errors: yes
+  changed_when: true
 
 - name: Fix RapidPro ownership after git pull
   command: "chown -R {{ ai_update_gateway_user }}:{{ ai_update_gateway_user }} {{ ai_update_rapidpro_dir }}"
