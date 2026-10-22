@@ -210,13 +210,13 @@
   copy:
     dest: /etc/sudoers.d/frappe
     content: |
-      Cmnd_Alias BENCH_UNITS = /usr/bin/systemctl daemon-reload, \
+      {% set cmds = ['/usr/bin/systemctl daemon-reload'] %}
       {% for unit in ['frappe-bench.target', 'frappe-bench-web.target', 'frappe-bench-workers.target', 'frappe-bench-redis.target'] %}
       {% for verb in ['start', 'stop', 'restart', 'reload', 'status'] %}
-        /usr/bin/systemctl {{ verb }} {{ unit }}{% if not (loop.last and loop.parent.loop.last) %}, \{% endif %}
-
+      {% set _ = cmds.append('/usr/bin/systemctl ' ~ verb ~ ' ' ~ unit) %}
       {% endfor %}
       {% endfor %}
+      Cmnd_Alias BENCH_UNITS = {{ cmds | join(', ') }}
       {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl
       {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/sbin/nginx
       {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: BENCH_UNITS
