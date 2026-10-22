@@ -137,15 +137,12 @@
       # deldesir fork roles (keep in sync with roles/*/defaults/main.yml)
       - erpnext
       - ssl
-      - bagisto
-      - bagisto_headless
       - rapidpro
       - wuzapi
       - ai_gateway
       - rivebot
       - email_bridge
       - siyuan
-      - openclaw
       - hermes_agent
       - mempalace
       - organized

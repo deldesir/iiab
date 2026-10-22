@@ -452,12 +452,7 @@ erpnext_enabled: True
 erpnext_admin_password: "CHANGEME"    # ERPNext Administrator login password
 
 # Bagisto — E-commerce platform
-bagisto_install: True
-bagisto_enabled: True
-# bagisto_app_url: https://yourdomain.com/live  # Set after configuring SSL
 
-bagisto_headless_install: True
-bagisto_headless_enabled: True
 
 # RapidPro — CRM / messaging platform
 rapidpro_install: True
@@ -482,9 +477,6 @@ ai_gateway_gemini_api_key: "CHANGEME"    # Google AI Studio key: the gateway run
 # ai_gateway_llm_model: "gemini-3.1-flash-lite-preview"
 # ai_gateway_admin_phone: "YOUR_PHONE"
 
-openclaw_install: False
-openclaw_enabled: False
-openclaw_admin_token: "CHANGEME"          # Generate unique per-service token
 
 hermes_agent_install: True
 hermes_agent_enabled: True

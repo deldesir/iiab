@@ -1,7 +1,0 @@
-dependencies:
-  - role: nginx
-    vars:
-      nginx_install: true
-  - role: nodejs
-    vars:
-      nodejs_install: true
