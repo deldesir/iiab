@@ -71,4 +71,5 @@ echo "=== nginx + units + commands"
 for u in fleet-check.service fleet-check.timer fleet-digest.service fleet-backup-pull.service fleet-backup-pull.timer fleet-export.service fleet-export.timer; do cp -a "$R/scripts/fleet-units/$u" /etc/systemd/system/; done
 systemctl daemon-reload; systemctl enable --now fleet-check.timer fleet-backup-pull.timer fleet-export.timer   # backup-pull needs backup_mail_box in the inventory
 install -m 0755 "$R/scripts/fleet" /usr/local/sbin/fleet; install -m 0755 "$R/scripts/fleet-kuma-seed" /usr/local/sbin/fleet-kuma-seed
+if [ "${WARN:-0}" = 1 ]; then echo "IMPORT-DONE-WITH-WARNINGS: see the IMPORT-WARN lines above; the hub is not complete"; exit 1; fi
 echo "IMPORT-OK. Now: edit /etc/iiab/fleet.yml (this machine = hub, local: true; the old hub = observer), run 'fleet check --all', then on the old hub disable fleet-check.timer and semaphore."

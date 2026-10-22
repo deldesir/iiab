@@ -119,8 +119,9 @@ def in_window(c: dict) -> bool:
 
 def upgrade(c: dict) -> int:
     try:
-        res = get_json(f"{c['FLEET_HUB_URL'].rstrip('/')}/api/method/fleet_ops.api.current_manifest",
-                       {"box_id": c["FLEET_BOX_ID"], "token": c["FLEET_AGENT_TOKEN"]}).get("message") or {}
+        # POST: the token travels in the body, not in a query string the hub's web server logs
+        res = post_json(f"{c['FLEET_HUB_URL'].rstrip('/')}/api/method/fleet_ops.api.current_manifest",
+                        {"box_id": c["FLEET_BOX_ID"], "token": c["FLEET_AGENT_TOKEN"]}).get("message") or {}
     except Exception as e:
         print(f"manifest fetch failed: {e.__class__.__name__}")
         return 1
