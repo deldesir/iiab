@@ -25,14 +25,6 @@
           knowledge_base_id VARCHAR,
           system_prompt_override TEXT
       );
-      CREATE TABLE IF NOT EXISTS konex_admins (
-          id VARCHAR PRIMARY KEY,
-          user_phone VARCHAR NOT NULL,
-          channel_phone VARCHAR NOT NULL,
-          permissions VARCHAR DEFAULT '*',
-          created_by VARCHAR,
-          created_at INTEGER DEFAULT 0
-      );
       CREATE TABLE IF NOT EXISTS konex_knowledge_items (
           id VARCHAR PRIMARY KEY,
           title VARCHAR NOT NULL,
@@ -43,7 +35,6 @@
       );
       GRANT ALL PRIVILEGES ON TABLE konex_personas TO {{ rapidpro_db_user | default('temba') }};
       GRANT ALL PRIVILEGES ON TABLE konex_channel_configs TO {{ rapidpro_db_user | default('temba') }};
-      GRANT ALL PRIVILEGES ON TABLE konex_admins TO {{ rapidpro_db_user | default('temba') }};
       GRANT ALL PRIVILEGES ON TABLE konex_knowledge_items TO {{ rapidpro_db_user | default('temba') }};
   when: ai_gateway_enabled and ai_gateway_postgres_uri | default('') | length > 0
   ignore_errors: yes
@@ -69,10 +60,10 @@
 
 - name: Remove Nginx config for AI Gateway, if not ai_gateway_enabled
   file:
-    path: "{{ nginx_conf_dir }}/ai-gateway-nginx.conf"
+    path: "{{ nginx_conf_dir | default('/etc/nginx/conf.d') }}/ai-gateway.conf"
     state: absent
   when: not ai_gateway_enabled
-  notify: reload nginx
+  notify: restart nginx
 
 - name: Point RapidPro LLM at AI Gateway
   community.postgresql.postgresql_query:

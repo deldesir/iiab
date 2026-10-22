@@ -100,6 +100,21 @@ Order: canary box first; the idle boxes in parallel; the live tills one at a
 time inside their closed window. `bench-smoke.sh` after each box, before the
 next. `PREFLIGHT_ONLY=1` on a box first when a fork jumped far.
 
+## 4b. Abort or roll back a bench
+
+`bench-upgrade.sh` records the app commits and the backup it took in
+`/root/bench-upgrade.last.env` before it changes anything. To undo the last upgrade on a box:
+
+```
+ssh root@<box> systemd-run --unit=bench-rollback --collect --setenv=HOME=/root /bin/bash /opt/iiab/iiab/scripts/bench-rollback.sh
+ssh root@<box> 'tail -f /root/bench-rollback-$(date +%F).log'
+```
+
+Apps return to the recorded commits, requirements and assets are rebuilt, the database and
+files are restored from that backup (code and data go back together). `MANIFEST=file` targets
+a release manifest instead; `RESTORE=0` keeps the current database (code-only). Run
+`bench-smoke.sh` afterwards, and re-run the round on that box only when the cause is known.
+
 ## 5. Frappe apps: what the 2026-10 round taught
 
 - `crm` (develop) hard-requires the `whatsapp` app (`required_apps`, a linked

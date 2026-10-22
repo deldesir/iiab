@@ -84,7 +84,7 @@
 # 'loop' also sidesteps the 2023-12-04 'with_items' breakage caused by the
 # CVE-2023-5764 mitigation in ansible-core 2.16.1.)
 
-- name: Set vars_checklist for 62 + 62 vars ("XYZ_install" + "XYZ_enabled") to be checked
+- name: Set vars_checklist of roles whose "XYZ_install" + "XYZ_enabled" vars are checked
   set_fact:
     vars_checklist:
       - hostapd
@@ -147,6 +147,8 @@
       - mempalace
       - organized
       - anki
+      - social_code
+      - ai_update
 
 - name: Set vars_deprecated_list for 4 deprecated vars ("XYZ_install") to be checked
   set_fact:
