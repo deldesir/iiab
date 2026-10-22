@@ -68,6 +68,7 @@ set_conf() {                                  # set_conf VAR VALUE — rewrite o
 }
 overrides_without() { local pair out=""; for pair in $RECIPIENT_OVERRIDES; do [ "${pair%%=*}" = "$1" ] || out="$out $pair"; done; echo "${out# }"; }
 
+ONLY=${2:-}                                   # "run hub": only the hub entries (the afternoon retry when the laptop hub was off)
 case "${1:-run}" in
   run) ;;
   recipients)
@@ -104,7 +105,7 @@ WORK=$(mktemp -d /tmp/fleet-backup.XXXXXX)
 [ "${KEEP_WORK:-0}" = 1 ] && echo "workdir kept: $WORK" || trap 'rm -rf "$WORK"' EXIT
 umask 077
 mkdir -p "$DEST"
-FAILED=()
+FAILED=(); UNREACHABLE=()
 
 # on <box> <cmd…> — run on the box ("local" = this machine), as root.
 on() { local box=$1; shift; if [ "$box" = local ]; then bash -c "$*"; else ssh -o BatchMode=yes -o ConnectTimeout=20 "root@$box" "$*"; fi; }
@@ -154,7 +155,10 @@ backup_hub() {
   local host=$1 label=$1 to
   to=$(recipient_for "$label")
   echo "== $label (hub export) -> $to"
-  local bundle; bundle=$(on "$host" "ls -t /library/backups/control-plane-export-*.tar.gpg 2>/dev/null | head -1") || return 1
+  local bundle rc
+  bundle=$(on "$host" "ls -t /library/backups/control-plane-export-*.tar.gpg 2>/dev/null | head -1"); rc=$?
+  if [ $rc -eq 255 ]; then echo "  hub unreachable (ssh): the export copy is not refreshed this run" >&2; return 2; fi
+  [ $rc -eq 0 ] || return 1
   [ -n "$bundle" ] || { echo "  no control-plane export found (fleet-export.timer on the hub)" >&2; return 1; }
   local out=$DEST/$label/$STAMP; mkdir -p "$out"
   pull "$host" "$bundle" "$out/" || return 1
@@ -252,7 +256,9 @@ then follow RESTORE.txt inside. An off-box copy is also kept on the hub under $D
 }
 
 for entry in $BOXES; do
-  backup_box "$entry" || FAILED+=("${entry#*=}")
+  [ "$ONLY" = hub ] && [ "${entry%%=*}" != hub ] && continue
+  backup_box "$entry"; rc=$?
+  case $rc in 0) ;; 2) UNREACHABLE+=("${entry#*=}") ;; *) FAILED+=("${entry#*=}") ;; esac
 done
 
 if [ ${#FAILED[@]} -gt 0 ]; then
@@ -260,5 +266,13 @@ if [ ${#FAILED[@]} -gt 0 ]; then
   send_mail "$RECIPIENT" "[backup] FAILED $STAMP: ${FAILED[*]}" \
     "fleet-backup-mail could not back up: ${FAILED[*]}. See: journalctl -u fleet-backup-mail" || true
   exit 1
+fi
+if [ ${#UNREACHABLE[@]} -gt 0 ]; then
+  # the hub laptop being off is a known condition, not a failed run: say so, keep the unit healthy,
+  # and let the afternoon hub-only timer try again
+  echo "UNREACHABLE (not refreshed): ${UNREACHABLE[*]}" >&2
+  send_mail "$RECIPIENT" "[backup] WARN $STAMP: hub unreachable, export copy not refreshed" \
+    "The hub (${UNREACHABLE[*]}) did not answer over ssh; its control-plane export copy was not refreshed this run. The hub-only retry runs in the afternoon; the fleet digest reports the copy's age." || true
+  exit 0
 fi
 echo "all boxes backed up and mailed"
