@@ -27,13 +27,14 @@ asf "bench --site $SITE set-config pause_scheduler 1" >/dev/null
 apps=${DRILL_APPS:-}; if [ -z "$apps" ]; then for a in $WANT; do grep -qx $a "$B/sites/apps.txt" && apps="$apps $a"; done; fi
 for a in $apps; do step "install-app $a"; asf "bench --site $SITE install-app $a" >/dev/null || { echo "DRILL-FAILED: install-app $a"; exit 1; }; done
 step "seed"
-cp "$SEED" /tmp/demo-seed.py; chmod 644 /tmp/demo-seed.py
-asf "bench --site $SITE execute \"exec(open('/tmp/demo-seed.py').read(), {})\"" 2>&1 | tail -15 | tee /tmp/demo-seed.out
-grep -q "$READY" /tmp/demo-seed.out || { echo "DRILL-FAILED: the seed did not finish"; [ -n "${KEEP:-}" ] || { mysql -e "DROP DATABASE IF EXISTS \`$DB\`; DROP USER IF EXISTS '$DB'@'localhost';"; rm -rf "$B/sites/$SITE"; }; rm -f /tmp/demo-seed.py /tmp/demo-seed.out; exit 1; }
-first=$(grep "$READY" /tmp/demo-seed.out)
+SD=$(mktemp -d /tmp/demo-seed.XXXXXX); chown root:frappe "$SD"; chmod 0750 "$SD"; trap 'rm -rf "$SD"' EXIT
+install -m 0640 -o root -g frappe "$SEED" "$SD/seed.py"
+asf "bench --site $SITE execute \"exec(open('$SD/seed.py').read(), {})\"" 2>&1 | tail -15 | tee $SD/seed.out
+grep -q "$READY" $SD/seed.out || { echo "DRILL-FAILED: the seed did not finish"; [ -n "${KEEP:-}" ] || { mysql -e "DROP DATABASE IF EXISTS \`$DB\`; DROP USER IF EXISTS '$DB'@'localhost';"; rm -rf "$B/sites/$SITE"; }; true; exit 1; }
+first=$(grep "$READY" $SD/seed.out)
 step "seed again (idempotence)"
-asf "bench --site $SITE execute \"exec(open('/tmp/demo-seed.py').read(), {})\"" 2>&1 | tail -3 | tee /tmp/demo-seed.out
-second=$(grep "$READY" /tmp/demo-seed.out)
+asf "bench --site $SITE execute \"exec(open('$SD/seed.py').read(), {})\"" 2>&1 | tail -3 | tee $SD/seed.out
+second=$(grep "$READY" $SD/seed.out)
 [ "$first" = "$second" ] && echo "idempotent: same summary twice" || echo "DRILL-WARNING: the second run changed the summary"
 step "checks"
 echo "$COUNTS" | tr '|' '\n' | while read -r dt; do
@@ -49,5 +50,5 @@ step "teardown"
 mysql -e "DROP DATABASE IF EXISTS \`$DB\`; DROP USER IF EXISTS '$DB'@'localhost';"
 rm -rf "$B/sites/$SITE"
 fi
-rm -f /tmp/demo-seed.py /tmp/demo-seed.out
+true
 [ "$code" = 200 ] && echo "$login" | grep -q Logged && [ "$first" = "$second" ] && echo "DEMO-DRILL-OK total $(( $(date +%s) - t0 ))s" || echo "DEMO-DRILL-FAILED ping=$code login=$login"

@@ -27,10 +27,11 @@ for a in erpnext payments whatsapp hrms crm builder webshop pos_next hospitality
   step "install-app $a"; asf "bench --site $SITE install-app $a" >/dev/null || { echo "REBUILD-FAILED: install-app $a"; exit 1; }
 done
 step "seed"
-cp "$SEED" /tmp/demo-seed.py; chmod 644 /tmp/demo-seed.py
-asf "bench --site $SITE execute \"exec(open('/tmp/demo-seed.py').read(), {})\"" 2>&1 | tail -3 | tee /tmp/demo-seed.out
-grep -q "$READY" /tmp/demo-seed.out || { echo "REBUILD-FAILED: the seed did not finish"; rm -f /tmp/demo-seed.py /tmp/demo-seed.out; exit 1; }
-rm -f /tmp/demo-seed.py /tmp/demo-seed.out
+SD=$(mktemp -d /tmp/demo-seed.XXXXXX); chown root:frappe "$SD"; chmod 0750 "$SD"; trap 'rm -rf "$SD"' EXIT
+install -m 0640 -o root -g frappe "$SEED" "$SD/seed.py"
+asf "bench --site $SITE execute \"exec(open('$SD/seed.py').read(), {})\"" 2>&1 | tail -3 | tee $SD/seed.out
+grep -q "$READY" $SD/seed.out || { echo "REBUILD-FAILED: the seed did not finish"; true; exit 1; }
+true
 step "restart web and scheduler"
 systemctl restart frappe-bench-frappe-web.service frappe-bench-node-socketio.service frappe-bench-frappe-schedule.service 2>/dev/null || asf "bench restart"
 sleep 6; curl -s -m 20 -o /dev/null -w 'ping %{http_code}\n' http://localhost/erp/api/method/ping

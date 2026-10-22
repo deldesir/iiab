@@ -9,12 +9,21 @@ echo "=== $(date +%T) binary"
 id semaphore >/dev/null 2>&1 || useradd -r -m -d /var/lib/semaphore -s /usr/sbin/nologin semaphore
 install -d -o semaphore -g semaphore -m 0750 /var/lib/semaphore /var/lib/semaphore/tmp
 if ! /usr/local/bin/semaphore version 2>/dev/null | grep -q "$VER"; then
-  T=$(mktemp -d); curl -sL -o "$T/s.tgz" "https://github.com/semaphoreui/semaphore/releases/download/v$VER/semaphore_${VER}_linux_amd64.tar.gz"
-  tar -xzf "$T/s.tgz" -C "$T" semaphore && install -m 0755 "$T/semaphore" /usr/local/bin/semaphore && rm -rf "$T"
+  T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+  curl -fsSL -o "$T/s.tgz" "https://github.com/semaphoreui/semaphore/releases/download/v$VER/semaphore_${VER}_linux_amd64.tar.gz"
+  tar -xzf "$T/s.tgz" -C "$T" semaphore && install -m 0755 "$T/semaphore" /usr/local/bin/semaphore
 fi
 /usr/local/bin/semaphore version
 echo "=== $(date +%T) database on postgresql-iiab"
-DBPW=$(openssl rand -base64 30 | tr -d '/+=' | cut -c1-28)
+# A second run keeps the existing configuration: its encryption keys sign every stored access
+# key and session, and its database password must stay what the role has. Only a first run
+# generates them.
+if [ -f "$CONF" ]; then
+  DBPW=$(python3 -c "import json; print(json.load(open('$CONF'))['postgres']['pass'])")
+  echo "config exists: keeping keys and the database password"
+else
+  DBPW=$(openssl rand -base64 30 | tr -d '/+=' | cut -c1-28)
+fi
 if ! sudo -u postgres psql -tAc "select 1 from pg_roles where rolname='semaphore'" | grep -q 1; then
   sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE ROLE semaphore LOGIN PASSWORD '$DBPW'" >/dev/null
 else
@@ -23,9 +32,10 @@ fi
 sudo -u postgres psql -tAc "select 1 from pg_database where datname='semaphore'" | grep -q 1 || sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE semaphore OWNER semaphore" >/dev/null
 echo "=== $(date +%T) config"
 umask 077; install -d -m 0750 -o semaphore -g semaphore $CONF_DIR
-ADMPW=$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-22)
+ADMPW=$(grep -oE '^SEMAPHORE_ADMIN_PASSWORD=.*' $FLEET_CONF 2>/dev/null | cut -d= -f2- || true)
+[ -n "$ADMPW" ] || ADMPW=$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-22)
 k() { head -c 32 /dev/urandom | base64; }
-cat > $CONF <<JSON
+[ -f "$CONF" ] || cat > $CONF <<JSON
 {
   "postgres": { "host": "127.0.0.1:5432", "user": "semaphore", "pass": "$DBPW", "name": "semaphore", "options": { "sslmode": "disable" } },
   "dialect": "postgres",
