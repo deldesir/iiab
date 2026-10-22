@@ -21,7 +21,7 @@ T=$(mktemp -d /var/tmp/cp-import.XXXXXX); trap 'rm -rf "$T"' EXIT
 gpg --batch --quiet --passphrase-file "$PASS" -d "$BUNDLE" | tar -C "$T" -xf -
 cat "$T/MANIFEST.txt"
 echo "=== /etc/iiab + /var/lib/fleet"
-install -d -m 0750 /etc/iiab /var/lib/fleet
+install -d -m 0750 /etc/iiab; install -d -m 0755 /var/lib/fleet
 cp -an "$T/etc/iiab/." /etc/iiab/            # never overwrites this machine's own files
 rsync -a "$T/var/lib/fleet/" /var/lib/fleet/
 chmod 0640 /etc/iiab/fleet.yml; chmod 0600 /etc/iiab/fleet.conf

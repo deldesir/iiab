@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+"""Deliver the latest fleet digest through the gateway's admin notification path (the observer
+era's delivery; the hub uses `fleet digest --send`). Runs as the gateway's user from the
+gateway's environment; exit 1 when the notification was not delivered."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/iiab/ai-gateway")
+from app.graph.tools.email import notify_admin  # noqa: E402
+
+text = Path("/var/lib/fleet/latest-digest.txt").read_text().strip()
+sys.exit(0 if notify_admin("Fleet digest: " + text.splitlines()[0], text) else 1)

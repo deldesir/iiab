@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/fleet check --all
+# status follows the money, as its own step: the check itself changes nothing
+ExecStartPost=-/usr/local/sbin/fleet dunning --auto
 # through the gateway where one runs (fleet-digest.service), else through the fleet site's Email Account
 ExecStartPost=-/usr/local/sbin/fleet digest --send
-# a failing box is a finding, not a unit failure: keep the timer healthy
-SuccessExitStatus=1

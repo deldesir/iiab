@@ -5,4 +5,3 @@ After=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/fleet-agent report
-SuccessExitStatus=1

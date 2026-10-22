@@ -186,6 +186,26 @@ def require_targets(a) -> None:
         sys.exit("fleet: name the box(es) or pass --all (this command changes boxes)")
 
 
+MUTATING = {"check", "dunning", "upgrade", "rollback", "suspend", "resume", "offboard", "onboard", "rename", "hostname",
+            "authorize-key", "manifest", "deploy-agent", "deploy-watchdog", "agent-token", "reboot", "push", "vars"}
+
+
+_HELD: list = []   # lock handles kept open for the process's life
+
+
+def acquire_lock():
+    """One fleet command that writes at a time. Blocks (with a note) until the other one is done."""
+    import fcntl
+    STATE.mkdir(parents=True, exist_ok=True)
+    fh = open(STATE / ".lock", "w")
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("waiting: another fleet command holds the inventory", file=sys.stderr)
+        fcntl.flock(fh, fcntl.LOCK_EX)
+    return fh
+
+
 def select_boxes(inv: dict, ids: list[str], all_: bool) -> list[dict]:
     boxes = sorted(inv["boxes"], key=lambda b: (b["canary_rank"], b["id"]))
     if all_ or not ids:
@@ -231,11 +251,17 @@ def run_on(box: dict, cmd: str, timeout: int = 120) -> tuple[int, str]:
         argv = ["bash", "-c", cmd]
     else:
         argv = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", f"{box['ssh_user']}@{box['reach']['ssh']}", cmd]
-    try:
-        p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return 124, "timeout"
-    return p.returncode, (p.stdout + p.stderr).strip()
+    for attempt in (1, 2):
+        try:
+            p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return 124, "timeout"
+        if p.returncode == 255 and not box.get("local") and attempt == 1:
+            time.sleep(3)   # ssh itself failed (a blip, a key exchange, a busy sshd): one more try
+            continue
+        break
+    # a success returns stdout alone: an ssh warning on stderr must never end up in parsed output
+    return p.returncode, (p.stdout if p.returncode == 0 else p.stdout + p.stderr).strip()
 
 
 def scp_to(box: dict, src: Path, dest: str, mode: str = "0755") -> None:
@@ -828,7 +854,6 @@ def cmd_check(a, inv):
               f" domain {fmt_days(r.get('domain_days_left'))} ({r.get('domain_registrar') or '?'})")
         for x in r.get("findings", []):
             print(f"   {state(x['level'], 5)} {x['message']}")
-    apply_dunning(inv, results, apply=bool(inv.get("auto_suspend")))
     all_checks = latest_checks(inv)
     (STATE / "latest-digest.txt").write_text(build_digest(inv, all_checks) + "\n")
     os.chmod(STATE / "latest-digest.txt", 0o644)
@@ -839,7 +864,7 @@ def cmd_check(a, inv):
     warn = [r["id"] for r in results.values() if r["status"] == "WARN"]
     print(paint(f"CHECK-{'FAILED ' + ','.join(bad) if bad else 'OK'}", "red" if bad else "green")
           + ((" (warnings: " + ",".join(warn) + ")") if warn else ""))
-    return 1 if bad else 0
+    return 1 if (bad and a.strict) else 0   # the check ran: a finding is a finding, not a failed run (--strict for scripts)
 
 
 def cmd_digest(a, inv):
@@ -1270,9 +1295,10 @@ def cmd_dunning(a, inv):
         results[b["id"]] = res
         if res["findings"]:
             print(f"{label(b)}: {res['findings'][0]['message']}")
-    lines = apply_dunning(inv, results, apply=a.apply, quiet=True)
+    apply = a.apply or (a.auto and bool(inv.get("auto_suspend")))   # --auto: the timer's run, bound by the inventory's switch
+    lines = apply_dunning(inv, results, apply=apply, quiet=True)
     print("\n".join(lines) if lines else "nothing to change")
-    if a.apply:
+    if lines and (a.apply or a.auto):
         push(inv, quiet=True)
     return 0
 
@@ -1779,7 +1805,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="fleet", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list"); sub.add_parser("status"); sub.add_parser("tailnet")
-    p = sub.add_parser("check"); p.add_argument("ids", nargs="*"); p.add_argument("--all", action="store_true"); p.add_argument("--no-push", action="store_true")
+    p = sub.add_parser("check"); p.add_argument("ids", nargs="*"); p.add_argument("--all", action="store_true"); p.add_argument("--no-push", action="store_true"); p.add_argument("--strict", action="store_true", help="exit 1 when a box is CRIT or STALE")
     p = sub.add_parser("digest"); p.add_argument("--send", action="store_true")
     p = sub.add_parser("manifest"); ps = p.add_subparsers(dest="action", required=True)
     c = ps.add_parser("capture"); c.add_argument("--id", required=True); c.add_argument("--from", dest="from_box"); c.add_argument("--notes"); c.add_argument("--force", action="store_true")
@@ -1796,7 +1822,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("reboot"); p.add_argument("id", nargs="?"); p.add_argument("--all", action="store_true"); p.add_argument("--now", action="store_true")
     p = sub.add_parser("backup-pull"); p.add_argument("--dest")
     p = sub.add_parser("rollback"); p.add_argument("id"); p.add_argument("--release"); p.add_argument("--no-restore", action="store_true"); p.add_argument("--dry-run", action="store_true"); p.add_argument("--now", action="store_true")
-    p = sub.add_parser("dunning"); p.add_argument("--apply", action="store_true")
+    p = sub.add_parser("dunning"); p.add_argument("--apply", action="store_true"); p.add_argument("--auto", action="store_true", help="apply only when the inventory's auto_suspend is on (the nightly timer)")
     p = sub.add_parser("vars"); p.add_argument("action", choices=["pull", "diff", "show"]); p.add_argument("ids", nargs="*"); p.add_argument("--all", action="store_true")
     p = sub.add_parser("onboard"); p.add_argument("--host", required=True); p.add_argument("--business", required=True); p.add_argument("--alias", required=True)
     p.add_argument("--role", default="customer", choices=["customer", "till", "hub", "observer"]); p.add_argument("--owner", default="customer", choices=["customer", "self"])
@@ -1807,6 +1833,8 @@ def main(argv=None) -> int:
     p = sub.add_parser("hostname"); p.add_argument("id"); p.add_argument("--now", action="store_true")
     p = sub.add_parser("authorize-key"); p.add_argument("file"); p.add_argument("ids", nargs="*"); p.add_argument("--all", action="store_true"); p.add_argument("--check", action="store_true")
     a = ap.parse_args(argv)
+    if a.cmd in MUTATING:
+        _HELD.append(acquire_lock())   # held until exit: the nightly check and a console command never interleave their writes
     inv = load_inventory()
     return {"list": cmd_list, "status": cmd_status, "tailnet": cmd_tailnet, "check": cmd_check, "digest": cmd_digest, "manifest": cmd_manifest,
             "upgrade": cmd_upgrade, "suspend": cmd_suspend, "resume": cmd_resume, "offboard": cmd_offboard, "push": cmd_push,
