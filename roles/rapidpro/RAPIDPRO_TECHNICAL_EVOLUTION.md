@@ -77,7 +77,7 @@ A comparative audit against the **`legacy` branch** of the `deldesir/iiab` repos
     *   **Legacy Artifacts:** `/opt/iiab/iiab/roles/rapidpro/files/*.patch` (Phase 1 history).
 
 ### B. Android Layer (Target Deployment)
-*   **Context:** Android device accessing the environment via Termux/Proot (`100.64.0.14`).
+*   **Context:** Android device accessing the environment via Termux/Proot (`<hub-tailnet-address>`).
 *   **Key Paths:**
     *   **Binaries:** `/usr/local/bin` (Optimized native binaries).
     *   **Service Control:** `/usr/local/pdsm/services-available/*` (PDSM scripts using numerical prefixes `01-`, `02-`, etc., for ordered dependency startup).

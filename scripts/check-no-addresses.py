@@ -13,7 +13,7 @@ IPV4 = re.compile(r"(?<![\w.-])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?![\w.
 ALLOWED = re.compile(r"^(127\.|0\.0\.0\.0$|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|255\.|100\.64\.0\.0$|8\.8\.8\.8$|1\.1\.1\.1$)")
 NAMES = re.compile(r"novadah|\+509 ?\d{4} ?\d{4}|\b(garantie\.boutique|novadah\.net|malianova\.com|winndixie\.me|resistanceenergy\.app|michocell\.com)\b", re.I)
 SUFFIXES = {".yml", ".yaml", ".j2", ".md", ".sh", ".txt", ".conf", ".py", ".service", ".timer", ".json"}
-SKIP = ("demo-hotel-seed.py",)   # fictional guests with phone-shaped numbers
+SKIP = ("demo-hotel-seed.py", "check-no-addresses.py")   # fictional guests with phone-shaped numbers; this script's own patterns
 
 def files(args):
     for a in args:
@@ -36,6 +36,8 @@ for f in files(sys.argv[1:]):
     except OSError:
         continue
     for n, line in enumerate(text.splitlines(), 1):
+        if re.search(r"firmware|version", line, re.I):   # dotted version numbers look like addresses
+            continue
         for m in IPV4.finditer(line):
             if all(int(x) <= 255 for x in m.groups()) and not ALLOWED.match(m.group(0)):
                 bad.append(f"{f}:{n}: address {m.group(0)}")
