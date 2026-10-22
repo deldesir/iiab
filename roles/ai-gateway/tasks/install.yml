@@ -51,15 +51,20 @@
   become: yes
   become_user: "{{ ai_gateway_user }}"
 
-- name: Clone or Update AI Gateway repository
-  shell: |
-    if [ -d "{{ ai_gateway_dir }}/.git" ]; then
-      cd "{{ ai_gateway_dir }}" && git fetch origin && git reset --hard origin/{{ ai_gateway_repo_version }}
-    else
-      git clone --branch "{{ ai_gateway_repo_version }}" --origin origin "{{ ai_gateway_repo }}" "{{ ai_gateway_dir }}"
-    fi
+# The service runs from this working tree. A fast-forward to the wanted version is the only
+# change the role makes to it: a tree with local modifications stops the role (force: no) so
+# the operator sees them, instead of a reset --hard that used to discard them silently and
+# restart the service on every run.
+- name: Clone or fast-forward the AI Gateway repository
+  git:
+    repo: "{{ ai_gateway_repo }}"
+    dest: "{{ ai_gateway_dir }}"
+    version: "{{ ai_gateway_repo_version }}"
+    force: no
+    update: yes
   become: yes
   become_user: "{{ ai_gateway_user }}"
+  register: ai_gateway_git
   notify: restart ai-gateway
 
 - name: Set ownership of AI Gateway directory
