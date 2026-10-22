@@ -18,7 +18,9 @@ PW=$(python3 -c "import json; print(json.load(open('$CONF'))['db_password'])")
 HOST=$(python3 -c "import json; print(json.load(open('$CONF')).get('host_name',''))")
 cp -a "$CONF" "/var/lib/fleet/site_config.$SITE.before-rebuild.json"
 step "drop and recreate database $DB ($PROFILE)"
-mysql -e "DROP DATABASE IF EXISTS \`$DB\`; CREATE DATABASE \`$DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS '$DB'@'localhost' IDENTIFIED BY '$PW'; ALTER USER '$DB'@'localhost' IDENTIFIED BY '$PW'; GRANT ALL ON \`$DB\`.* TO '$DB'@'localhost'; FLUSH PRIVILEGES;" || { echo "REBUILD-FAILED: mysql"; exit 1; }
+mysql <<SQL || { echo "REBUILD-FAILED: mysql"; exit 1; }
+DROP DATABASE IF EXISTS \`$DB\`; CREATE DATABASE \`$DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS '$DB'@'localhost' IDENTIFIED BY '$PW'; ALTER USER '$DB'@'localhost' IDENTIFIED BY '$PW'; GRANT ALL ON \`$DB\`.* TO '$DB'@'localhost'; FLUSH PRIVILEGES;
+SQL
 step "new site"
 asf "bench new-site $SITE --admin-password demo1234 --db-name $DB --db-password '$PW' --no-setup-db --force" >/dev/null || { echo "REBUILD-FAILED: new-site"; exit 1; }
 [ -n "$HOST" ] && asf "bench --site $SITE set-config host_name '$HOST'" >/dev/null

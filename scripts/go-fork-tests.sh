@@ -98,6 +98,18 @@ fi
 # --- Postgres roles and databases --------------------------------------------------------------------------------
 psql_admin -c "SELECT 1" >/dev/null || die "postgresql-iiab not reachable on :5432"
 
+# The upstream suites hard-code their roles and password; the roles (one of them SUPERUSER, which
+# the test dump needs for CREATE EXTENSION) exist only while this script runs on the production
+# cluster: they are dropped on exit, success or not.
+drop_test_roles() {
+	for r in mailroom_test courier_test; do
+		psql_admin -c "DROP DATABASE IF EXISTS $r" >/dev/null 2>&1 || true
+		psql_admin -c "DROP ROLE IF EXISTS $r" >/dev/null 2>&1 || true
+	done
+	log "test roles dropped"
+}
+trap drop_test_roles EXIT
+
 if [[ $(psql_admin -c "SELECT 1 FROM pg_roles WHERE rolname = 'mailroom_test'") != 1 ]]; then
 	log "creating role mailroom_test (SUPERUSER: the test dump runs CREATE EXTENSION vector)"
 	psql_admin -c "CREATE ROLE mailroom_test LOGIN PASSWORD 'temba' SUPERUSER CREATEDB"

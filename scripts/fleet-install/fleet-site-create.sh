@@ -25,10 +25,12 @@ fi
 . "$CONF"
 asf() { sudo -u frappe -H bash -lc "cd $B && $*"; }
 echo "=== $(date +%T) database + user"
-mysql -e "CREATE DATABASE IF NOT EXISTS \`$DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+mysql <<SQL || { echo "SITE-FAILED: mysql"; exit 1; }
+CREATE DATABASE IF NOT EXISTS \`$DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS '$DB'@'localhost' IDENTIFIED BY '$FLEET_DB_PASSWORD';
 ALTER USER '$DB'@'localhost' IDENTIFIED BY '$FLEET_DB_PASSWORD';
-GRANT ALL ON \`$DB\`.* TO '$DB'@'localhost'; FLUSH PRIVILEGES;" || { echo "SITE-FAILED: mysql"; exit 1; }
+GRANT ALL ON \`$DB\`.* TO '$DB'@'localhost'; FLUSH PRIVILEGES;
+SQL
 echo "=== $(date +%T) new-site"
 if [ ! -f "$B/sites/$SITE/site_config.json" ]; then
   asf "bench new-site $SITE --admin-password '$FLEET_ADMIN_PASSWORD' --db-name $DB --db-password '$FLEET_DB_PASSWORD' --no-setup-db --force" || { echo "SITE-FAILED: new-site"; exit 1; }

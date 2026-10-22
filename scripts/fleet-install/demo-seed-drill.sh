@@ -20,7 +20,9 @@ asf() { sudo -u frappe -H bash -lc "cd $B && $*"; }
 t0=$(date +%s); step() { printf '\n=== %s (+%ss) %s\n' "$(date +%T)" "$(( $(date +%s) - t0 ))" "$*"; }
 PW=$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)
 step "scratch database + site ($PROFILE)"
-mysql -e "DROP DATABASE IF EXISTS \`$DB\`; CREATE DATABASE \`$DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS '$DB'@'localhost' IDENTIFIED BY '$PW'; ALTER USER '$DB'@'localhost' IDENTIFIED BY '$PW'; GRANT ALL ON \`$DB\`.* TO '$DB'@'localhost'; FLUSH PRIVILEGES;" || { echo "DRILL-FAILED: mysql"; exit 1; }
+mysql <<SQL || { echo "DRILL-FAILED: mysql"; exit 1; }
+DROP DATABASE IF EXISTS \`$DB\`; CREATE DATABASE \`$DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS '$DB'@'localhost' IDENTIFIED BY '$PW'; ALTER USER '$DB'@'localhost' IDENTIFIED BY '$PW'; GRANT ALL ON \`$DB\`.* TO '$DB'@'localhost'; FLUSH PRIVILEGES;
+SQL
 rm -rf "$B/sites/$SITE"
 asf "bench new-site $SITE --admin-password 'drill-initial' --db-name $DB --db-password '$PW' --no-setup-db --force" >/dev/null || { echo "DRILL-FAILED: new-site"; exit 1; }
 asf "bench --site $SITE set-config pause_scheduler 1" >/dev/null

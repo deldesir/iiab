@@ -28,7 +28,8 @@ chmod 0640 /etc/iiab/fleet.yml; chmod 0600 /etc/iiab/fleet.conf
 TAILIP=$(tailscale ip -4 2>/dev/null || hostname -I | cut -d' ' -f1)
 sed -i "s#^FLEET_PUBLIC_URL=.*#FLEET_PUBLIC_URL=http://$TAILIP:8931#; s#^SEMAPHORE_URL=.*#SEMAPHORE_URL=http://$TAILIP:3002#" /etc/iiab/fleet.conf
 echo "=== fleet site"
-bash "$R/scripts/fleet-install/fleet-site-create.sh" || true   # creates DB/user/site with a fresh password (kept in fleet.conf)
+WARN=0; warn() { echo "IMPORT-WARN: $*" >&2; WARN=1; }
+bash "$R/scripts/fleet-install/fleet-site-create.sh" || warn "fleet site creation failed"   # creates DB/user/site with a fresh password (kept in fleet.conf)
 db=$(ls "$T"/site/*-database.sql.gz | head -1)
 gunzip -c "$db" | mysql "$(python3 -c "import json;print(json.load(open('$B/sites/$SITE/site_config.json'))['db_name'])")"
 for x in files private-files; do f=$(ls "$T"/site/*-$x.tar 2>/dev/null | head -1); [ -n "$f" ] && tar -xf "$f" -C "$B/sites/$SITE/" && chown -R frappe:frappe "$B/sites/$SITE"; done
@@ -51,10 +52,10 @@ if [ -f "$T/semaphore/config.json" ]; then
     (cd "$R" && ./runrole postgresql) >"$T/postgresql-role.log" 2>&1 || { tail -n 20 "$T/postgresql-role.log"; echo "postgresql role failed"; exit 1; }
     systemctl is-active -q postgresql-iiab || { echo "postgresql-iiab still not running"; exit 1; }
   fi
-  bash "$R/scripts/fleet-install/semaphore-install.sh" || true
+  bash "$R/scripts/fleet-install/semaphore-install.sh" || warn "console install failed"
   systemctl stop semaphore
   sudo -u postgres psql -c "DROP DATABASE IF EXISTS semaphore" >/dev/null; sudo -u postgres psql -c "CREATE DATABASE semaphore OWNER semaphore" >/dev/null
-  sudo -u postgres pg_restore -d semaphore < "$T/semaphore/semaphore.pgdump" || true   # via stdin: the postgres user cannot read root's temp dir
+  sudo -u postgres pg_restore -d semaphore < "$T/semaphore/semaphore.pgdump" || warn "console database restore reported errors"   # via stdin: the postgres user cannot read root's temp dir
   python3 - "$T/semaphore/config.json" /etc/semaphore/config.json "$TAILIP" <<'PY'
 import json, sys
 old, new = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
