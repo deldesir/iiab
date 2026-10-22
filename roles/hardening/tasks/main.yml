@@ -6,7 +6,7 @@
     src: 00-hardening.conf
     dest: /etc/ssh/sshd_config.d/00-hardening.conf
     mode: '0644'
-    validate: 'sshd -t -f /etc/ssh/sshd_config'
+    validate: '/usr/sbin/sshd -t -f %s'   # Ansible requires %s: the drop-in is checked on its own before it lands
   become: yes
   register: sshd_hardening
 
@@ -35,6 +35,13 @@
 # (ufw and the like) may touch iptables on a box: the generator flushes and rebuilds.
 
 # ---------------------------------------------------------------- boot network wait
+- name: Drop-in directory for systemd-networkd-wait-online
+  file:
+    path: /etc/systemd/system/systemd-networkd-wait-online.service.d
+    state: directory
+    mode: '0755'
+  become: yes
+
 - name: Wait for any configured link at boot, not every interface
   copy:
     src: wait-online-any.conf

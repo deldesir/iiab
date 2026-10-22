@@ -5,5 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+# git finds root's credential helper (for the private repositories) through HOME
+Environment=HOME=/root
 ExecStart=/usr/local/sbin/fleet-mirror
 Nice=10
