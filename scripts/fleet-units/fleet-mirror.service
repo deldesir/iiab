@@ -1,0 +1,9 @@
+[Unit]
+Description=Mirror the repositories the fleet deploys from
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/fleet-mirror
+Nice=10

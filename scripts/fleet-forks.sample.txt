@@ -1,0 +1,26 @@
+# Repositories the fleet deploys from: one owner/repo per line. Copy to /etc/iiab/fleet-forks.txt
+# on the observer and complete it with the private ones (the training kits, the records, the
+# fleet site app) and the storefront repositories; the file is private because names are.
+deldesir/iiab
+deldesir/iiab-admin-console
+deldesir/iiab-factory
+deldesir/frappe
+deldesir/erpnext
+deldesir/hrms
+deldesir/crm
+deldesir/builder
+deldesir/webshop
+frappe/payments
+deldesir/POSNext
+deldesir/hospitality_pms
+deldesir/rapidpro
+deldesir/mailroom
+deldesir/courier
+deldesir/wuzapi
+deldesir/gateway
+deldesir/rivebot
+deldesir/mempalace
+deldesir/hermes-agent
+deldesir/email-bridge
+deldesir/organized-app
+deldesir/organized-backend
