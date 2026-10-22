@@ -1,5 +1,0 @@
-# Hardening role: key-only SSH, brute-force banning, a host firewall and a boot that does not
-# wait for every interface.
-hardening_firewall: True                 # set False on a machine that routes VMs (a lab host)
-hardening_tailnet_iface: tailscale0      # everything is allowed in on the tailnet interface
-hardening_public_tcp_ports: [22, 80, 443]   # the only public faces; every other listener is reached through nginx or the tailnet

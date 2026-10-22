@@ -30,38 +30,9 @@
     state: started
   become: yes
 
-# ---------------------------------------------------------------- host firewall
-# Public faces are ssh, http and https. Application listeners (the wiki server, the library,
-# the bench's socket server) are proxied by nginx or reached over the tailnet; they must not be
-# reachable on the public address. The tailnet interface is trusted as a whole.
-
-- name: Install ufw
-  apt:
-    name: ufw
-    state: present
-  become: yes
-  when: hardening_firewall
-
-- name: Firewall policy and rules (ufw itself skips rules that already exist)
-  command: "ufw {{ item }}"
-  loop: "{{ ['default deny incoming', 'default allow outgoing', 'allow in on ' ~ hardening_tailnet_iface]
-            + (hardening_public_tcp_ports | map('regex_replace', '^(.*)$', 'allow \\1/tcp') | list) }}"
-  register: ufw_rules
-  changed_when: "'Skipping' not in ufw_rules.stdout and 'already' not in ufw_rules.stdout"
-  become: yes
-  when: hardening_firewall
-
-- name: Firewall status
-  command: ufw status
-  register: ufw_status
-  changed_when: false
-  become: yes
-  when: hardening_firewall
-
-- name: Enable the firewall (ssh is allowed above, so this cannot lock the operator out)
-  command: ufw --force enable
-  become: yes
-  when: "hardening_firewall and 'Status: active' not in ufw_status.stdout"
+# The host firewall is IIAB's own: /usr/bin/iiab-gen-iptables (roles/network), driven by
+# ports_externally_visible in local_vars.yml (2 on the fleet: ssh, http, https). Nothing else
+# (ufw and the like) may touch iptables on a box: the generator flushes and rebuilds.
 
 # ---------------------------------------------------------------- boot network wait
 - name: Wait for any configured link at boot, not every interface
