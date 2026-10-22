@@ -15,7 +15,9 @@ echo "dump: $DUMP ($(du -h "$DUMP" | cut -f1))"
 case "$DUMP" in *-enc.sql.gz) echo "DRILL-FAILED: this box's dumps are encrypted with its own key; drill needs the site's backup_encryption_key"; exit 1;; esac
 PW=$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24); APW=$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-16)
 step "scratch database + user"
-mysql -e "DROP DATABASE IF EXISTS \`$DB\`; CREATE DATABASE \`$DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS '$DB'@'localhost' IDENTIFIED BY '$PW'; ALTER USER '$DB'@'localhost' IDENTIFIED BY '$PW'; GRANT ALL ON \`$DB\`.* TO '$DB'@'localhost'; FLUSH PRIVILEGES;" || { echo "DRILL-FAILED: mysql"; exit 1; }
+mysql <<SQL || { echo "DRILL-FAILED: mysql"; exit 1; }
+DROP DATABASE IF EXISTS \`$DB\`; CREATE DATABASE \`$DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS '$DB'@'localhost' IDENTIFIED BY '$PW'; ALTER USER '$DB'@'localhost' IDENTIFIED BY '$PW'; GRANT ALL ON \`$DB\`.* TO '$DB'@'localhost'; FLUSH PRIVILEGES;
+SQL
 step "scratch site (scheduler paused before any data lands)"
 rm -rf "$B/sites/$SITE"
 asf "bench new-site $SITE --admin-password '$APW' --db-name $DB --db-password '$PW' --no-setup-db --force" >/dev/null || { echo "DRILL-FAILED: new-site"; exit 1; }

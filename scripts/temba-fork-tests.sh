@@ -46,6 +46,7 @@ print(re.search(r'"PASSWORD":\s*"([^"]*)"', db).group(1))
 PY
 )
 
+umask 077
 cat > temba/settings_local.py <<PY
 # written by iiab/scripts/temba-fork-tests.sh - the test settings for this box, ignored by git
 from .settings_dev import *  # noqa

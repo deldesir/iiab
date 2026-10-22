@@ -25,9 +25,9 @@ else
   DBPW=$(openssl rand -base64 30 | tr -d '/+=' | cut -c1-28)
 fi
 if ! sudo -u postgres psql -tAc "select 1 from pg_roles where rolname='semaphore'" | grep -q 1; then
-  sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE ROLE semaphore LOGIN PASSWORD '$DBPW'" >/dev/null
+  printf "CREATE ROLE semaphore LOGIN PASSWORD '%s'\n" "$DBPW" | sudo -u postgres psql -v ON_ERROR_STOP=1 >/dev/null
 else
-  sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER ROLE semaphore WITH PASSWORD '$DBPW'" >/dev/null
+  printf "ALTER ROLE semaphore WITH PASSWORD '%s'\n" "$DBPW" | sudo -u postgres psql -v ON_ERROR_STOP=1 >/dev/null
 fi
 sudo -u postgres psql -tAc "select 1 from pg_database where datname='semaphore'" | grep -q 1 || sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE semaphore OWNER semaphore" >/dev/null
 echo "=== $(date +%T) config"
