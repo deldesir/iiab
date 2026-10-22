@@ -23,7 +23,7 @@ if [ "${1:-}" = "--check" ]; then
   for r in $repos; do
     d="$MIRROR_DIR/${r##*/}.git"
     if [ ! -d "$d" ]; then echo "MISSING $r"; bad=$((bad+1)); continue; fi
-    age=$(( $(date +%s) - $(stat -c %Y "$d/FETCH_HEAD" 2>/dev/null || echo 0) ))
+    age=$(( $(date +%s) - $(stat -c %Y "$d/.mirrored" 2>/dev/null || echo 0) ))
     [ $age -gt 100000 ] && { echo "STALE $r ($((age/3600))h)"; bad=$((bad+1)); }
   done
   [ $bad -eq 0 ] && echo "MIRROR-OK $(echo "$repos" | wc -l) repositories" || echo "MIRROR-CHECK: $bad problem(s)"
@@ -35,9 +35,9 @@ ok=0; failed=0
   for r in $repos; do
     d="$MIRROR_DIR/${r##*/}.git"
     if [ -d "$d" ]; then
-      if git -C "$d" remote update --prune >/dev/null 2>&1; then echo "updated $r"; ok=$((ok+1)); else echo "FAILED update $r"; failed=$((failed+1)); fi
+      if git -C "$d" remote update --prune >/dev/null 2>&1; then echo "updated $r"; touch "$d/.mirrored"; ok=$((ok+1)); else echo "FAILED update $r"; failed=$((failed+1)); fi
     else
-      if git clone -q --mirror "https://github.com/$r.git" "$d" 2>/dev/null; then echo "cloned $r"; ok=$((ok+1)); else echo "FAILED clone $r"; failed=$((failed+1)); fi
+      if git clone -q --mirror "https://github.com/$r.git" "$d" 2>/dev/null; then echo "cloned $r"; touch "$d/.mirrored"; ok=$((ok+1)); else echo "FAILED clone $r"; failed=$((failed+1)); fi
     fi
   done
   echo "MIRROR-DONE ok=$ok failed=$failed"
