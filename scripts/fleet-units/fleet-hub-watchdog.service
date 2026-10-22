@@ -5,4 +5,3 @@ After=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/fleet-hub-watchdog
-SuccessExitStatus=1

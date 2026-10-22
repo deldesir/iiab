@@ -9,4 +9,4 @@ User=iiab-admin
 WorkingDirectory=/opt/iiab/ai-gateway
 EnvironmentFile=/opt/iiab/ai-gateway/.env
 EnvironmentFile=-/opt/iiab/ai-gateway/.env.local
-ExecStart=/opt/iiab/ai-gateway/.venv/bin/python -c "import sys; sys.path.insert(0, '/opt/iiab/ai-gateway'); from app.graph.tools.email import notify_admin; t = open('/var/lib/fleet/latest-digest.txt').read().strip(); sys.exit(0 if notify_admin('Fleet digest: ' + t.splitlines()[0], t) else 1)"
+ExecStart=/opt/iiab/ai-gateway/.venv/bin/python /usr/local/sbin/fleet-digest-send
