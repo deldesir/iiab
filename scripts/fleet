@@ -1299,7 +1299,7 @@ def agent_token_for(box_id: str) -> str:
 
 def agent_conf_text(box: dict) -> str:
     conf = read_conf(PUSH_CONF)
-    hub = conf.get("FLEET_PUBLIC_URL") or "http://100.64.0.18:8931"
+    hub = conf.get("FLEET_PUBLIC_URL") or sys.exit("fleet: FLEET_PUBLIC_URL is not set in the fleet configuration")
     kuma = f"{conf['KUMA_URL'].rstrip('/')}/api/push/{push_token_for(box['id'], conf['KUMA_PUSH_TOKEN'])}" if conf.get("KUMA_URL") and conf.get("KUMA_PUSH_TOKEN") else ""
     return (f"# fleet-agent configuration for {box['id']} (0600). Reports go to the fleet site on the hub.\n"
             f"FLEET_BOX_ID={box['id']}\nFLEET_HUB_URL={hub}\nFLEET_AGENT_TOKEN={agent_token_for(box['id'])}\n"

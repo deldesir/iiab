@@ -186,6 +186,7 @@ gui_port: 80    # 2021-08-17: For iptables.  And #2811 dreams of HTTPS/443 ?
 #ports_externally_visible: 0    # none
 #ports_externally_visible: 1    # ssh only
 #ports_externally_visible: 2    # ssh + http-or-https (for Admin Console's box.lan/admin too)
+tailnet_cidr: 100.64.0.0/10    # the tailnet's address range (CGNAT space); nginx allow-lists for admin faces use it
 ports_externally_visible: 2     # ssh + http-or-https only (services proxied via nginx)
 #ports_externally_visible: 4    # ssh + http-or-https + common IIAB services + Samba
 #ports_externally_visible: 5    # all but databases

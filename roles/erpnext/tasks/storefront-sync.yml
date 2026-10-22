@@ -8,6 +8,12 @@
     fail_msg: "ERPNext is not enabled, skipping storefront synchronization."
     quiet: yes
 
+- name: A storefront repository must be named (storefront_repo in local_vars)
+  assert:
+    that: storefront_repo | default('') | length > 0
+    fail_msg: "storefront_repo is empty: set the customer's storefront repository in local_vars.yml"
+    quiet: yes
+
 - name: Install Git if not present
   apt:
     name: git
@@ -44,8 +50,8 @@
 
 - name: Clone or pull storefront repository
   git:
-    repo: "{{ storefront_repo | default('https://github.com/deldesir/novadah-storefront.git') }}"
-    dest: "{{ storefront_dir | default('/opt/iiab/novadah-storefront') }}"
+    repo: "{{ storefront_repo }}"
+    dest: "{{ storefront_dir }}"
     version: "{{ storefront_branch | default('main') }}"
     force: yes
 
@@ -69,7 +75,7 @@
 
 - name: Write storefront config.json
   copy:
-    dest: "{{ storefront_dir | default('/opt/iiab/novadah-storefront') }}/config.json"
+    dest: "{{ storefront_dir }}/config.json"
     content: |
       {
         "siteUrl": "http://{{ erpnext_site_name }}:8000",
@@ -83,10 +89,10 @@
   # (force: yes above) has no .last_modified files, and without --force the CLI
   # skips every item ("No .last_modified file found ... Skipping update"),
   # pushing nothing. --publish then promotes the pushed draft_blocks to the live
-  # `blocks` field so the storefront actually renders Novadah's design.
+  # `blocks` field so the storefront actually renders the customer's design.
   shell: builder push --force --publish
   args:
-    chdir: "{{ storefront_dir | default('/opt/iiab/novadah-storefront') }}"
+    chdir: "{{ storefront_dir }}"
   register: push_result
   until: push_result is succeeded
   retries: 3

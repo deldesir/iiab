@@ -99,7 +99,7 @@ def main() -> int:
     args = parse_args()
     CONF = Path(args.conf)
     conf = read_kv(CONF)
-    url = args.url or conf.get("KUMA_URL") or "http://100.64.0.18:3001"
+    url = args.url or conf.get("KUMA_URL") or sys.exit("fleet-kuma-seed: pass --url or set KUMA_URL in the fleet configuration")
     user = conf.get("KUMA_ADMIN_USER") or "fleet"
     pw = conf.get("KUMA_ADMIN_PASSWORD")
     if not pw:

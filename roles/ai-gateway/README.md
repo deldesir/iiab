@@ -34,7 +34,7 @@ Override in `/etc/iiab/local_vars.yml`:
 ```yaml
 ai_gateway_enabled: True
 ai_gateway_llm_model: "openai/custom_ai"
-ai_gateway_admin_phone: "+50912345678"
+ai_gateway_admin_phone: "+15550100000"   # your number, international format
 ```
 
 Then run:
