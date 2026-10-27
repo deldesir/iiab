@@ -54,7 +54,7 @@ ai_gateway_app: "app.api.app:create_app"
 # OpenAI-compatible client at ai_gateway_openai_api_base.
 ai_gateway_hermes_provider: "{{ 'gemini' if (ai_gateway_gemini_api_key | default('')) else '' }}"
 # Set in /etc/iiab/local_vars.yml (secret; defined in exactly one place).
-ai_gateway_gemini_api_key: ""
+ai_gateway_gemini_api_key: ""   # no default: set it in /etc/iiab/local_vars.yml; the role refuses to run while it is empty
 ai_gateway_openai_api_base: "http://localhost:4000"    # any OpenAI-compatible endpoint (fallback path only)
 ai_gateway_openai_api_key: "change-me"
 ai_gateway_llm_model: "gemini-3.5-flash"

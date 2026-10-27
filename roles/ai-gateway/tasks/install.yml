@@ -1,4 +1,12 @@
 ---
+- name: The model key must be set in local_vars when the gateway is enabled
+  assert:
+    that:
+      - ai_gateway_gemini_api_key | default('') | length > 0
+    fail_msg: "ai_gateway_gemini_api_key is empty - set it in /etc/iiab/local_vars.yml"
+    quiet: true
+  when: ai_gateway_enabled | default(false) | bool
+
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1

@@ -480,7 +480,7 @@ rapidpro_install: False
 rapidpro_enabled: False
 rapidpro_db_name: "temba"
 rapidpro_db_user: "temba"
-rapidpro_db_pass: "temba"
+rapidpro_db_pass: ""   # no default: set it in /etc/iiab/local_vars.yml; the role refuses to run while it is empty
 admin_email: "admin@box.lan"
 admin_password: "changeme"
 rapidpro_url: /rp
