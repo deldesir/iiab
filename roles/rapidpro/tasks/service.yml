@@ -4,34 +4,34 @@
 # --- Systemd path (standard Linux) ---
 
 - name: Systemd - Ensure Infrastructure Services are Running
-  service:
+  ansible.builtin.service:
     name: "{{ item }}"
     state: started
-    enabled: yes
+    enabled: true
   loop:
     - postgresql
     - "{{ valkey_service_name }}"
-  become: yes
+  become: true
   when: not is_proot
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Systemd - Force Restart RapidPro Services (Fresh Start)
-  service:
+  ansible.builtin.service:
     name: "{{ item }}"
     state: restarted
-    enabled: yes
+    enabled: true
   loop:
     - rapidpro-gunicorn
     - rapidpro-courier
     - rapidpro-mailroom
     - rapidpro-celery
-  become: yes
+  become: true
   when: not is_proot
 
 # --- pdsm path (proot/Android) ---
 
 - name: pdsm - Enable RapidPro Services (Android/Proot)
-  command: /usr/local/bin/pdsm enable {{ item }}
+  ansible.builtin.command: /usr/local/bin/pdsm enable {{ item }}
   loop:
     - postgresql
     - valkey
@@ -39,27 +39,27 @@
     - rapidpro-courier
     - rapidpro-mailroom
     - rapidpro-celery
-  become: yes
+  become: true
   when: is_proot
 
 - name: pdsm - Start Infrastructure Services (Android/Proot)
-  command: /usr/local/bin/pdsm start {{ item }}
+  ansible.builtin.command: /usr/local/bin/pdsm start {{ item }}
   loop:
     - postgresql
     - valkey
   register: pdsm_infra_start
   changed_when: "'already running' not in pdsm_infra_start.stdout"
-  become: yes
+  become: true
   when: is_proot
 
 - name: Wait for Database Ready (All Platforms)
-  wait_for:
+  ansible.builtin.wait_for:
     port: 5432
     host: 127.0.0.1
     timeout: 300
 
 - name: pdsm - Start RapidPro Application Services (Android/Proot)
-  command: /usr/local/bin/pdsm start {{ item }}
+  ansible.builtin.command: /usr/local/bin/pdsm start {{ item }}
   loop:
     - rapidpro-gunicorn
     - rapidpro-courier
@@ -67,5 +67,5 @@
     - rapidpro-celery
   register: pdsm_app_start
   changed_when: "'already running' not in pdsm_app_start.stdout"
-  become: yes
+  become: true
   when: is_proot

@@ -1,22 +1,23 @@
+---
 # SSL enable/disable tasks — controls certbot auto-renewal timer
 
 - name: Enable & Start certbot.timer for automatic certificate renewal
-  systemd:
+  ansible.builtin.systemd:
     name: certbot.timer
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   when:
     - ssl_enabled | bool
     - iiab_ssl_certbot_auto_renew | default(True) | bool
     - not is_proot
 
 - name: Disable & Stop certbot.timer
-  systemd:
+  ansible.builtin.systemd:
     name: certbot.timer
-    enabled: no
+    enabled: false
     state: stopped
   when:
     - not ssl_enabled | bool or not iiab_ssl_certbot_auto_renew | default(True) | bool
     - not is_proot
-  ignore_errors: yes
+  ignore_errors: true

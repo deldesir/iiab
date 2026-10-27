@@ -5,70 +5,70 @@
 # Migrate workspace from old location (/opt/iiab/siyuan-server/workspace)
 # to /library/siyuan if notebooks exist at the old path
 - name: Check for legacy workspace at old location
-  stat:
+  ansible.builtin.stat:
     path: "{{ siyuan_dir }}/workspace/data"
   register: old_workspace
 
 - name: Check if new workspace already has data
-  stat:
+  ansible.builtin.stat:
     path: "{{ siyuan_workspace }}/data"
   register: new_workspace
 
 - name: Migrate legacy workspace to {{ siyuan_workspace }}
-  shell: |
+  ansible.builtin.shell: |
     mkdir -p {{ siyuan_workspace }}
     cp -a {{ siyuan_dir }}/workspace/* {{ siyuan_workspace }}/
     mv {{ siyuan_dir }}/workspace {{ siyuan_dir }}/workspace.migrated
-  become: yes
+  become: true
   when:
     - old_workspace.stat.exists | default(false)
     - not (new_workspace.stat.exists | default(false))
 
 - name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: df -B1 --output=used / | tail -1
   register: df1
   changed_when: false
 
 - name: Create SiYuan directories
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: "{{ siyuan_user }}"
     group: "{{ siyuan_user }}"
-    mode: '0755'
-  become: yes
+    mode: "0755"
+  become: true
   loop:
     - "{{ siyuan_dir }}"
     - "{{ siyuan_workspace }}"
 
 - name: Download SiYuan v{{ siyuan_version }} release tarball (checksum-verified)
-  get_url:
+  ansible.builtin.get_url:
     url: "https://github.com/siyuan-note/siyuan/releases/download/v{{ siyuan_version }}/siyuan-{{ siyuan_version }}-{{ siyuan_arch }}.tar.gz"
     dest: "/tmp/siyuan-{{ siyuan_version }}.tar.gz"
     checksum: "sha256:https://github.com/siyuan-note/siyuan/releases/download/v{{ siyuan_version }}/SHA256SUMS.txt"
-    mode: '0644'
+    mode: "0644"
   register: siyuan_download
   retries: 3
   delay: 5
   until: siyuan_download is succeeded
-  become: yes
+  become: true
 
 # The 3.x data-format upgrades are ONE-WAY: snapshot the workspace before
 # replacing the kernel so a bad upgrade is recoverable.
 - name: Snapshot workspace before upgrading an existing install
-  shell: >
+  ansible.builtin.shell: >
     tar -czf "/library/backups/siyuan-pre-{{ siyuan_version }}-$(date +%F).tar.gz"
     --exclude='temp' -C "{{ siyuan_workspace | dirname }}" "{{ siyuan_workspace | basename }}"
   args:
     creates: "/library/backups/siyuan-pre-{{ siyuan_version }}-*.tar.gz"
-  become: yes
+  become: true
   when: siyuan_installed is defined
 
 - name: Stop SiYuan before replacing the kernel binary
-  systemd:
+  ansible.builtin.systemd:
     name: siyuan
     state: stopped
-  become: yes
+  become: true
   failed_when: false
   when: siyuan_installed is defined
 
@@ -81,68 +81,68 @@
 #   changelogs/           — release notes
 
 - name: Extract SiYuan server resources from tarball
-  shell: >
+  ansible.builtin.shell: >
     tar xzf "/tmp/siyuan-{{ siyuan_version }}.tar.gz"
     --strip-components=2
     -C "{{ siyuan_dir }}"
     "siyuan-{{ siyuan_version }}-{{ siyuan_arch }}/resources"
-  become: yes
+  become: true
 
 - name: Make SiYuan kernel binary executable
-  file:
+  ansible.builtin.file:
     path: "{{ siyuan_dir }}/kernel/SiYuan-Kernel"
-    mode: '0755'
-  become: yes
+    mode: "0755"
+  become: true
 
 - name: Record installed version marker
-  copy:
+  ansible.builtin.copy:
     content: "{{ siyuan_version }}\n"
     dest: "{{ siyuan_dir }}/VERSION"
-    mode: '0644'
-  become: yes
+    mode: "0644"
+  become: true
 
 - name: Clean up tarball
-  file:
+  ansible.builtin.file:
     path: "/tmp/siyuan-{{ siyuan_version }}.tar.gz"
     state: absent
-  become: yes
+  become: true
 
 - name: Set ownership of SiYuan directory
-  file:
+  ansible.builtin.file:
     path: "{{ siyuan_dir }}"
     owner: "{{ siyuan_user }}"
     group: "{{ siyuan_user }}"
-    recurse: yes
+    recurse: true
     state: directory
-  become: yes
+  become: true
 
 - name: Install SiYuan secrets env file (auth code out of the unit file)
-  template:
+  ansible.builtin.template:
     src: siyuan.env.j2
     dest: "{{ siyuan_dir }}/.env"
     owner: "{{ siyuan_user }}"
     group: "{{ siyuan_user }}"
-    mode: '0600'
-  become: yes
+    mode: "0600"
+  become: true
 
 - name: Install SiYuan systemd service
-  template:
+  ansible.builtin.template:
     src: siyuan.service.j2
     dest: /etc/systemd/system/siyuan.service
-    mode: '0644'
-  become: yes
+    mode: "0644"
+  become: true
 
 - name: Ensure SiYuan workspace conf directory exists
-  file:
+  ansible.builtin.file:
     path: "{{ siyuan_workspace }}/conf"
     state: directory
     owner: "{{ siyuan_user }}"
     group: "{{ siyuan_user }}"
-    mode: '0755'
-  become: yes
+    mode: "0755"
+  become: true
 
 - name: Set SiYuan API token in workspace conf
-  shell: |
+  ansible.builtin.shell: |
     python3 -c "
     import json, os
     conf_path = '{{ siyuan_workspace }}/conf/conf.json'
@@ -154,30 +154,30 @@
     with open(conf_path, 'w') as f:
         json.dump(conf, f, indent=2)
     "
-  become: yes
+  become: true
   become_user: "{{ siyuan_user }}"
   when: siyuan_api_token | length > 0
 
 # RECORD SiYuan AS INSTALLED
 
 - name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: df -B1 --output=used / | tail -1
   register: df2
   changed_when: false
 
 - name: Add 'siyuan_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-  ini_file:
+  community.general.ini_file:
     path: "{{ iiab_ini_file }}"
     section: siyuan
     option: siyuan_disk_usage
     value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'siyuan_installed: True'"
-  set_fact:
-    siyuan_installed: True
+  ansible.builtin.set_fact:
+    siyuan_installed: true
 
 - name: "Add 'siyuan_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: "{{ iiab_state_file }}"
-    regexp: '^siyuan_installed'
-    line: 'siyuan_installed: True'
+    regexp: "^siyuan_installed"
+    line: "siyuan_installed: True"

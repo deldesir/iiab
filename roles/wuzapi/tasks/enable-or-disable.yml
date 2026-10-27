@@ -1,18 +1,18 @@
 ---
 - name: Enable & Restart 'wuzapi' systemd service, if wuzapi_enabled
-  systemd:
+  ansible.builtin.systemd:
     name: wuzapi
-    daemon_reload: yes
-    enabled: yes
+    daemon_reload: true
+    enabled: true
     state: restarted
   when:
     - wuzapi_enabled
     - not is_proot
 
 - name: Disable & Stop 'wuzapi' systemd service, if not wuzapi_enabled
-  systemd:
+  ansible.builtin.systemd:
     name: wuzapi
-    enabled: no
+    enabled: false
     state: stopped
   when:
     - not wuzapi_enabled
@@ -24,25 +24,24 @@
     - is_proot
   block:
     - name: pdsm - Enable wuzapi
-      command: /usr/local/bin/pdsm enable wuzapi
-
+      ansible.builtin.command: /usr/local/bin/pdsm enable wuzapi
     - name: pdsm - Start wuzapi
-      command: /usr/local/bin/pdsm start wuzapi
+      ansible.builtin.command: /usr/local/bin/pdsm start wuzapi
       register: pdsm_wuzapi_start
       changed_when: "'already running' not in pdsm_wuzapi_start.stdout"
 
 - name: Configure Nginx for Wuzapi, if wuzapi_enabled
-  template:
+  ansible.builtin.template:
     src: wuzapi-nginx.conf.j2
     dest: /etc/nginx/conf.d/wuzapi.conf
-  become: yes
+  become: true
   when: wuzapi_enabled
   notify: reload nginx
 
 - name: Remove Nginx config for Wuzapi, if not wuzapi_enabled
-  file:
+  ansible.builtin.file:
     path: /etc/nginx/conf.d/wuzapi.conf
     state: absent
-  become: yes
+  become: true
   when: not wuzapi_enabled
   notify: reload nginx

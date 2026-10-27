@@ -2,7 +2,7 @@
 # Install tasks for ERPNext
 
 - name: Does the site exist already?
-  stat:
+  ansible.builtin.stat:
     path: "/home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}/site_config.json"
   register: erpnext_site_config
 
@@ -10,14 +10,14 @@
 # the Administrator password only when the site is created: an existing site's Administrator
 # password lives hashed in that site and is not something this role knows or needs.
 - name: The database password must be set in local_vars (no default, so a public repository never ships a working credential)
-  assert:
+  ansible.builtin.assert:
     that:
       - erpnext_db_password | default('') | length > 0
     fail_msg: "erpnext_db_password is empty - set it in /etc/iiab/local_vars.yml to the value the site uses (sites/<site>/site_config.json on an existing install)"
     quiet: true
 
 - name: The Administrator password must be set in local_vars before the site is created
-  assert:
+  ansible.builtin.assert:
     that:
       - erpnext_admin_password | default('') | length > 0
     fail_msg: "erpnext_admin_password is empty - set it in /etc/iiab/local_vars.yml before the site is created"
@@ -25,40 +25,40 @@
   when: not erpnext_site_config.stat.exists
 
 - name: "Set 'mysql_install: True' and 'mysql_enabled: True'"
-  set_fact:
-    mysql_install: True
-    mysql_enabled: True
+  ansible.builtin.set_fact:
+    mysql_install: true
+    mysql_enabled: true
 
 - name: MYSQL - run 'mysql' role (attempt to install & enable MySQL / MariaDB)
-  include_role:
+  ansible.builtin.include_role:
     name: mysql
 
 - name: FAIL (STOP THE INSTALL) IF 'mysql_installed is undefined'
-  fail:
+  ansible.builtin.fail:
     msg: "ERPNext install cannot proceed, as MySQL / MariaDB is not installed."
   when: mysql_installed is undefined
 
 - name: "Set 'nodejs_install: True' and 'nodejs_enabled: True'"
-  set_fact:
-    nodejs_install: True
-    nodejs_enabled: True
+  ansible.builtin.set_fact:
+    nodejs_install: true
+    nodejs_enabled: true
 
 - name: NODEJS - run 'nodejs' role (attempt to install & enable Node.js)
-  include_role:
+  ansible.builtin.include_role:
     name: nodejs
 
 - name: FAIL (STOP THE INSTALL) IF 'nodejs_installed is undefined'
-  fail:
+  ansible.builtin.fail:
     msg: "ERPNext install cannot proceed, as Node.js is not installed."
   when: nodejs_installed is undefined
 
 - name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: df -B1 --output=used / | tail -1
   register: df1
   changed_when: false
 
 - name: Install ERPNext system dependencies
-  apt:
+  ansible.builtin.apt:
     name:
       - redis-server
       - python3-pip
@@ -77,57 +77,57 @@
 # second (it installs cleanly on 26.04: its libssl3 dependency is provided by libssl3t64).
 # Without either, the install goes on and PDF printing stays unavailable until one is added.
 - name: Does the OS repository offer wkhtmltopdf?
-  shell: "apt-cache policy wkhtmltopdf | grep -q 'Candidate: [0-9]'"
+  ansible.builtin.shell: "apt-cache policy wkhtmltopdf | grep -q 'Candidate: [0-9]'"
   register: wkhtmltopdf_apt
   failed_when: false
   changed_when: false
   when: erpnext_enabled | bool
 
 - name: Install wkhtmltopdf from the OS repository
-  apt:
+  ansible.builtin.apt:
     name: wkhtmltopdf
     state: present
   when: erpnext_enabled | bool and wkhtmltopdf_apt.rc == 0
 
 - name: Install wkhtmltopdf from the upstream wkhtmltox release (no OS package)
+  when: erpnext_enabled | bool and wkhtmltopdf_apt.rc != 0
+
   block:
     - name: Read the package architecture (bare ansible_* facts are undefined in role runs)
-      command: dpkg --print-architecture
+      ansible.builtin.command: dpkg --print-architecture
       register: wkhtmltox_arch
       changed_when: false
 
     - name: Download wkhtmltox {{ wkhtmltox_version }} for {{ wkhtmltox_arch.stdout }}
-      get_url:
+      ansible.builtin.get_url:
         url: "https://github.com/wkhtmltopdf/packaging/releases/download/{{ wkhtmltox_version }}/wkhtmltox_{{ wkhtmltox_version }}.jammy_{{ wkhtmltox_arch.stdout }}.deb"
         dest: /tmp/wkhtmltox.deb
-        mode: '0644'
+        mode: "0644"
         timeout: 120
 
     - name: Install the wkhtmltox package (apt resolves its dependencies)
-      apt:
+      ansible.builtin.apt:
         deb: /tmp/wkhtmltox.deb
   rescue:
     - name: wkhtmltopdf could not be installed on this OS
-      debug:
+      ansible.builtin.debug:
         msg: "wkhtmltopdf is unavailable here: PDF printing (invoices, receipts) will not work until it is installed by hand. The ERPNext install continues."
-  when: erpnext_enabled | bool and wkhtmltopdf_apt.rc != 0
-
 - name: Ensure git-hooks directory exists in /etc
-  file:
+  ansible.builtin.file:
     path: /etc/git-hooks
     state: directory
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
   when: erpnext_enabled | bool
 
 - name: Deploy system-wide secure git hooks (PAT leak prevention)
-  copy:
+  ansible.builtin.copy:
     src: "git-hooks/{{ item }}"
     dest: "/etc/git-hooks/{{ item }}"
     owner: root
     group: root
-    mode: '0755'
+    mode: "0755"
   loop:
     - pre-commit
     - post-commit
@@ -136,67 +136,66 @@
   when: erpnext_enabled | bool
 
 - name: Configure system-wide core.hooksPath
-  command: git config --system core.hooksPath /etc/git-hooks
+  ansible.builtin.command: git config --system core.hooksPath /etc/git-hooks
   when: erpnext_enabled | bool
 
-
 - name: Install yarn globally via npm
-  npm:
+  community.general.npm:
     name: yarn
-    global: yes
+    global: true
     state: present
   when: erpnext_enabled | bool
 
 - name: Ensure vm.overcommit_memory=1 persists across reboots (Redis requirement)
-  copy:
+  ansible.builtin.copy:
     dest: /etc/sysctl.d/99-iiab-erpnext-redis.conf
     content: "vm.overcommit_memory=1\n"
-    mode: '0644'
-  become: yes
+    mode: "0644"
+  become: true
   when: erpnext_enabled | bool
 
 - name: Apply vm.overcommit_memory=1 immediately (no module, no deprecation)
-  command: sysctl -w vm.overcommit_memory=1
-  become: yes
+  ansible.builtin.command: sysctl -w vm.overcommit_memory=1
+  become: true
   changed_when: false
   when: erpnext_enabled | bool
 
 - name: Configure MariaDB for ERPNext
-  template:
+  ansible.builtin.template:
     src: erpnext-mysqld.cnf.j2
     dest: /etc/mysql/mariadb.conf.d/99-erpnext.cnf
   notify: restart mariadb
   when: erpnext_enabled | bool
 
 - name: Create frappe user
-  user:
+  ansible.builtin.user:
     name: "{{ erpnext_user_name }}"
     shell: /bin/bash
     home: /home/{{ erpnext_user_name }}
     groups: www-data
-    append: yes
+    append: true
   when: erpnext_enabled | bool
 
 - name: Ensure pipx is installed and in path for frappe user
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  command: pipx ensurepath
+  ansible.builtin.command: pipx ensurepath
   args:
     creates: /home/{{ erpnext_user_name }}/.local/bin
   when: erpnext_enabled | bool
 
 - name: Install frappe-bench globally for frappe user
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  command: pipx install frappe-bench
+  ansible.builtin.command: pipx install frappe-bench
   args:
     creates: /home/{{ erpnext_user_name }}/.local/bin/bench
   when: erpnext_enabled | bool
 
 - name: Install uv via pipx for frappe user (required by modern bench init)
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  command: pipx install uv
+  ansible.builtin.command: pipx install uv
   args:
     creates: /home/{{ erpnext_user_name }}/.local/bin/uv
   when: erpnext_enabled | bool
@@ -205,33 +204,33 @@
 # bench init / get-app.  Without supervisor + passwordless sudo, the
 # entire ERPNext installation crashes.
 - name: Install supervisor (required by frappe-bench tool)
-  apt:
+  ansible.builtin.apt:
     name: supervisor
     state: present
   when: erpnext_enabled | bool
 
 - name: Ensure supervisor is running
-  systemd:
+  ansible.builtin.systemd:
     name: supervisor
     state: started
-    enabled: yes
+    enabled: true
   when: erpnext_enabled | bool
 
 - name: Make yarn resilient to slow registries (bench app installs pull hundreds of tarballs)
-  copy:
+  ansible.builtin.copy:
     dest: "/home/{{ erpnext_user_name }}/.yarnrc"
     content: |
       network-timeout 600000
       network-concurrency 4
     owner: "{{ erpnext_user_name }}"
     group: "{{ erpnext_user_name }}"
-    mode: '0644'
+    mode: "0644"
   when: erpnext_enabled | bool
 
 # systemctl is limited to the bench's own targets, each spelled out: an unrestricted systemctl is
 # root, and sudo-rs (the default sudo since Ubuntu 26.04) refuses wildcards in command arguments.
 - name: Grant frappe user passwordless sudo for bench tooling
-  copy:
+  ansible.builtin.copy:
     dest: /etc/sudoers.d/frappe
     content: |
       {% set cmds = ['/usr/bin/systemctl daemon-reload'] %}
@@ -244,14 +243,14 @@
       {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl
       {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/sbin/nginx
       {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: BENCH_UNITS
-    mode: '0440'
-    validate: 'visudo -cf %s'
+    mode: "0440"
+    validate: "visudo -cf %s"
   when: erpnext_enabled | bool
 
 - name: Instruct uv to fetch specific Python version if needed
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  command: ~/.local/bin/uv python install 3.14
+  ansible.builtin.command: ~/.local/bin/uv python install 3.14
   args:
     creates: /home/{{ erpnext_user_name }}/.local/share/uv/python
   environment:
@@ -264,7 +263,7 @@
 # Without this, the 'creates:' guard skips re-init and the install
 # is stuck with a broken bench forever.
 - name: Check if frappe-bench exists but is incomplete (missing frappe app or venv)
-  shell: |
+  ansible.builtin.shell: |
     test -d /home/{{ erpnext_user_name }}/frappe-bench || exit 0
     test -f /home/{{ erpnext_user_name }}/frappe-bench/apps/frappe/pyproject.toml && \
     test -f /home/{{ erpnext_user_name }}/frappe-bench/env/bin/python && \
@@ -274,7 +273,7 @@
   when: erpnext_enabled | bool
 
 - name: Remove incomplete frappe-bench directory from a previous failed init
-  file:
+  ansible.builtin.file:
     path: /home/{{ erpnext_user_name }}/frappe-bench
     state: absent
   when:
@@ -283,9 +282,9 @@
     - bench_completeness.stdout == "INCOMPLETE"
 
 - name: Init frappe bench
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  command: ~/.local/bin/bench init frappe-bench --frappe-path https://github.com/deldesir/frappe.git --frappe-branch {{ erpnext_version }} {% if erpnext_version == 'develop' %}--python 3.14{% endif %}
+  ansible.builtin.command: ~/.local/bin/bench init frappe-bench --frappe-path https://github.com/deldesir/frappe.git --frappe-branch {{ erpnext_version }} {% if erpnext_version == 'develop' %}--python 3.14{% endif %}
   args:
     chdir: /home/{{ erpnext_user_name }}
     creates: /home/{{ erpnext_user_name }}/frappe-bench
@@ -297,7 +296,7 @@
 # yarn network timeout) leaves a partial apps/<name> dir that skips forever.
 # An app is only truly installed once bench records it in sites/apps.txt.
 - name: Remove partially-installed bench apps (on disk but absent from apps.txt)
-  shell: |
+  ansible.builtin.shell: |
     [ -f /home/{{ erpnext_user_name }}/frappe-bench/sites/apps.txt ] || exit 0
     for d in /home/{{ erpnext_user_name }}/frappe-bench/apps/*/; do
       app=$(basename "$d")
@@ -305,13 +304,13 @@
     done
   args:
     executable: /bin/bash
-  changed_when: False
+  changed_when: false
   when: erpnext_enabled | bool
 
 - name: Install ERPNext app in bench
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  command: ~/.local/bin/bench get-app https://github.com/deldesir/erpnext.git --branch {{ erpnext_version }}
+  ansible.builtin.command: ~/.local/bin/bench get-app https://github.com/deldesir/erpnext.git --branch {{ erpnext_version }}
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
     creates: /home/{{ erpnext_user_name }}/frappe-bench/apps/erpnext
@@ -320,9 +319,9 @@
   when: erpnext_enabled | bool
 
 - name: Install extra Frappe apps in bench (HR, CRM, etc.)
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  command: ~/.local/bin/bench get-app {{ item.name }} --branch {{ item.branch }}
+  ansible.builtin.command: ~/.local/bin/bench get-app {{ item.name }} --branch {{ item.branch }}
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
     creates: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item.app_name }}
@@ -335,7 +334,7 @@
 # on every install/reinstall.  No separate stop needed here.
 
 - name: Check if site config exists
-  stat:
+  ansible.builtin.stat:
     path: /home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}/site_config.json
   register: site_config
 
@@ -353,7 +352,7 @@
     )
 
 - name: Drop ERPNext Site Directory (ONLY when erpnext_force_drop_db is set or site config is missing)
-  file:
+  ansible.builtin.file:
     path: /home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}
     state: absent
   when: >
@@ -363,22 +362,21 @@
     )
 
 - name: Flush Redis cache + queue (eliminates stale assets_json, doctype_meta, boot data)
-  command: redis-cli -p {{ item }} FLUSHDB
+  ansible.builtin.command: redis-cli -p {{ item }} FLUSHDB
   loop:
     - 13000
     - 11000
-  ignore_errors: yes
+  ignore_errors: true
   when: erpnext_enabled | bool
 
 - name: Ensure correct ownership of Frappe apps directory (prevents permission errors on code pull)
-  command: chown -R {{ erpnext_user_name }}:{{ erpnext_user_name }} /home/{{ erpnext_user_name }}/frappe-bench/apps
+  ansible.builtin.command: chown -R {{ erpnext_user_name }}:{{ erpnext_user_name }} /home/{{ erpnext_user_name }}/frappe-bench/apps
   when: erpnext_enabled | bool
 
-
 - name: Pull latest code from fork for frappe/erpnext
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  shell: |
+  ansible.builtin.shell: |
     if git remote | grep -q "^origin$"; then
         REMOTE="origin"
     else
@@ -398,12 +396,12 @@
     - frappe
     - erpnext
   when: erpnext_enabled | bool
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Pull latest code from fork for extra apps
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  shell: |
+  ansible.builtin.shell: |
     if git remote | grep -q "^origin$"; then
         REMOTE="origin"
     else
@@ -421,23 +419,22 @@
     chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item.app_name }}
   loop: "{{ erpnext_extra_apps }}"
   when: erpnext_enabled | bool
-  ignore_errors: yes
-
+  ignore_errors: true
 
 - name: Update Python/Node dependencies after code pull (prevents ImportError on new packages)
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  shell: ~/.local/bin/bench setup requirements
+  ansible.builtin.shell: ~/.local/bin/bench setup requirements
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     CYPRESS_INSTALL_BINARY: "0"
   when: erpnext_enabled | bool
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Wipe compiled JS/CSS bundles (forces clean bench build, avoids stale hashes)
-  shell: |
+  ansible.builtin.shell: |
     rm -rf /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/*/dist
     rm -f  /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/assets.json
     rm -f  /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/assets-rtl.json
@@ -460,10 +457,10 @@
   when: erpnext_enabled | bool
 
 - name: Create ERPNext Site
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  no_log: true   # the command line carries the admin and database passwords
-  command: ~/.local/bin/bench new-site {{ erpnext_site_name }} --admin-password {{ erpnext_admin_password }} --db-name {{ erpnext_db_name }} --db-password {{ erpnext_db_password }} --no-setup-db --force
+  no_log: true # the command line carries the admin and database passwords
+  ansible.builtin.command: ~/.local/bin/bench new-site {{ erpnext_site_name }} --admin-password {{ erpnext_admin_password }} --db-name {{ erpnext_db_name }} --db-password {{ erpnext_db_password }} --no-setup-db --force
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
     creates: /home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}/site_config.json
@@ -472,10 +469,10 @@
   when: erpnext_enabled | bool
 
 - name: Ensure site_config.json has the correct database password (prevents Access Denied if password changed in local_vars.yml)
-  no_log: true   # the inline script carries the database password
-  become: yes
+  no_log: true # the inline script carries the database password
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  shell: |
+  ansible.builtin.shell: |
     python3 -c "
     import json
     path = '/home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}/site_config.json'
@@ -495,19 +492,19 @@
   when: erpnext_enabled | bool
 
 - name: Ensure currentsite.txt exists (Frappe needs this to resolve the active site)
-  copy:
+  ansible.builtin.copy:
     content: "{{ erpnext_site_name }}\n"
     dest: /home/{{ erpnext_user_name }}/frappe-bench/sites/currentsite.txt
     owner: "{{ erpnext_user_name }}"
     group: "{{ erpnext_user_name }}"
-    mode: '0644'
-    force: no
+    mode: "0644"
+    force: false
   when: erpnext_enabled | bool
 
 - name: Set site host_name for IIAB subpath
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  command: ~/.local/bin/bench --site {{ erpnext_site_name }} set-config host_name "{{ erpnext_host_name }}"
+  ansible.builtin.command: ~/.local/bin/bench --site {{ erpnext_site_name }} set-config host_name "{{ erpnext_host_name }}"
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
@@ -515,9 +512,9 @@
   when: erpnext_enabled | bool
 
 - name: Generate Systemd Services (replaces Supervisor)
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  shell: |
+  ansible.builtin.shell: |
     yes | ~/.local/bin/bench setup systemd
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
@@ -526,24 +523,24 @@
   when: erpnext_enabled | bool
 
 - name: Increase gunicorn worker timeout to 300s (setup_wizard.setup_complete needs >120s)
-  replace:
+  ansible.builtin.replace:
     path: /home/{{ erpnext_user_name }}/frappe-bench/config/systemd/frappe-bench-frappe-web.service
-    regexp: '-t \d+'
-    replace: '-t 300'
+    regexp: "-t \\d+"
+    replace: "-t 300"
   when: erpnext_enabled | bool
 
 - name: Set gunicorn workers to (2 * CPU cores) + 1 for optimal concurrency
-  replace:
+  ansible.builtin.replace:
     path: /home/{{ erpnext_user_name }}/frappe-bench/config/systemd/frappe-bench-frappe-web.service
-    regexp: '-w \d+'
-    replace: '-w {{ (2 * (ansible_processor_vcpus | default(2) | int)) + 1 }}'
+    regexp: "-w \\d+"
+    replace: "-w {{ (2 * (ansible_processor_vcpus | default(2) | int)) + 1 }}"
   when: erpnext_enabled | bool
 
 - name: Fix bench setup systemd bug (ExecStart=None in worker/scheduler services)
-  replace:
+  ansible.builtin.replace:
     path: "/home/{{ erpnext_user_name }}/frappe-bench/config/systemd/{{ item }}"
-    regexp: 'ExecStart=None '
-    replace: 'ExecStart=/home/{{ erpnext_user_name }}/.local/bin/bench '
+    regexp: "ExecStart=None "
+    replace: "ExecStart=/home/{{ erpnext_user_name }}/.local/bin/bench "
   loop:
     - frappe-bench-frappe-schedule.service
     - frappe-bench-frappe-default-worker@.service
@@ -552,29 +549,27 @@
   when: erpnext_enabled | bool
 
 - name: Setup Systemd Symlinks
-  shell: |
+  ansible.builtin.shell: |
     ln -sf /home/{{ erpnext_user_name }}/frappe-bench/config/systemd/* /etc/systemd/system/
     systemctl daemon-reload
   when: erpnext_enabled | bool
 
-
 - name: Start Bench Redis Services (required for install-app and migrate)
-  systemd:
+  ansible.builtin.systemd:
     name: "{{ item }}"
-    enabled: yes
+    enabled: true
     state: started
   loop:
     - frappe-bench-redis-cache.service
     - frappe-bench-redis-queue.service
   when: erpnext_enabled | bool
 
-
 # Check which apps are already installed in the site to avoid
 # "App already installed" errors on crash-and-resume re-runs.
 - name: Get list of apps already installed in site
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  shell: ~/.local/bin/bench --site {{ erpnext_site_name }} list-apps 2>/dev/null | grep -v '^$' || true
+  ansible.builtin.shell: ~/.local/bin/bench --site {{ erpnext_site_name }} list-apps 2>/dev/null | grep -v '^$' || true
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
@@ -584,9 +579,9 @@
   when: erpnext_enabled | bool
 
 - name: Install ERPNext App in Site
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  command: >-
+  ansible.builtin.command: >-
     ~/.local/bin/bench --site {{ erpnext_site_name }} install-app erpnext
     {{ '--force' if (erpnext_force_drop_db | default(False) | bool) else '' }}
   args:
@@ -598,9 +593,9 @@
     - "'erpnext' not in (_installed_apps.stdout | default(''))"
 
 - name: Install extra apps in site (HR, CRM, etc.)
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  command: >-
+  ansible.builtin.command: >-
     ~/.local/bin/bench --site {{ erpnext_site_name }} install-app {{ item.app_name }}
     {{ '--force' if (erpnext_force_drop_db | default(False) | bool) else '' }}
   args:
@@ -613,9 +608,9 @@
     - "item.app_name not in (_installed_apps.stdout | default(''))"
 
 - name: Run migrate + clear-cache after all apps installed
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  shell: |
+  ansible.builtin.shell: |
     ~/.local/bin/bench --site {{ erpnext_site_name }} migrate
     ~/.local/bin/bench --site {{ erpnext_site_name }} clear-cache
   args:
@@ -631,11 +626,10 @@
 # Set home_page to 'shop' only AFTER the setup wizard has been completed,
 # either manually or via a post-setup hook.
 
-
 - name: Enable scheduler for the site
-  become: yes
+  become: true
   become_user: "{{ erpnext_user_name }}"
-  command: ~/.local/bin/bench --site {{ erpnext_site_name }} scheduler enable
+  ansible.builtin.command: ~/.local/bin/bench --site {{ erpnext_site_name }} scheduler enable
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
@@ -643,9 +637,9 @@
   when: erpnext_enabled | bool
 
 - name: Enable ERPNext Systemd Targets (web + workers)
-  systemd:
+  ansible.builtin.systemd:
     name: "{{ item }}"
-    enabled: yes
+    enabled: true
     state: started
   loop:
     - frappe-bench.target
@@ -653,19 +647,19 @@
   when: erpnext_enabled | bool
 
 - name: Grant Nginx access to Frappe static assets
-  shell: chmod a+x /home/{{ erpnext_user_name }} /home/{{ erpnext_user_name }}/frappe-bench && chmod -R a+rX /home/{{ erpnext_user_name }}/frappe-bench/sites
+  ansible.builtin.shell: chmod a+x /home/{{ erpnext_user_name }} /home/{{ erpnext_user_name }}/frappe-bench && chmod -R a+rX /home/{{ erpnext_user_name }}/frappe-bench/sites
   when: erpnext_enabled | bool
 
 - name: Ensure Nginx knows the client's scheme behind a TLS-terminating proxy ($fwd_proto map in the http context; boxes whose nginx.conf predates it)
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/nginx/nginx.conf
-    regexp: '^\s*map \$http_x_forwarded_proto \$fwd_proto'
-    line: '    map $http_x_forwarded_proto $fwd_proto { default $scheme; https https; }'
-    insertafter: '^http \{'
+    regexp: "^\\s*map \\$http_x_forwarded_proto \\$fwd_proto"
+    line: "    map $http_x_forwarded_proto $fwd_proto { default $scheme; https https; }"
+    insertafter: "^http \\{"
   when: erpnext_enabled | bool
 
 - name: Configure IIAB Nginx Sub-Path Proxy for ERPNext
-  template:
+  ansible.builtin.template:
     src: erpnext-nginx.conf.j2
     dest: /etc/nginx/conf.d/erpnext-nginx.conf
   notify:
@@ -685,15 +679,14 @@
 # if assets are already built.  This avoids 15-45 min of downtime + session
 # destruction for a "just enforce enabled" re-run.
 - name: Check if JS assets are already built
-  stat:
+  ansible.builtin.stat:
     path: /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/assets.json
   register: _assets_json
   when: erpnext_enabled | bool
 
 - name: Set _needs_build flag
-  set_fact:
+  ansible.builtin.set_fact:
     _needs_build: "{{ reinstall | default(False) | bool or erpnext_force_rebuild | default(False) | bool or not (_assets_json.stat.exists | default(false)) or erpnext_installed is undefined }}"
-
 
 # ── Stop ALL services before build ─────────────────────────────────────────────
 # 1) Frees ~900 MB of RAM held by gunicorn workers + background jobs, which is
@@ -705,7 +698,7 @@
 # NOTE: We stop individual services explicitly because systemd targets with
 # Wants= do NOT propagate stop/start to already-running member services.
 - name: Stop Frappe services before build (kill stale gunicorn workers + free RAM)
-  shell: |
+  ansible.builtin.shell: |
     systemctl stop frappe-bench-frappe-web.service \
                    frappe-bench-node-socketio.service \
                    frappe-bench-frappe-schedule.service \
@@ -716,11 +709,11 @@
   when: erpnext_enabled | bool and _needs_build | bool
 
 - name: Flush Redis caches before build (clear stale boot data and asset references)
-  command: redis-cli -p {{ item }} FLUSHDB
+  ansible.builtin.command: redis-cli -p {{ item }} FLUSHDB
   loop:
     - 13000
     - 11000
-  ignore_errors: yes
+  ignore_errors: true
   when: erpnext_enabled | bool and _needs_build | bool
 
 # ── Build JS bundles with temporary swap ───────────────────────────────────────
@@ -730,9 +723,16 @@
 # (never tmpfs, guaranteed on-disk) provides overflow headroom.
 # The block/always structure guarantees the swapfile is cleaned up even if the
 # build fails.
-- block:
+- when: erpnext_enabled | bool and _needs_build | bool
+
+  # ── Start services with clean workers ──────────────────────────────────────────
+  # Restart (not just start) every service explicitly to guarantee gunicorn
+  # preloads the freshly-built code.  A simple 'start frappe-bench.target'
+  # would skip services that systemd considers "already active" from before
+  # the stop, leaving stale workers that crash on missing modules (hrms, crm).
+  block:
     - name: Create temporary 4 GB swapfile for Vite build
-      shell: |
+      ansible.builtin.shell: |
         SWAPFILE=/var/tmp/.erpnext_build_swap
         if [ ! -f "$SWAPFILE" ]; then
           fallocate -l 4G "$SWAPFILE" 2>/dev/null || \
@@ -741,66 +741,57 @@
           mkswap "$SWAPFILE" >/dev/null
           swapon "$SWAPFILE"
         fi
-
-    # All IIAB customizations are baked into deldesir/* forks.  A single 'bench
-    # build' (without --app flags) generates a unified assets.json covering
-    # every installed app.  Using --app causes each app to overwrite assets.json
-    # with only its own entries, breaking CSS/JS references for all other apps.
-    # NOTE: NODE_OPTIONS is NOT set here.  Frappe's build.py auto-calculates
-    # the V8 heap limit to 75 % of total RAM via get_safe_max_old_space_size()
-    # and passes it via popen(env=get_node_env()), which replaces the entire
-    # inherited environment.
     - name: Rebuild all JS bundles (unified assets.json)
-      shell: |
+      ansible.builtin.shell: |
         /home/{{ erpnext_user_name }}/.local/bin/bench build
       args:
         chdir: "/home/{{ erpnext_user_name }}/frappe-bench"
-      become: yes
+      become: true
       become_user: "{{ erpnext_user_name }}"
       environment:
         PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
     - name: Rebuild Builder Frontend (Vite — separate from bench build)
-      shell: |
+      ansible.builtin.shell: |
         yarn install
         yarn build
       args:
         chdir: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/frontend"
-      become: yes
+      become: true
       become_user: "{{ erpnext_user_name }}"
       when: erpnext_enabled | bool
-      ignore_errors: yes
+      ignore_errors: true
 
     - name: Deploy IIAB asset patching script
-      template:
+      ansible.builtin.template:
         src: patch_erpnext_assets.py.j2
         dest: /home/{{ erpnext_user_name }}/frappe-bench/patch_erpnext_assets.py
         owner: "{{ erpnext_user_name }}"
         group: "{{ erpnext_user_name }}"
-        mode: '0755'
+        mode: "0755"
       when: erpnext_enabled | bool
 
     - name: Run IIAB asset patching script (idempotent subpath fix for compiled artifacts)
-      command: python3 /home/{{ erpnext_user_name }}/frappe-bench/patch_erpnext_assets.py
+      ansible.builtin.command: python3 /home/{{ erpnext_user_name }}/frappe-bench/patch_erpnext_assets.py
       args:
         chdir: /home/{{ erpnext_user_name }}/frappe-bench
-      become: yes
+      become: true
       become_user: "{{ erpnext_user_name }}"
       when: erpnext_enabled | bool
 
     - name: Deploy IIAB About page translation and custom styling script
-      template:
+      ansible.builtin.template:
         src: update_about_page.py.j2
         dest: /home/{{ erpnext_user_name }}/frappe-bench/update_about_page.py
         owner: "{{ erpnext_user_name }}"
         group: "{{ erpnext_user_name }}"
-        mode: '0755'
+        mode: "0755"
       when: erpnext_enabled | bool
 
     - name: Run IIAB About page translation and custom styling script
-      become: yes
+      become: true
       become_user: "{{ erpnext_user_name }}"
-      shell: |
+      ansible.builtin.shell: |
         ~/.local/bin/bench --site {{ erpnext_site_name }} execute "exec('import sys; sys.path.insert(0, \"/home/{{ erpnext_user_name }}/frappe-bench\"); import update_about_page; update_about_page.run()')"
       args:
         chdir: /home/{{ erpnext_user_name }}/frappe-bench
@@ -810,21 +801,14 @@
 
   always:
     - name: Remove temporary swapfile after build
-      shell: |
+      ansible.builtin.shell: |
         SWAPFILE=/var/tmp/.erpnext_build_swap
         if [ -f "$SWAPFILE" ]; then
           swapoff "$SWAPFILE" 2>/dev/null || true
           rm -f "$SWAPFILE"
         fi
-  when: erpnext_enabled | bool and _needs_build | bool
-
-# ── Start services with clean workers ──────────────────────────────────────────
-# Restart (not just start) every service explicitly to guarantee gunicorn
-# preloads the freshly-built code.  A simple 'start frappe-bench.target'
-# would skip services that systemd considers "already active" from before
-# the stop, leaving stale workers that crash on missing modules (hrms, crm).
 - name: Start Frappe services with fresh workers (all apps loaded cleanly)
-  shell: |
+  ansible.builtin.shell: |
     systemctl restart frappe-bench.target \
                       frappe-bench-frappe-web.service \
                       frappe-bench-node-socketio.service \
@@ -835,7 +819,7 @@
   when: erpnext_enabled | bool and _needs_build | bool
 
 - name: Ensure Frappe services are running (no-build re-run)
-  systemd:
+  ansible.builtin.systemd:
     name: "{{ item }}"
     state: started
   loop:
@@ -846,23 +830,23 @@
   when: erpnext_enabled | bool and not (_needs_build | bool)
 
 - name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: df -B1 --output=used / | tail -1
   register: df2
   changed_when: false
 
 - name: Add 'erpnext_disk_usage' delta to iiab.ini
-  ini_file:
+  community.general.ini_file:
     path: /etc/iiab/iiab.ini
     section: erpnext
     option: erpnext_disk_usage
     value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'erpnext_installed: True'"
-  set_fact:
-    erpnext_installed: True
+  ansible.builtin.set_fact:
+    erpnext_installed: true
 
 - name: "Add 'erpnext_installed: True' to /etc/iiab/iiab_state.yml"
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/iiab/iiab_state.yml
-    regexp: '^erpnext_installed'
-    line: 'erpnext_installed: True'
+    regexp: "^erpnext_installed"
+    line: "erpnext_installed: True"

@@ -4,14 +4,14 @@
 # the role converged on a config that 403'd mailroom's hairpin webhooks.
 # Gather exactly the facts the template needs, right before using them.
 - name: Gather network facts for the hairpin self-allow
-  setup:
+  ansible.builtin.setup:
     gather_subset:
       - network
 
 - name: Deploy AI Gateway Nginx configuration
-  template:
+  ansible.builtin.template:
     src: ai-gateway-nginx.conf.j2
     dest: "{{ nginx_conf_dir | default('/etc/nginx/conf.d') }}/ai-gateway.conf"
-    mode: '0644'
-  become: yes
+    mode: "0644"
+  become: true
   notify: restart nginx

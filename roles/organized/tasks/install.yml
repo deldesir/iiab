@@ -1,46 +1,46 @@
 ---
 - name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: df -B1 --output=used / | tail -1
   register: df1
   changed_when: false
 
 - name: Mark organized-backend directory as safe for git
-  command: git config --global --add safe.directory "{{ organized_dir }}"
-  ignore_errors: yes
+  ansible.builtin.command: git config --global --add safe.directory "{{ organized_dir }}"
+  ignore_errors: true
 
 - name: Clone organized-backend repository
-  git:
+  ansible.builtin.git:
     repo: "{{ organized_repo }}"
     dest: "{{ organized_dir }}"
     version: "{{ organized_version }}"
     depth: 1
-    force: yes
+    force: true
 
 - name: Mark organized-app directory as safe for git
-  command: git config --global --add safe.directory "{{ organized_app_dir }}"
-  ignore_errors: yes
+  ansible.builtin.command: git config --global --add safe.directory "{{ organized_app_dir }}"
+  ignore_errors: true
 
 - name: Clone organized-app repository
-  git:
+  ansible.builtin.git:
     repo: "{{ organized_app_repo }}"
     dest: "{{ organized_app_dir }}"
     version: "{{ organized_app_version }}"
     depth: 1
-    force: yes
+    force: true
   register: organized_app_src
 
 - name: Install organized-app npm dependencies
-  command: npm ci --prefer-offline
+  ansible.builtin.command: npm ci --prefer-offline
   args:
     chdir: "{{ organized_app_dir }}"
   environment:
     NODE_OPTIONS: "--max-old-space-size=2048"
 
 - name: Inject offline build-time env for organized-app (Vite .env.production.local)
-  template:
+  ansible.builtin.template:
     src: organized.env.production.local.j2
     dest: "{{ organized_app_dir }}/.env.production.local"
-    mode: '0644'
+    mode: "0644"
   register: organized_build_env
 
 - name: Force a frontend rebuild when the source or build env changed
@@ -48,13 +48,13 @@
   # runs when dist is absent. Removing dist here whenever the cloned app source
   # OR the injected build env changed makes the build idempotent: a new fork
   # commit (or env edit) is always rebuilt, while an unchanged run is a no-op.
-  file:
+  ansible.builtin.file:
     path: "{{ organized_app_dir }}/dist"
     state: absent
   when: organized_app_src is changed or organized_build_env is changed
 
 - name: Build organized-app frontend (Vite)
-  command: npm run build
+  ansible.builtin.command: npm run build
   args:
     chdir: "{{ organized_app_dir }}"
     creates: "{{ organized_app_dir }}/dist/index.html"
@@ -62,59 +62,59 @@
     NODE_OPTIONS: "--max-old-space-size=2048"
 
 - name: Create backend virtualenv with uv
-  command: /root/.local/bin/uv venv --python /usr/bin/python3 .venv
+  ansible.builtin.command: /root/.local/bin/uv venv --python /usr/bin/python3 .venv
   args:
     chdir: "{{ organized_dir }}"
     creates: "{{ organized_dir }}/.venv"
 
 - name: Install backend dependencies with uv
-  command: /root/.local/bin/uv pip install -r requirements.txt
+  ansible.builtin.command: /root/.local/bin/uv pip install -r requirements.txt
   args:
     chdir: "{{ organized_dir }}"
   environment:
     VIRTUAL_ENV: "{{ organized_dir }}/.venv"
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Install postgresql-client
-  apt:
+  ansible.builtin.apt:
     name: postgresql-client
     state: present
-  become: yes
+  become: true
 
 # --- System user & directories ---
 
 - name: Create organized system user
-  user:
+  ansible.builtin.user:
     name: "{{ organized_user }}"
-    system: yes
+    system: true
     home: "{{ organized_dir }}"
-    create_home: no
+    create_home: false
     shell: /usr/sbin/nologin
-  become: yes
+  become: true
 
 - name: Create log directory
-  file:
+  ansible.builtin.file:
     path: /var/log/organized
     state: directory
     owner: "{{ organized_user }}"
     group: "{{ organized_user }}"
-    mode: '0755'
-  become: yes
+    mode: "0755"
+  become: true
 
 - name: Install logrotate config for organized logs
-  template:
+  ansible.builtin.template:
     src: organized.logrotate.j2
     dest: /etc/logrotate.d/organized
-    mode: '0644'
-  become: yes
+    mode: "0644"
+  become: true
 
 - name: Set ownership of organized backend
-  file:
+  ansible.builtin.file:
     path: "{{ organized_dir }}"
     owner: "{{ organized_user }}"
     group: "{{ organized_user }}"
-    recurse: yes
-  become: yes
+    recurse: true
+  become: true
 
 # --- Database ---
 
@@ -123,32 +123,32 @@
     name: "{{ organized_db_user }}"
     password: "{{ organized_db_pass }}"
     role_attr_flags: CREATEDB
-  become: yes
+  become: true
   become_user: postgres
 
 - name: Create organized database
   community.postgresql.postgresql_db:
     name: "{{ organized_db_name }}"
     owner: "{{ organized_db_user }}"
-  become: yes
+  become: true
   become_user: postgres
 
 # --- Environment file ---
 
 - name: Generate Django secret key
-  shell: "{{ organized_dir }}/.venv/bin/python3 -c \"import secrets,string; print(''.join(secrets.choice(string.ascii_letters+string.digits+'!@_+-=') for _ in range(50)))\""
+  ansible.builtin.shell: "{{ organized_dir }}/.venv/bin/python3 -c \"import secrets,string; print(''.join(secrets.choice(string.ascii_letters+string.digits+'!@_+-=') for _ in range(50)))\""
   register: django_secret_key
   changed_when: false
   when: organized_secret_key is not defined
 
 - name: Write organized environment file
-  template:
+  ansible.builtin.template:
     src: organized.env.j2
     dest: /etc/iiab/organized.env
     owner: "{{ organized_user }}"
     group: "{{ organized_user }}"
-    mode: '0600'
-  become: yes
+    mode: "0600"
+  become: true
   notify: restart organized
 
 # organized.env is regenerated on every run, so any secret that lives only
@@ -157,45 +157,45 @@
 # Ansible, and loaded after organized.env by the units (EnvironmentFile=-),
 # so its values always win. Same pattern as ai-gateway's .env.local.
 - name: Ensure machine-local env override file exists (never overwritten)
-  copy:
+  ansible.builtin.copy:
     dest: /etc/iiab/organized.env.local
-    force: no
+    force: false
     content: |
       # Machine-local secrets and overrides — NEVER written by Ansible.
       # Loaded after organized.env by the systemd units, so values here win.
     owner: "{{ organized_user }}"
     group: "{{ organized_user }}"
-    mode: '0600'
-  become: yes
+    mode: "0600"
+  become: true
 
 - name: Install hourglass-check (validate Hourglass exports before import)
-  copy:
+  ansible.builtin.copy:
     src: hourglass-check
     dest: /usr/local/bin/hourglass-check
-    mode: '0755'
-  become: yes
+    mode: "0755"
+  become: true
 
 - name: Install organized-import (one-shot Hourglass JSON+docx import, NWS CSV)
-  copy:
+  ansible.builtin.copy:
     src: organized-import
     dest: /usr/local/bin/organized-import
-    mode: '0755'
-  become: yes
+    mode: "0755"
+  become: true
 
 - name: Create the Hourglass drop directory
-  file:
+  ansible.builtin.file:
     path: /library/hourglass
     state: directory
-    mode: '0755'
-  become: yes
+    mode: "0755"
+  become: true
 
 # --- Backend setup ---
 
 - name: Install gunicorn in backend venv
-  command: "/root/.local/bin/uv pip install gunicorn"
+  ansible.builtin.command: "/root/.local/bin/uv pip install gunicorn"
   args:
     chdir: "{{ organized_dir }}"
-  become: yes
+  become: true
   environment:
     VIRTUAL_ENV: "{{ organized_dir }}/.venv"
     PATH: "{{ organized_dir }}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -204,10 +204,10 @@
 # apply them here. Running `makemigrations` at deploy time is intentionally
 # omitted — it could generate divergent migrations if models ever drift.
 - name: Run organized backend migrations
-  command: "{{ organized_dir }}/.venv/bin/python manage.py migrate"
+  ansible.builtin.command: "{{ organized_dir }}/.venv/bin/python manage.py migrate"
   args:
     chdir: "{{ organized_dir }}"
-  become: yes
+  become: true
   become_user: "{{ organized_user }}"
   environment:
     DJANGO_SECRET_KEY: "{{ django_secret_key.stdout | default(organized_secret_key | default('temp-key-for-migrations')) }}"
@@ -216,10 +216,10 @@
     DB_PASSWORD: "{{ organized_db_pass }}"
 
 - name: Collect static files
-  command: "{{ organized_dir }}/.venv/bin/python manage.py collectstatic --noinput"
+  ansible.builtin.command: "{{ organized_dir }}/.venv/bin/python manage.py collectstatic --noinput"
   args:
     chdir: "{{ organized_dir }}"
-  become: yes
+  become: true
   become_user: "{{ organized_user }}"
   environment:
     DJANGO_SECRET_KEY: "{{ django_secret_key.stdout | default(organized_secret_key | default('temp-key-for-migrations')) }}"
@@ -227,81 +227,81 @@
 # --- Offline source-materials mirror ---
 
 - name: Create source-materials mirror directories
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: "{{ organized_user }}"
     group: "{{ organized_user }}"
-    mode: '0755'
+    mode: "0755"
   loop:
     - "{{ organized_sources_dir }}"
     - "{{ organized_sources_dir }}/api"
     - "{{ organized_sources_dir }}/input"
-  become: yes
+  become: true
 
 - name: Install source-materials generator + fetcher scripts
-  copy:
+  ansible.builtin.copy:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
-    mode: '0755'
+    mode: "0755"
   loop:
     - { src: organized-sources-generate.js, dest: "{{ organized_sources_generator }}" }
     - { src: organized-sources-fetch.js, dest: "{{ organized_sources_fetcher }}" }
-  become: yes
+  become: true
 
 - name: Install source-materials mirror systemd units
-  template:
+  ansible.builtin.template:
     src: "{{ item }}"
     dest: "/etc/systemd/system/{{ item | basename | regex_replace('\\.j2$', '') }}"
-    mode: '0644'
+    mode: "0644"
   loop:
     - organized-sources.service.j2
     - organized-sources.timer.j2
-  become: yes
+  become: true
 
 # --- Systemd services ---
 
 - name: Install organized systemd service
-  template:
+  ansible.builtin.template:
     src: organized.service.j2
     dest: /etc/systemd/system/organized.service
-    mode: '0644'
-  become: yes
+    mode: "0644"
+  become: true
   notify: restart organized
 
 - name: Install organized celery systemd service
-  template:
+  ansible.builtin.template:
     src: organized-celery.service.j2
     dest: /etc/systemd/system/organized-celery.service
-    mode: '0644'
-  become: yes
+    mode: "0644"
+  become: true
   notify: restart organized-celery
 
 - name: Reload systemd daemon
-  systemd:
-    daemon_reload: yes
-  become: yes
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
 
 # --- Bookkeeping ---
 
 - name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: df -B1 --output=used / | tail -1
   register: df2
   changed_when: false
 
 - name: Add 'organized_disk_usage = ...' to {{ iiab_ini_file }}
-  ini_file:
+  community.general.ini_file:
     path: "{{ iiab_ini_file }}"
     section: organized
     option: organized_disk_usage
     value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'organized_installed: True'"
-  set_fact:
-    organized_installed: True
+  ansible.builtin.set_fact:
+    organized_installed: true
 
 - name: "Add 'organized_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: "{{ iiab_state_file }}"
-    regexp: '^organized_installed'
-    line: 'organized_installed: True'
+    regexp: "^organized_installed"
+    line: "organized_installed: True"

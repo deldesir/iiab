@@ -3,7 +3,7 @@
 # Note: is_proot is defined in default_vars.yml — no need to re-derive it here.
 
 - name: Run Installation Tasks
-  include_tasks: install.yml
+  ansible.builtin.include_tasks: install.yml
   when: rapidpro_enabled
 
 # The `centrifugo` tag on these includes lets `--tags centrifugo` reach the
@@ -11,21 +11,21 @@
 # include_tasks does not pass its own tags down, so everything else in the
 # included files still needs a full run.
 - name: Run Configuration Tasks
-  include_tasks: configure.yml
+  ansible.builtin.include_tasks: configure.yml
   when: rapidpro_enabled
   tags: [centrifugo, settings, mailroom-docs]
 
 - name: Ensure Services are Started
-  include_tasks: service.yml
+  ansible.builtin.include_tasks: service.yml
   when: rapidpro_enabled
 
 - name: Configure Nginx
-  include_tasks: nginx.yml
+  ansible.builtin.include_tasks: nginx.yml
   when: rapidpro_enabled
   tags: [centrifugo, nginx]
 
 - name: Realtime sockets (Centrifugo)
-  include_tasks:
+  ansible.builtin.include_tasks:
     file: centrifugo.yml
     apply:
       tags: [centrifugo]
@@ -33,8 +33,8 @@
   tags: [centrifugo]
 
 - name: Mark RapidPro as Installed
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/iiab/iiab_state.yml
     line: "rapidpro_installed: true"
-    create: yes
-  become: yes
+    create: true
+  become: true

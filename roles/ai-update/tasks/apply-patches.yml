@@ -9,7 +9,7 @@
 # Patch 1: Tenant-scoped memory isolation via contextvars
 # Reason: Multi-tenant WhatsApp deployments need per-user memory dirs
 - name: "hermes: tenant memory isolation"
-  replace:
+  ansible.builtin.replace:
     path: /opt/iiab/hermes-agent/tools/memory_tool.py
     regexp: |
       def get_memory_dir\(\) -> Path:
@@ -30,29 +30,29 @@
               user_digits = urn.split(":")[-1].lstrip("+")
               return base / f"user_{user_digits}"
           return base
-  become: yes
+  become: true
   register: patch_tenant
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: "⚠️  tenant isolation patch did not apply"
-  debug:
+  ansible.builtin.debug:
     msg: "Hermes tenant isolation patch FAILED — upstream may have refactored memory_tool.py"
   when: patch_tenant is failed
 
 # Patch 2: 4KB USER.md storage cap
 # Reason: Prevent token exhaustion from unbounded user memory growth
 - name: "hermes: 4KB USER.md storage cap"
-  replace:
+  ansible.builtin.replace:
     # upstream moved MemoryStore (and its limit getter) out of memory_tool.py
     path: /opt/iiab/hermes-agent/tools/memory_tool_store.py
     regexp: 'return self\.user_char_limit if target == "user" else self\.memory_char_limit'
     replace: 'return 4096 if target == "user" else self.memory_char_limit  # IIAB: storage cap for multi-tenant'
-  become: yes
+  become: true
   register: patch_cap
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: "⚠️  storage cap patch did not apply"
-  debug:
+  ansible.builtin.debug:
     msg: "Hermes 4KB storage cap patch FAILED — check tools/memory_tool_store.py"
   when: patch_cap is failed
 
@@ -64,16 +64,16 @@
 # create_revision canvas builds failing in the gateway). A slotted class is
 # only weakref-able if __slots__ includes __weakref__.
 - name: "hermes: _SafeWriter weakref slot (structlog compatibility)"
-  replace:
+  ansible.builtin.replace:
     path: /opt/iiab/hermes-agent/agent/process_bootstrap.py
     regexp: '__slots__ = \("_inner",\)'
     replace: '__slots__ = ("_inner", "__weakref__")  # IIAB: weakref-able for structlog WRITE_LOCKS'
-  become: yes
+  become: true
   register: patch_safewriter
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: "⚠️  _SafeWriter weakref patch did not apply"
-  debug:
+  ansible.builtin.debug:
     msg: "Hermes _SafeWriter weakref patch FAILED — check agent/process_bootstrap.py"
   when: patch_safewriter is failed
 
@@ -82,7 +82,7 @@
 # anchor. Check the end state instead and stop the play: an agent restarted
 # without tenant isolation would share one memory file between every user.
 - name: "hermes: verify deploy patches are present (fails loudly on a silent miss)"
-  shell: |
+  ansible.builtin.shell: |
     set -e
     grep -q 'current_tenant_urn' /opt/iiab/hermes-agent/tools/memory_tool.py \
       || { echo "MISSING: tenant memory isolation (tools/memory_tool.py)"; exit 1; }
@@ -93,7 +93,7 @@
   args:
     executable: /bin/bash
   changed_when: false
-  become: yes
+  become: true
 
 # ═══════════════════════════════════════════════════════════════════
 # MemPalace patches
@@ -113,9 +113,9 @@
 # We keep uv updated and install the required version, but --frozen may fail
 # if pyproject.toml has a narrow window our uv doesn't yet know about.
 - name: "rapidpro: widen Python version constraint"
-  replace:
+  ansible.builtin.replace:
     path: /opt/iiab/rapidpro/pyproject.toml
     regexp: 'requires-python = ">=3\.\d+(\.\d+)?,<3\.\d+"'
     replace: 'requires-python = ">=3.12"'
-  become: yes
-  ignore_errors: yes
+  become: true
+  ignore_errors: true

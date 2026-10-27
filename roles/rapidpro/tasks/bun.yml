@@ -7,34 +7,34 @@
 # uname -m decides the asset (bare ansible_* facts are undefined in IIAB runs).
 
 - name: Check whether bun is installed
-  stat:
+  ansible.builtin.stat:
     path: /usr/local/bin/bun
   register: bun_binary
 
 - name: Install bun
   when: not bun_binary.stat.exists
-  become: yes
+  become: true
   block:
     - name: Get machine architecture
-      command: uname -m
+      ansible.builtin.command: uname -m
       register: bun_arch
-      changed_when: False
+      changed_when: false
 
     - name: Download bun release
-      get_url:
+      ansible.builtin.get_url:
         url: "https://github.com/oven-sh/bun/releases/latest/download/bun-linux-{{ 'aarch64' if bun_arch.stdout == 'aarch64' else 'x64' }}.zip"
         dest: /tmp/bun.zip
-        mode: '0644'
+        mode: "0644"
 
     - name: Unpack bun
-      unarchive:
+      ansible.builtin.unarchive:
         src: /tmp/bun.zip
         dest: /tmp
-        remote_src: yes
+        remote_src: true
 
     - name: Install bun binary
-      copy:
+      ansible.builtin.copy:
         src: "/tmp/bun-linux-{{ 'aarch64' if bun_arch.stdout == 'aarch64' else 'x64' }}/bun"
         dest: /usr/local/bin/bun
-        mode: '0755'
-        remote_src: yes
+        mode: "0755"
+        remote_src: true

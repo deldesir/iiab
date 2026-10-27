@@ -2,25 +2,25 @@
 # --- Systemd path (standard Linux) ---
 
 - name: Manage Gunicorn service (systemd)
-  systemd:
+  ansible.builtin.systemd:
     name: rapidpro-gunicorn
     state: "{{ 'started' if rapidpro_enabled else 'stopped' }}"
     enabled: "{{ rapidpro_enabled }}"
-    daemon_reload: yes
-  become: yes
+    daemon_reload: true
+  become: true
   when: not is_proot
 
 - name: Manage Go services (systemd)
-  systemd:
+  ansible.builtin.systemd:
     name: "{{ item }}"
     state: "{{ 'started' if rapidpro_enabled else 'stopped' }}"
     enabled: "{{ rapidpro_enabled }}"
-    daemon_reload: yes
+    daemon_reload: true
   loop:
     - rapidpro-mailroom
     - rapidpro-courier
     - rapidpro-celery
-  become: yes
+  become: true
   when: not is_proot
 
 # --- pdsm path (proot/Android) ---
@@ -31,7 +31,7 @@
     - is_proot
   block:
     - name: pdsm - Enable all RapidPro services
-      command: /usr/local/bin/pdsm enable {{ item }}
+      ansible.builtin.command: /usr/local/bin/pdsm enable {{ item }}
       loop:
         - rapidpro-gunicorn
         - rapidpro-mailroom
@@ -39,7 +39,7 @@
         - rapidpro-celery
 
     - name: pdsm - Start all RapidPro services
-      command: /usr/local/bin/pdsm start {{ item }}
+      ansible.builtin.command: /usr/local/bin/pdsm start {{ item }}
       loop:
         - rapidpro-gunicorn
         - rapidpro-mailroom
@@ -54,7 +54,7 @@
     - is_proot
   block:
     - name: pdsm - Stop all RapidPro services
-      command: /usr/local/bin/pdsm stop {{ item }}
+      ansible.builtin.command: /usr/local/bin/pdsm stop {{ item }}
       loop:
         - rapidpro-gunicorn
         - rapidpro-mailroom
@@ -65,7 +65,7 @@
       failed_when: false
 
     - name: pdsm - Disable all RapidPro services
-      command: /usr/local/bin/pdsm disable {{ item }}
+      ansible.builtin.command: /usr/local/bin/pdsm disable {{ item }}
       loop:
         - rapidpro-gunicorn
         - rapidpro-mailroom

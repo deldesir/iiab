@@ -1,28 +1,26 @@
 ---
 - name: Assert that "mempalace_install is sameas true" (boolean not string etc)
-  assert:
+  ansible.builtin.assert:
     that: mempalace_install is sameas true
     fail_msg: "PLEASE SET 'mempalace_install: True' e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
+    quiet: true
 
 - name: Assert that "mempalace_enabled | type_debug == 'bool'" (boolean not string etc)
-  assert:
+  ansible.builtin.assert:
     that: mempalace_enabled | type_debug == 'bool'
     fail_msg: >-
       PLEASE GIVE VARIABLE 'mempalace_enabled' A PROPER (UNQUOTED) ANSIBLE
       BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml
-    quiet: yes
+    quiet: true
 
 - block:
-
     - name: Install MemPalace if 'mempalace_installed' not defined, e.g. in {{ iiab_state_file }}
-      include_tasks: install.yml
+      ansible.builtin.include_tasks: install.yml
       when: mempalace_installed is undefined
 
-    - include_tasks: enable-or-disable.yml
-
+    - ansible.builtin.include_tasks: enable-or-disable.yml
     - name: Add 'mempalace' variable values to {{ iiab_ini_file }}
-      ini_file:
+      community.general.ini_file:
         path: "{{ iiab_ini_file }}"
         section: mempalace
         option: "{{ item.option }}"
@@ -38,8 +36,7 @@
           value: "{{ mempalace_enabled }}"
 
   rescue:
-
-    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
-      fail:
+    - name: "SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})"
+      ansible.builtin.fail:
         msg: ""
       when: not skip_role_on_error

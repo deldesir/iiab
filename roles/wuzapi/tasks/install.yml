@@ -1,11 +1,11 @@
 ---
 - name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: df -B1 --output=used / | tail -1
   register: df1
   changed_when: false
 
 - name: Install build dependencies
-  apt:
+  ansible.builtin.apt:
     name:
       - git
       - make
@@ -13,95 +13,95 @@
       - sqlite3
       - libsqlite3-dev
     state: present
-  become: yes
+  become: true
 
 - name: Create Wuzapi directory
-  file:
+  ansible.builtin.file:
     path: "{{ wuzapi_dir }}"
     state: directory
     owner: "{{ iiab_admin_user }}"
     group: "{{ iiab_admin_user }}"
-  become: yes
+  become: true
 
 # Download via the shared helper: prefer gzipped asset, verify SHA256SUMS, raw fallback.
 - name: Install Wuzapi Binary from Release (gz-preferred, checksum-verified)
-  command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "https://github.com/deldesir/wuzapi/releases/latest/download/wuzapi-linux-{{ wuzapi_go_arch }}" "{{ wuzapi_dir }}/wuzapi"
-  become: yes
+  ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "https://github.com/deldesir/wuzapi/releases/latest/download/wuzapi-linux-{{ wuzapi_go_arch }}" "{{ wuzapi_dir }}/wuzapi"
+  become: true
 
 - name: Clone Wuzapi repository (for static assets)
-  git:
+  ansible.builtin.git:
     repo: "https://github.com/deldesir/wuzapi.git"
     dest: "/opt/iiab/wuzapi-src"
     version: "main"
-    update: yes
-  become: yes
+    update: true
+  become: true
 
 - name: Copy static assets to install directory
-  copy:
+  ansible.builtin.copy:
     src: "/opt/iiab/wuzapi-src/static"
     dest: "{{ wuzapi_dir }}/"
-    remote_src: yes
+    remote_src: true
     owner: "{{ iiab_admin_user }}"
     group: "{{ iiab_admin_user }}"
-  become: yes
+  become: true
 
 - name: Ensure correct ownership for Wuzapi directory
-  file:
+  ansible.builtin.file:
     path: "{{ wuzapi_dir }}"
     owner: "{{ iiab_admin_user }}"
     group: "{{ iiab_admin_user }}"
-    recurse: yes
+    recurse: true
     state: directory
-  become: yes
+  become: true
 
 - name: Install Wuzapi systemd service, 0600 (the unit carries the encryption, HMAC and admin keys)
-  template:
+  ansible.builtin.template:
     src: wuzapi.service.j2
     dest: /etc/systemd/system/wuzapi.service
-    mode: '0600'
-  become: yes
+    mode: "0600"
+  become: true
 
 # /etc/iiab is world-traversable (0755), so the lookup('password')-generated
 # global key files must be locked down to root-only.
 - name: Secure the auto-generated wuzapi global key files (0600)
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
-    mode: '0600'
+    mode: "0600"
     owner: root
     group: root
   loop:
     - "{{ iiab_etc_path }}/wuzapi_global_encryption_key"
     - "{{ iiab_etc_path }}/wuzapi_global_hmac_key"
-  become: yes
+  become: true
 
 - name: Symlink Wuzapi binary to path (Android)
-  file:
+  ansible.builtin.file:
     src: "{{ wuzapi_dir }}/wuzapi"
     dest: /usr/local/bin/wuzapi
     state: link
-  become: yes
+  become: true
   when: is_proot
 
 # RECORD WuzAPI AS INSTALLED
 
 - name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: df -B1 --output=used / | tail -1
   register: df2
   changed_when: false
 
 - name: Add 'wuzapi_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-  ini_file:
+  community.general.ini_file:
     path: "{{ iiab_ini_file }}"
     section: wuzapi
     option: wuzapi_disk_usage
     value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'wuzapi_installed: True'"
-  set_fact:
-    wuzapi_installed: True
+  ansible.builtin.set_fact:
+    wuzapi_installed: true
 
 - name: "Add 'wuzapi_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: "{{ iiab_state_file }}"
-    regexp: '^wuzapi_installed'
-    line: 'wuzapi_installed: True'
+    regexp: "^wuzapi_installed"
+    line: "wuzapi_installed: True"

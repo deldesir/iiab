@@ -1,27 +1,24 @@
 ---
 - name: Assert that "ai_gateway_install is sameas true" (boolean not string etc)
-  assert:
+  ansible.builtin.assert:
     that: ai_gateway_install is sameas true
     fail_msg: "PLEASE SET 'ai_gateway_install: True' e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
+    quiet: true
 
 - name: Assert that "ai_gateway_enabled | type_debug == 'bool'" (boolean not string etc)
-  assert:
+  ansible.builtin.assert:
     that: ai_gateway_enabled | type_debug == 'bool'
     fail_msg: "PLEASE GIVE VARIABLE 'ai_gateway_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
-
+    quiet: true
 
 - block:
-
     - name: Install AI Gateway if 'ai_gateway_installed' not defined, e.g. in {{ iiab_state_file }}
-      include_tasks: install.yml
+      ansible.builtin.include_tasks: install.yml
       when: ai_gateway_installed is undefined
 
-    - include_tasks: enable-or-disable.yml
-
+    - ansible.builtin.include_tasks: enable-or-disable.yml
     - name: Add 'ai_gateway' variable values to {{ iiab_ini_file }}
-      ini_file:
+      community.general.ini_file:
         path: "{{ iiab_ini_file }}"
         section: ai-gateway
         option: "{{ item.option }}"
@@ -39,8 +36,7 @@
           value: "{{ ai_gateway_port }}"
 
   rescue:
-
-    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
-      fail:
+    - name: "SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})"
+      ansible.builtin.fail:
         msg: ""
       when: not skip_role_on_error

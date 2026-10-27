@@ -37,29 +37,29 @@
       GRANT ALL PRIVILEGES ON TABLE konex_channel_configs TO {{ rapidpro_db_user | default('temba') }};
       GRANT ALL PRIVILEGES ON TABLE konex_knowledge_items TO {{ rapidpro_db_user | default('temba') }};
   when: ai_gateway_enabled and ai_gateway_postgres_uri | default('') | length > 0
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Enable & Restart 'ai-gateway' systemd service, if ai_gateway_enabled
-  systemd:
+  ansible.builtin.systemd:
     name: ai-gateway
-    daemon_reload: yes
-    enabled: yes
+    daemon_reload: true
+    enabled: true
     state: restarted
   when: ai_gateway_enabled
 
 - name: Disable & Stop 'ai-gateway' systemd service, if not ai_gateway_enabled
-  systemd:
+  ansible.builtin.systemd:
     name: ai-gateway
-    enabled: no
+    enabled: false
     state: stopped
   when: not ai_gateway_enabled
 
 - name: Configure Nginx for AI Gateway
-  include_tasks: nginx.yml
+  ansible.builtin.include_tasks: nginx.yml
   when: ai_gateway_enabled
 
 - name: Remove Nginx config for AI Gateway, if not ai_gateway_enabled
-  file:
+  ansible.builtin.file:
     path: "{{ nginx_conf_dir | default('/etc/nginx/conf.d') }}/ai-gateway.conf"
     state: absent
   when: not ai_gateway_enabled
@@ -75,4 +75,4 @@
       SET config = jsonb_set(config::jsonb, '{endpoint}', '"http://localhost:{{ ai_gateway_port }}"')::json
       WHERE config->>'endpoint' != 'http://localhost:{{ ai_gateway_port }}'
   when: ai_gateway_enabled
-  ignore_errors: yes  # Non-fatal: RapidPro may not be installed
+  ignore_errors: true # Non-fatal: RapidPro may not be installed
