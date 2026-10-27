@@ -27,6 +27,7 @@
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
+  changed_when: false
 
 - name: Create SiYuan directories
   file:
@@ -162,6 +163,7 @@
 - name: Record (final) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df2
+  changed_when: false
 
 - name: Add 'siyuan_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
   ini_file:

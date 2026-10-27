@@ -2,6 +2,7 @@
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
+  changed_when: false
 
 - name: Add hermes-agent directory to git safe directories
   community.general.git_config:
@@ -53,6 +54,7 @@
 - name: Record (final) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df2
+  changed_when: false
 
 - name: Add 'hermes_agent_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
   ini_file:

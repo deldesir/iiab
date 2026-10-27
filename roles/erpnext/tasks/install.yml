@@ -55,6 +55,7 @@
 - name: Record (initial) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df1
+  changed_when: false
 
 - name: Install ERPNext system dependencies
   apt:
@@ -847,6 +848,7 @@
 - name: Record (final) disk space used
   shell: df -B1 --output=used / | tail -1
   register: df2
+  changed_when: false
 
 - name: Add 'erpnext_disk_usage' delta to iiab.ini
   ini_file:
