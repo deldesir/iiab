@@ -1,13 +1,28 @@
 ---
 # Install tasks for ERPNext
 
-- name: The site's passwords must be set in local_vars (no defaults, so a public repository never ships a working credential)
+- name: Does the site exist already?
+  stat:
+    path: "/home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}/site_config.json"
+  register: erpnext_site_config
+
+# The database password is used on every run (the site configuration is kept in step with it),
+# the Administrator password only when the site is created: an existing site's Administrator
+# password lives hashed in that site and is not something this role knows or needs.
+- name: The database password must be set in local_vars (no default, so a public repository never ships a working credential)
+  assert:
+    that:
+      - erpnext_db_password | default('') | length > 0
+    fail_msg: "erpnext_db_password is empty - set it in /etc/iiab/local_vars.yml to the value the site uses (sites/<site>/site_config.json on an existing install)"
+    quiet: true
+
+- name: The Administrator password must be set in local_vars before the site is created
   assert:
     that:
       - erpnext_admin_password | default('') | length > 0
-      - erpnext_db_password | default('') | length > 0
-    fail_msg: "erpnext_admin_password and erpnext_db_password are empty - set them in /etc/iiab/local_vars.yml (an existing site keeps its current values: set those)"
+    fail_msg: "erpnext_admin_password is empty - set it in /etc/iiab/local_vars.yml before the site is created"
     quiet: true
+  when: not erpnext_site_config.stat.exists
 
 - name: "Set 'mysql_install: True' and 'mysql_enabled: True'"
   set_fact:
