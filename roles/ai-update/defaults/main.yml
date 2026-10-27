@@ -3,7 +3,7 @@ ai_update_install: True
 ai_update_enabled: True
 
 # uv binary
-ai_update_uv_bin: /root/.local/bin/uv
+ai_update_uv_bin: /usr/local/bin/uv
 
 # ── Gateway cluster (shared venv, ONE uv sync, ONE restart) ────────
 ai_update_gateway_dir: /opt/iiab/ai-gateway

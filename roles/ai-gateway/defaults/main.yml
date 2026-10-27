@@ -6,7 +6,8 @@ ai_gateway_enabled: True
 ai_gateway_dir: /opt/iiab/ai-gateway
 
 # uv binary path (IIAB Ansible runs as root)
-ai_gateway_uv_bin: /root/.local/bin/uv
+ai_gateway_uv_bin: /usr/local/bin/uv
+ai_gateway_python: "3.14"        # the venv's interpreter; changing it recreates the venv on the next run
 
 # Source repository
 ai_gateway_repo: "https://github.com/deldesir/gateway.git"

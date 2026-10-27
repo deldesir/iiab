@@ -7,7 +7,7 @@ hermes_agent_dir: /opt/iiab/hermes-agent
 hermes_agent_user: "{{ iiab_admin_user }}"
 
 # uv binary path
-hermes_agent_uv_bin: /root/.local/bin/uv
+hermes_agent_uv_bin: /usr/local/bin/uv
 
 # Source repository — tracks latest main branch
 hermes_agent_repo: "https://github.com/deldesir/hermes-agent.git"

@@ -5,7 +5,7 @@ email_bridge_enabled: False
 # Install location
 email_bridge_home: /opt/iiab/email-bridge
 email_bridge_user: "{{ iiab_admin_user }}"
-email_bridge_uv_bin: /root/.local/bin/uv
+email_bridge_uv_bin: /usr/local/bin/uv
 email_bridge_rapidpro_dir: /opt/iiab/rapidpro    # used to auto-create the channel
 
 # Service
