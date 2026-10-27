@@ -4,14 +4,14 @@
 erpnext_install: False
 erpnext_enabled: False
 erpnext_db_root_password: "" # Should ideally be {{ mysql_root_password }}
-erpnext_admin_password: "CHANGEME"  # Override in /etc/iiab/local_vars.yml
+erpnext_admin_password: ""   # no default: set it in /etc/iiab/local_vars.yml; the role refuses to run while it is empty
 erpnext_version: "develop"
 wkhtmltox_version: "0.12.6.1-3"    # upstream wkhtmltox release used where the OS has no wkhtmltopdf package
 erpnext_site_name: "site.local"
 erpnext_user_name: "frappe"
 erpnext_db_name: "_site_local"
 erpnext_db_user: "_site_local"
-erpnext_db_password: "CHANGEME" # User should ideally override this
+erpnext_db_password: ""   # no default: set it in /etc/iiab/local_vars.yml; the role refuses to run while it is empty
 # Public URL for email/PDF links (e.g. "https://example.com/erp").
 # Auto-derived from iiab_ssl_domain when SSL is enabled.
 # Override explicitly in local_vars.yml if needed.

@@ -1,6 +1,14 @@
 ---
 # Install tasks for ERPNext
 
+- name: The site's passwords must be set in local_vars (no defaults, so a public repository never ships a working credential)
+  assert:
+    that:
+      - erpnext_admin_password | default('') | length > 0
+      - erpnext_db_password | default('') | length > 0
+    fail_msg: "erpnext_admin_password and erpnext_db_password are empty - set them in /etc/iiab/local_vars.yml (an existing site keeps its current values: set those)"
+    quiet: true
+
 - name: "Set 'mysql_install: True' and 'mysql_enabled: True'"
   set_fact:
     mysql_install: True

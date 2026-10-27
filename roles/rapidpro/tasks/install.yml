@@ -2,6 +2,13 @@
 # This file will contain all the installation tasks for RapidPro.
 
 
+- name: The database password must be set in local_vars (no default, so a public repository never ships a working credential)
+  assert:
+    that:
+      - rapidpro_db_pass | default('') | length > 0
+    fail_msg: "rapidpro_db_pass is empty - set it in /etc/iiab/local_vars.yml (an existing install keeps its current value: set that)"
+    quiet: true
+
 - name: Drop RapidPro database if requested
   when: rapidpro_force_drop_db | default(false)
   block:
