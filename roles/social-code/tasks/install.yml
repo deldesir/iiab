@@ -1,10 +1,8 @@
 # social-code/tasks/install.yml — Install Social Code training suite
 
-- name: "Install uv (Python package manager)"
-  ansible.builtin.shell: >
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-  args:
-    creates: /root/.local/bin/uv
+- name: uv, pinned and checked (roles/uv)
+  include_role:
+    name: uv
 
 - name: "Ensure social-code source exists"
   ansible.builtin.stat:
@@ -18,12 +16,12 @@
     version: main
   when: not sc_source.stat.exists
 
-- name: "Install Python dependencies via uv"
+- name: "Install Python dependencies from the lock file (uv sync --frozen)"
   ansible.builtin.command:
-    cmd: /root/.local/bin/uv sync
+    cmd: "{{ uv_bin }} sync --frozen"
     chdir: "{{ social_code_src }}"
-  environment:
-    PATH: "/root/.local/bin:{{ ansible_env.PATH }}"
+  register: social_code_sync
+  changed_when: "'Installed' in social_code_sync.stderr or 'Uninstalled' in social_code_sync.stderr"
 
 - name: "Create data directory"
   ansible.builtin.file:

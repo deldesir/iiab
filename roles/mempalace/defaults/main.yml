@@ -7,7 +7,7 @@ mempalace_dir: /opt/iiab/mempalace
 mempalace_user: "{{ iiab_admin_user }}"
 
 # uv binary path
-mempalace_uv_bin: /root/.local/bin/uv
+mempalace_uv_bin: /usr/local/bin/uv
 
 # Source repository — tracks latest main branch
 mempalace_repo: "https://github.com/deldesir/mempalace.git"

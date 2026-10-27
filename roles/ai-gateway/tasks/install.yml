@@ -11,11 +11,9 @@
     state: present
   become: yes
 
-- name: Ensure uv is installed
-  shell: curl -LsSf https://astral.sh/uv/install.sh | sh
-  args:
-    creates: "{{ ai_gateway_uv_bin }}"
-  become: yes
+- name: uv, pinned and checked (roles/uv)
+  include_role:
+    name: uv
 
 - name: Create AI Gateway directory
   file:
@@ -80,30 +78,36 @@
 # Hermes Agent requires >=3.11; this ensures the venv satisfies all deps.
 # Must update .python-version first — uv reads this file and would refuse
 # to sync if it conflicts with pyproject.toml's requires-python.
-- name: Update .python-version to latest available Python
+- name: Pin the venv's Python for uv (.python-version)
   copy:
-    content: "3.14\n"
+    content: "{{ ai_gateway_python }}\n"
     dest: "{{ ai_gateway_dir }}/.python-version"
     owner: "{{ ai_gateway_user }}"
     group: "{{ ai_gateway_user }}"
     mode: '0644'
   become: yes
 
-- name: Ensure AI Gateway venv uses latest available Python
-  command: "{{ ai_gateway_uv_bin }} venv .venv --python 3.14 --clear"
-  args:
-    chdir: "{{ ai_gateway_dir }}"
+- name: Which Python the AI Gateway venv runs, if it exists
+  command: "{{ ai_gateway_dir }}/.venv/bin/python -c 'import sys; print(f\"{sys.version_info[0]}.{sys.version_info[1]}\")'"
+  register: ai_gateway_venv_python
+  changed_when: false
+  failed_when: false
   become: yes
-  environment:
-    PATH: "/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-- name: Install AI Gateway dependencies (uv sync)
-  command: "{{ ai_gateway_uv_bin }} sync"
+- name: Create the AI Gateway venv (only when missing or on another Python; never cleared on a routine run)
+  command: "{{ ai_gateway_uv_bin }} venv .venv --python {{ ai_gateway_python }}"
   args:
     chdir: "{{ ai_gateway_dir }}"
   become: yes
-  environment:
-    PATH: "/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: ai_gateway_venv_python.rc != 0 or ai_gateway_venv_python.stdout.strip() != ai_gateway_python
+
+- name: Install AI Gateway dependencies from the lock file (uv sync --frozen)
+  command: "{{ ai_gateway_uv_bin }} sync --frozen"
+  args:
+    chdir: "{{ ai_gateway_dir }}"
+  register: ai_gateway_sync
+  changed_when: "'Installed' in ai_gateway_sync.stderr or 'Uninstalled' in ai_gateway_sync.stderr"
+  become: yes
 
 - name: Fix ownership after uv sync
   file:

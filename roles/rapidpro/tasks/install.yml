@@ -147,47 +147,36 @@
   become: yes
   ignore_errors: yes
 
-- name: Install or update uv
-  shell: |
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-  become: yes
-  become_user: "{{ iiab_admin_user }}"
-  changed_when: false
+- name: uv, pinned and checked (roles/uv)
+  include_role:
+    name: uv
 
 - name: Install required Python version via uv
   shell: |
-    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    uv python install
+    {{ uv_bin }} python install
   args:
     chdir: "{{ rapidpro_dir }}"
   become: yes
   become_user: "{{ iiab_admin_user }}"
   changed_when: false
 
-- name: Create uv virtual environment
-  shell: |
-    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    uv venv --clear
+- name: Create uv virtual environment (only when missing; a routine run never clears it)
+  command: "{{ uv_bin }} venv"
   args:
     chdir: "{{ rapidpro_dir }}"
+    creates: "{{ rapidpro_dir }}/.venv/bin/python"
   become: yes
   become_user: "{{ iiab_admin_user }}"
 
-- name: Regenerate lockfile after pyproject.toml patch
-  shell: |
-    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    uv lock --upgrade
+# The fork's uv.lock is the truth: no `uv lock --upgrade` here (it silently bumped every
+# dependency on each run and once brought in a database driver change that took the gateway
+# down). A dependency change is a commit to the fork.
+- name: Sync dependencies from the lock file (uv sync --frozen)
+  command: "{{ uv_bin }} sync --frozen"
   args:
     chdir: "{{ rapidpro_dir }}"
-  become: yes
-  become_user: "{{ iiab_admin_user }}"
-
-- name: Sync dependencies with uv
-  shell: |
-    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    uv sync
-  args:
-    chdir: "{{ rapidpro_dir }}"
+  register: rapidpro_sync
+  changed_when: "'Installed' in rapidpro_sync.stderr or 'Uninstalled' in rapidpro_sync.stderr"
   become: yes
   become_user: "{{ iiab_admin_user }}"
 

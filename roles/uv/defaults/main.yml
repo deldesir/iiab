@@ -1,0 +1,8 @@
+# uv, the Python project tool the service roles build their venvs with: one pinned release,
+# verified against the publisher's checksum, installed system-wide. Bump the version and both
+# checksums together (https://github.com/astral-sh/uv/releases, the *.tar.gz.sha256 assets).
+uv_version: "0.11.17"
+uv_bin: /usr/local/bin/uv
+uv_checksums:
+  x86_64: "0017ccecaeb4d431d7f93b583ebff0c5c38e00eb734fcf13d05f72ca419125fe"
+  aarch64: "de008880a903ac2c5654647dc19a75c0d6652313c977a2bc5ce05e1e3a93429e"

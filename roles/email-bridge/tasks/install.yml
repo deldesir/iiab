@@ -10,11 +10,9 @@
     state: present
   become: yes
 
-- name: Ensure uv is installed
-  shell: which uv || curl -LsSf https://astral.sh/uv/install.sh | sh
-  args:
-    creates: "{{ email_bridge_uv_bin }}"
-  become: yes
+- name: uv, pinned and checked (roles/uv)
+  include_role:
+    name: uv
 
 - name: Create email-bridge home directory
   file:
@@ -46,12 +44,12 @@
   become: yes
 
 - name: Sync email-bridge Python dependencies (uv sync)
-  command: "{{ email_bridge_uv_bin }} sync"
+  command: "{{ email_bridge_uv_bin }} sync --frozen"
   args:
     chdir: "{{ email_bridge_home }}"
+  register: email_bridge_sync
+  changed_when: "'Installed' in email_bridge_sync.stderr or 'Uninstalled' in email_bridge_sync.stderr"
   become: yes
-  environment:
-    PATH: "/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 - name: Fix ownership after uv sync
   file:
