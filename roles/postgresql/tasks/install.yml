@@ -91,6 +91,16 @@
     group: postgres
     mode: "0640"
 
+- name: Install /library/pgsql-iiab/pg_hba.conf from template (postgres:postgres, 0640) so local connections prove a password
+  template:
+    backup: yes
+    src: pg_hba.conf.j2
+    dest: /library/pgsql-iiab/pg_hba.conf
+    owner: postgres
+    group: postgres
+    mode: "0640"
+  notify: reload postgresql-iiab
+
 - name: Disable & Stop stock 'postgresql' (parent) systemd service
   systemd:
     name: postgresql

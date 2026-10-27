@@ -1,0 +1,4 @@
+- name: reload postgresql-iiab
+  command: "/usr/lib/postgresql/{{ postgresql_version }}/bin/pg_ctl reload -D /library/pgsql-iiab"
+  become: yes
+  become_user: postgres
