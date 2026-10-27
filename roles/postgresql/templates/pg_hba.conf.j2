@@ -1,0 +1,12 @@
+# Managed by Ansible (postgresql role). initdb's default trusts every local connection: any
+# process on the box could connect as any role, the superuser included, without a password.
+# Here the postgres OS user is trusted through the unix socket (peer), and everything else,
+# socket or loopback, proves a password (scram-sha-256, which every role's password is hashed with).
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+local   all             postgres                                peer
+local   all             all                                     scram-sha-256
+host    all             all             127.0.0.1/32            scram-sha-256
+host    all             all             ::1/128                 scram-sha-256
+local   replication     postgres                                peer
+host    replication     all             127.0.0.1/32            scram-sha-256
+host    replication     all             ::1/128                 scram-sha-256
