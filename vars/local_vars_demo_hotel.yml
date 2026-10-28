@@ -116,6 +116,7 @@ pbx_install: False
 pbx_enabled: False
 erpnext_install: True
 erpnext_enabled: True
+storefront_repo: ""   # a demo box has no customer storefront; name a repository here to publish one
 erpnext_admin_password: "demo1234"
 erpnext_business_name: "Demo Hotel"
 rapidpro_install: False
