@@ -19,7 +19,7 @@
     name: git
     state: present
 
-- name: Ensure the site name resolves to localhost (builder push hits {{ erpnext_site_name }}:8000 directly)
+- name: "Ensure the site name resolves to localhost, since the builder push hits port 8000 directly on {{ erpnext_site_name }}"
   ansible.builtin.lineinfile:
     path: /etc/hosts
     line: "127.0.0.1 {{ erpnext_site_name }}"

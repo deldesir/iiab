@@ -23,9 +23,9 @@
     - wuzapi_enabled
     - is_proot
   block:
-    - name: pdsm - Enable wuzapi
+    - name: "Android (pdsm): enable wuzapi"
       ansible.builtin.command: /usr/local/bin/pdsm enable wuzapi
-    - name: pdsm - Start wuzapi
+    - name: "Android (pdsm): start wuzapi"
       ansible.builtin.command: /usr/local/bin/pdsm start wuzapi
       register: pdsm_wuzapi_start
       changed_when: "'already running' not in pdsm_wuzapi_start.stdout"

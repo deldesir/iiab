@@ -14,7 +14,7 @@
     state: present
   become: true
 
-- name: uv, pinned and checked (roles/uv)
+- name: Install uv, pinned and checked (roles/uv)
   ansible.builtin.include_role:
     name: uv
 
@@ -129,7 +129,7 @@
   args:
     executable: /bin/bash
 
-- name: Add 'rivebot_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
+- name: Add rivebot_disk_usage to {{ iiab_ini_file }}
   community.general.ini_file:
     path: "{{ iiab_ini_file }}"
     section: rivebot

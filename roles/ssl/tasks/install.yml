@@ -128,14 +128,14 @@
     var: certbot_result.stdout_lines
 
 # Symlink Let's Encrypt certs to IIAB's expected paths
-- name: "Symlink fullchain.pem → /etc/nginx/ssl/{{ iiab_ssl_domain }}.cert.pem"
+- name: "Symlink fullchain.pem to the NGINX certificate path for {{ iiab_ssl_domain }}"
   ansible.builtin.file:
     src: "/etc/letsencrypt/live/{{ iiab_ssl_domain }}/fullchain.pem"
     dest: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.cert.pem"
     state: link
     force: true
 
-- name: "Symlink privkey.pem → /etc/nginx/ssl/{{ iiab_ssl_domain }}.key.pem"
+- name: "Symlink privkey.pem to the NGINX key path for {{ iiab_ssl_domain }}"
   ansible.builtin.file:
     src: "/etc/letsencrypt/live/{{ iiab_ssl_domain }}/privkey.pem"
     dest: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.key.pem"

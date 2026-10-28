@@ -102,7 +102,7 @@
       register: wkhtmltox_arch
       changed_when: false
 
-    - name: Download wkhtmltox {{ wkhtmltox_version }} for {{ wkhtmltox_arch.stdout }}
+    - name: Download the wkhtmltox release for this architecture, version {{ wkhtmltox_version }}
       ansible.builtin.get_url:
         url: "https://github.com/wkhtmltopdf/packaging/releases/download/{{ wkhtmltox_version }}/wkhtmltox_{{ wkhtmltox_version }}.jammy_{{ wkhtmltox_arch.stdout }}.deb"
         dest: /tmp/wkhtmltox.deb
@@ -113,7 +113,7 @@
       ansible.builtin.apt:
         deb: /tmp/wkhtmltox.deb
   rescue:
-    - name: wkhtmltopdf could not be installed on this OS
+    - name: "Stop: wkhtmltopdf could not be installed on this OS"
       ansible.builtin.debug:
         msg: "wkhtmltopdf is unavailable here: PDF printing (invoices, receipts) will not work until it is installed by hand. The ERPNext install continues."
 - name: Ensure git-hooks directory exists in /etc
@@ -780,7 +780,8 @@
 # (never tmpfs, guaranteed on-disk) provides overflow headroom.
 # The block/always structure guarantees the swapfile is cleaned up even if the
 # build fails.
-- when: erpnext_enabled | bool and _needs_build | bool
+- name: Build the front-end bundles when a build is due
+  when: erpnext_enabled | bool and _needs_build | bool
 
   # ── Start services with clean workers ──────────────────────────────────────────
   # Restart (not just start) every service explicitly to guarantee gunicorn

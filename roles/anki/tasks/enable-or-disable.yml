@@ -14,13 +14,13 @@
     state: stopped
   when: not anki_enabled
 
-- name: Enable http://box{{ anki_url }} via NGINX, by installing {{ nginx_conf_dir }}/anki-nginx.conf from template
+- name: Enable the NGINX site for anki from the template, installing anki-nginx.conf in {{ nginx_conf_dir }}
   ansible.builtin.template:
     src: anki-nginx.conf.j2
     dest: "{{ nginx_conf_dir }}/anki-nginx.conf" # /etc/nginx/conf.d
   when: anki_enabled
 
-- name: Disable http://box{{ anki_url }} via NGINX, by removing {{ nginx_conf_dir }}/anki-nginx.conf
+- name: Disable the NGINX site for anki by removing anki-nginx.conf from {{ nginx_conf_dir }}
   ansible.builtin.file:
     path: "{{ nginx_conf_dir }}/anki-nginx.conf" # /etc/nginx/conf.d
     state: absent

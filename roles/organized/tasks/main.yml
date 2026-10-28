@@ -11,12 +11,14 @@
     fail_msg: "PLEASE GIVE VARIABLE 'organized_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: true
 
-- block:
+- name: Install, then enable or disable the congregation app
+  block:
     - name: Install organized if 'organized_installed' not defined, e.g. in {{ iiab_state_file }}
       ansible.builtin.include_tasks: install.yml
       when: organized_installed is undefined
 
-    - ansible.builtin.include_tasks: enable-or-disable.yml
+    - name: Enable or disable the congregation app
+      ansible.builtin.include_tasks: enable-or-disable.yml
     - name: Add 'organized' variable values to {{ iiab_ini_file }}
       community.general.ini_file:
         path: "{{ iiab_ini_file }}"

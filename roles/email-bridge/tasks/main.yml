@@ -11,7 +11,8 @@
     fail_msg: "email_bridge_enabled must be a boolean"
     quiet: true
 
-- block:
+- name: Install, then enable or disable the email bridge
+  block:
     - name: Install email-bridge if 'email_bridge_installed' not defined, e.g. in {{ iiab_state_file }}
       ansible.builtin.include_tasks: install.yml
       when: email_bridge_installed is undefined

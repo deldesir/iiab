@@ -15,6 +15,3 @@ skip_list:
   - no-handler                    # sweep: tasks gated on x.changed become handlers
   - command-instead-of-module     # sweep: git/systemctl/chmod calls that have a module
   - command-instead-of-shell      # same sweep
-  - name[casing]                  # sweep: task names (capitalised, no leading jinja, none missing)
-  - name[template]
-  - name[missing]

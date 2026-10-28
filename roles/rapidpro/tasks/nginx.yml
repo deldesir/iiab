@@ -2,7 +2,7 @@
 # Every task here carries the `centrifugo` and `nginx` tags: a tag-filtered run
 # must evaluate all of them, since the reload condition reads their results.
 
-- name: Enable http://box{{ rapidpro_url }} via NGINX, by installing {{ nginx_conf_dir }}/rapidpro-nginx.conf from template # http://box/rp
+- name: Enable the NGINX site for rapidpro from the template, installing rapidpro-nginx.conf in {{ nginx_conf_dir }}
   ansible.builtin.template:
     src: rapidpro-nginx.conf.j2
     dest: "{{ nginx_conf_dir }}/rapidpro-nginx.conf" # /etc/nginx/conf.d
@@ -10,7 +10,7 @@
   register: rapidpro_nginx_conf
   tags: [centrifugo, nginx]
 
-- name: Disable http://box{{ rapidpro_url }} via NGINX, by removing {{ nginx_conf_dir }}/rapidpro-nginx.conf # http://box/rp
+- name: Disable the NGINX site for rapidpro by removing rapidpro-nginx.conf from {{ nginx_conf_dir }}
   ansible.builtin.file:
     path: "{{ nginx_conf_dir }}/rapidpro-nginx.conf" # /etc/nginx/conf.d
     state: absent

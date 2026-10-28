@@ -11,12 +11,14 @@
     fail_msg: "PLEASE GIVE VARIABLE 'wuzapi_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: true
 
-- block:
+- name: Install, then enable or disable wuzapi
+  block:
     - name: Install WuzAPI if 'wuzapi_installed' not defined, e.g. in {{ iiab_state_file }}
       ansible.builtin.include_tasks: install.yml
       when: wuzapi_installed is undefined
 
-    - ansible.builtin.include_tasks: enable-or-disable.yml
+    - name: Enable or disable wuzapi
+      ansible.builtin.include_tasks: enable-or-disable.yml
     - name: Add 'wuzapi' variable values to {{ iiab_ini_file }}
       community.general.ini_file:
         path: "{{ iiab_ini_file }}"

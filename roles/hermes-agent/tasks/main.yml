@@ -13,12 +13,14 @@
       BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml
     quiet: true
 
-- block:
+- name: Install, then enable or disable the Hermes agent
+  block:
     - name: Install Hermes Agent if 'hermes_agent_installed' not defined, e.g. in {{ iiab_state_file }}
       ansible.builtin.include_tasks: install.yml
       when: hermes_agent_installed is undefined
 
-    - ansible.builtin.include_tasks: enable-or-disable.yml
+    - name: Enable or disable the Hermes agent
+      ansible.builtin.include_tasks: enable-or-disable.yml
     - name: Add 'hermes_agent' variable values to {{ iiab_ini_file }}
       community.general.ini_file:
         path: "{{ iiab_ini_file }}"
