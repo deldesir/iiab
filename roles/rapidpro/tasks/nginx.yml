@@ -56,4 +56,5 @@
   ansible.builtin.command: nginx -s reload
   become: true
   when: rapidpro_nginx_changed and is_proot
+  changed_when: true   # gated on the configuration change above
   tags: [centrifugo, nginx]

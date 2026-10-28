@@ -79,6 +79,7 @@
   become: true
   become_user: postgres
   when: is_proot and (db_table_count.stdout | default('0') | trim | int == 0)
+  changed_when: true   # runs only against an empty database (the count above), so a run is a change
 
 - name: Run database migrations
   ansible.builtin.shell: |
@@ -338,11 +339,14 @@
   ansible.builtin.command: /usr/local/bin/pdsm restart rapidpro-server
   become: true
   when: rapidpro_collectstatic is changed and is_proot
+  changed_when: true   # gated on the static build above: a restart is the change
 
 - name: Start RapidPro Watchdog (Android) ensures services stay running
   ansible.builtin.command: /usr/local/bin/pdsm start rapidpro-watchdog
   become: true
   when: is_proot
+  register: rapidpro_watchdog_start
+  changed_when: "'already running' not in rapidpro_watchdog_start.stdout"   # the wrapper's own message
 
 - name: Enable or disable RapidPro services
   ansible.builtin.include_tasks: enable-or-disable.yml
