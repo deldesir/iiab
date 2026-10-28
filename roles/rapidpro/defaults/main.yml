@@ -38,7 +38,6 @@ rapidpro_mailroom_src_dir: /opt/iiab/mailroom
 rapidpro_drop_db_on_reinstall: false
 rapidpro_force_drop_db: false
 
-rapidpro_assets_url: "https://github.com/deldesir/rp-assets/raw/main/rapidpro-assets-{{ rapidpro_assets_version }}.tar.gz"
 wuzapi_port: 8095
 
 wuzapi_admintoken: ""
