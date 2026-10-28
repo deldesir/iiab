@@ -11,7 +11,7 @@ import pytest
 _SCRATCH = Path(os.environ.get("PYTEST_FLEET_SCRATCH") or "/tmp/fleet-tool-tests")   # noqa: S108  a per-run scratch tree, replaced below per test
 _SCRATCH.mkdir(parents=True, exist_ok=True)
 os.environ["FLEET_NO_NETWORK"] = "1"
-for k, v in {"FLEET_INVENTORY": "fleet.yml", "FLEET_RELEASES": "releases", "FLEET_STATE": "state", "FLEET_PUSH_CONF": "fleet.conf", "FLEET_CATALOG": "catalog.yml", "FLEET_HUB_BACKUPS": "backups"}.items():
+for k, v in {"FLEET_INVENTORY": "fleet.yml", "FLEET_RELEASES": "releases", "FLEET_STATE": "state", "FLEET_PUSH_CONF": "fleet.conf", "FLEET_CATALOG": "catalog.yml", "FLEET_HUB_BACKUPS": "backups", "FLEET_OFFBOARD_DIR": "offboard"}.items():
     os.environ[k] = str(_SCRATCH / v)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -145,15 +145,16 @@ def scratch(tmp_path, monkeypatch):
         d.mkdir(parents=True)
         (d / f"{host}-database.sql.gz").write_bytes(b"")
     monkeypatch.setattr(config, "HUB_BACKUPS", tmp_path / "backups")
+    monkeypatch.setattr(config, "OFFBOARD_DIR", tmp_path / "offboard")
     monkeypatch.setattr(config, "INVENTORY", tmp_path / "fleet.yml")
     monkeypatch.setattr(config, "CATALOG", tmp_path / "catalog.yml")
     monkeypatch.setattr(config, "RELEASES", tmp_path / "releases")
     monkeypatch.setattr(config, "STATE", tmp_path / "state")
     monkeypatch.setattr(config, "PUSH_CONF", tmp_path / "fleet.conf")
     # modules that imported the names bind their own copies: point those too
-    import fleet_tool.checks as checks, fleet_tool.releases as releases, fleet_tool.site as site, fleet_tool.state as state, fleet_tool.upgrade as upgrade  # noqa: E401
-    for mod in (checks, releases, site, state, upgrade):
-        for name in ("INVENTORY", "CATALOG", "RELEASES", "STATE", "PUSH_CONF", "HUB_BACKUPS"):
+    import fleet_tool.checks as checks, fleet_tool.lifecycle as lifecycle, fleet_tool.releases as releases, fleet_tool.site as site, fleet_tool.state as state, fleet_tool.transport as transport_, fleet_tool.upgrade as upgrade  # noqa: E401
+    for mod in (checks, lifecycle, releases, site, state, transport_, upgrade):
+        for name in ("INVENTORY", "CATALOG", "RELEASES", "STATE", "PUSH_CONF", "HUB_BACKUPS", "OFFBOARD_DIR"):
             if hasattr(mod, name):
                 monkeypatch.setattr(mod, name, getattr(config, name))
     return tmp_path

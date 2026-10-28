@@ -3,10 +3,9 @@ from __future__ import annotations
 
 import datetime as dt
 import sys
-from pathlib import Path
 
 from .checks import judge_receivables
-from .config import label, log_action, save_inventory, select_boxes
+from .config import OFFBOARD_DIR, label, log_action, save_inventory, select_boxes
 from .site import push, site_get
 from .transport import bench, rsync, run_on
 
@@ -137,7 +136,7 @@ def cmd_offboard(a, inv):
     if box["owner"] == "self":
         sys.exit("fleet: refusing to offboard one of our own boxes")
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    dest = Path("/library/backups/offboard") / box["id"] / stamp
+    dest = OFFBOARD_DIR / box["id"] / stamp
     dest.mkdir(parents=True, exist_ok=True)
     print(f"== {box['id']}: final backup with files")
     rc, out = run_on(box, bench(box, f"--site {box['site']} backup --with-files"), timeout=1800)

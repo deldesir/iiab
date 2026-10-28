@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""fleet: the entry point. The command lives in the fleet_tool package beside this file in the
-repository (scripts/fleet_tool); an installed copy of this file finds the installed copy of the
-package first (/usr/local/lib/fleet_tool), then the repository's. `fleet --help` for the commands."""
+"""fleet: the entry point. The command lives in the fleet_tool package beside this file: in the
+repository that is scripts/fleet_tool, and a run from a checkout uses that checkout's package
+(so a branch can be tried from a worktree). The installed copy of this file has no package
+beside it and finds the installed package (/usr/local/lib/fleet_tool), then the repository's.
+`fleet --help` for the commands."""
 import sys
 from pathlib import Path
 
 _here = Path(__file__).resolve().parent
-for cand in (Path("/usr/local/lib"), _here, Path("/opt/iiab/iiab/scripts")):
+for cand in (_here, Path("/usr/local/lib"), Path("/opt/iiab/iiab/scripts")):
     if (cand / "fleet_tool" / "cli.py").exists():
         sys.path.insert(0, str(cand))
         break
