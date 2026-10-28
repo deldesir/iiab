@@ -1,0 +1,33 @@
+---
+# The flow engine's database: the role, the database and its extensions (the cluster listens on
+# its unix socket; these run as the postgres user).
+
+- name: Create PostgreSQL user
+  community.postgresql.postgresql_user:
+    name: "{{ rapidpro_db_user }}"
+    password: "{{ rapidpro_db_pass }}"
+    login_unix_socket: /var/run/postgresql
+  become: true
+  become_user: postgres
+
+- name: Create PostgreSQL database
+  community.postgresql.postgresql_db:
+    name: "{{ rapidpro_db_name }}"
+    owner: "{{ rapidpro_db_user }}"
+    login_unix_socket: /var/run/postgresql
+  become: true
+  become_user: postgres
+
+- name: Enable PostgreSQL extensions
+  community.postgresql.postgresql_ext:
+    name: "{{ item }}"
+    login_db: "{{ rapidpro_db_name }}"
+    login_unix_socket: /var/run/postgresql
+  loop:
+    - postgis
+    - postgis_topology
+    - hstore
+    - "uuid-ossp"
+    - vector # pgvector >= 0.8, built from source in install.yml (knowledge app)
+  become: true
+  become_user: postgres

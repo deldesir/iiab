@@ -1,0 +1,65 @@
+---
+# The schema: the prebuilt seed on Android, the migrations, the search indexes (or the DynamoDB
+# tables when the cloud services are on).
+
+- name: Copy prebuilt database dump (Android)
+  ansible.builtin.copy:
+    src: rapidpro_android_seed.dump
+    dest: /tmp/rapidpro_android_seed.dump
+    mode: "0644"
+  when: is_proot
+  become: true
+
+- name: Check if database is populated (Android)
+  ansible.builtin.shell: |
+    export PGHOST=/tmp
+    psql -d {{ rapidpro_db_name }} -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';" -t
+  become: true
+  become_user: postgres
+  register: db_table_count
+  when: is_proot
+  changed_when: false
+  ignore_errors: true
+
+- name: Restore prebuilt database (Android)
+  ansible.builtin.shell: |
+    export PGHOST=/tmp
+    pg_restore -d {{ rapidpro_db_name }} /tmp/rapidpro_android_seed.dump || true
+  become: true
+  become_user: postgres
+  when: is_proot and (db_table_count.stdout | default('0') | trim | int == 0)
+
+- name: Run database migrations
+  ansible.builtin.shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    uv run python manage.py migrate
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: true
+  become_user: "{{ iiab_admin_user }}"
+  register: rapidpro_migrate
+  changed_when: "'No migrations to apply' not in rapidpro_migrate.stdout"
+
+# the Postgres indexes contact and message search use without Elasticsearch; idempotent, kept out of the
+# migration graph so they never collide with upstream's numbering
+- name: Create the Postgres search indexes
+  ansible.builtin.shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    uv run python manage.py nanorp_indexes
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: true
+  become_user: "{{ iiab_admin_user }}"
+  when: not rapidpro_aws_enabled
+  changed_when: true   # creates what is missing; the command does not report which
+
+- name: Run DynamoDB migrations (create tables)
+  ansible.builtin.shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    uv run python manage.py migrate_dynamo
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: true
+  become_user: "{{ iiab_admin_user }}"
+  when: rapidpro_aws_enabled
+  changed_when: true   # creates the tables that are missing; the command does not report which
