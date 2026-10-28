@@ -19,6 +19,7 @@
 
 - name: Create Wuzapi directory
   ansible.builtin.file:
+    mode: "0755"
     path: "{{ wuzapi_dir }}"
     state: directory
     owner: "{{ iiab_admin_user }}"
@@ -42,6 +43,7 @@
 
 - name: Copy static assets to install directory
   ansible.builtin.copy:
+    mode: preserve
     src: "/opt/iiab/wuzapi-src/static"
     dest: "{{ wuzapi_dir }}/"
     remote_src: true
@@ -97,6 +99,7 @@
 
 - name: Add wuzapi_disk_usage to {{ iiab_ini_file }}
   community.general.ini_file:
+    mode: "0644"
     path: "{{ iiab_ini_file }}"
     section: wuzapi
     option: wuzapi_disk_usage

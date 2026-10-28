@@ -38,6 +38,7 @@
 
 - name: Install WebDAV systemd service
   ansible.builtin.template:
+    mode: "0644"
     src: siyuan-sync-webdav.service.j2
     dest: /etc/systemd/system/siyuan-sync-webdav.service
   become: true
@@ -52,6 +53,7 @@
 
 - name: Publish WebDAV on the tailnet
   ansible.builtin.template:
+    mode: "0644"
     src: siyuan-sync.conf.j2
     dest: /etc/nginx/sites-enabled/siyuan-sync.conf
   become: true

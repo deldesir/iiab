@@ -23,6 +23,7 @@
       ansible.builtin.include_tasks: enable-or-disable.yml
     - name: Add 'hermes_agent' variable values to {{ iiab_ini_file }}
       community.general.ini_file:
+        mode: "0644"
         path: "{{ iiab_ini_file }}"
         section: hermes-agent
         option: "{{ item.option }}"

@@ -4,6 +4,7 @@
 
 - name: Enable the NGINX site for rapidpro from the template, installing rapidpro-nginx.conf in {{ nginx_conf_dir }}
   ansible.builtin.template:
+    mode: "0644"
     src: rapidpro-nginx.conf.j2
     dest: "{{ nginx_conf_dir }}/rapidpro-nginx.conf" # /etc/nginx/conf.d
   when: rapidpro_enabled
@@ -22,6 +23,7 @@
 # auth proxies reach it through this loopback-only listener instead.
 - name: Install the loopback listener for temba's internal API, /etc/nginx/sites-enabled/rapidpro-internal.conf from template
   ansible.builtin.template:
+    mode: "0644"
     src: rapidpro-internal-nginx.conf.j2
     dest: /etc/nginx/sites-enabled/rapidpro-internal.conf
   when: rapidpro_enabled and rapidpro_centrifugo_enabled

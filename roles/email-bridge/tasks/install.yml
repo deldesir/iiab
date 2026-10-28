@@ -155,6 +155,7 @@
 
 - name: Add email_bridge_disk_usage to {{ iiab_ini_file }}
   community.general.ini_file:
+    mode: "0644"
     path: "{{ iiab_ini_file }}"
     section: email-bridge
     option: email_bridge_disk_usage

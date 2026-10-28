@@ -34,6 +34,7 @@
 
 - name: Mark RapidPro as Installed
   ansible.builtin.lineinfile:
+    mode: "0644"
     path: /etc/iiab/iiab_state.yml
     line: "rapidpro_installed: true"
     create: true

@@ -20,6 +20,7 @@
 
 - name: Create Anki sync data directory {{ anki_home }}
   ansible.builtin.file:
+    mode: "0755"
     path: "{{ anki_home }}"
     state: directory
     owner: "{{ anki_user }}"
@@ -49,6 +50,7 @@
 
 - name: Install /etc/systemd/system/anki.service from template
   ansible.builtin.template:
+    mode: "0644"
     src: anki.service.j2
     dest: /etc/systemd/system/anki.service
 
@@ -63,6 +65,7 @@
 
 - name: Add anki_disk_usage to {{ iiab_ini_file }}
   community.general.ini_file:
+    mode: "0644"
     path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
     section: anki
     option: anki_disk_usage

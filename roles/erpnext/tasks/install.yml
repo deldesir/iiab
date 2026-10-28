@@ -168,6 +168,7 @@
 
 - name: Configure MariaDB for ERPNext
   ansible.builtin.template:
+    mode: "0644"
     src: erpnext-mysqld.cnf.j2
     dest: /etc/mysql/mariadb.conf.d/99-erpnext.cnf
   notify: restart mariadb
@@ -715,6 +716,7 @@
 
 - name: Configure IIAB Nginx Sub-Path Proxy for ERPNext
   ansible.builtin.template:
+    mode: "0644"
     src: erpnext-nginx.conf.j2
     dest: /etc/nginx/conf.d/erpnext-nginx.conf
   notify:
@@ -908,6 +910,7 @@
 
 - name: Add 'erpnext_disk_usage' delta to iiab.ini
   community.general.ini_file:
+    mode: "0644"
     path: /etc/iiab/iiab.ini
     section: erpnext
     option: erpnext_disk_usage

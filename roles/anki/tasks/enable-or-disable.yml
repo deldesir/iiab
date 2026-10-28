@@ -16,6 +16,7 @@
 
 - name: Enable the NGINX site for anki from the template, installing anki-nginx.conf in {{ nginx_conf_dir }}
   ansible.builtin.template:
+    mode: "0644"
     src: anki-nginx.conf.j2
     dest: "{{ nginx_conf_dir }}/anki-nginx.conf" # /etc/nginx/conf.d
   when: anki_enabled
