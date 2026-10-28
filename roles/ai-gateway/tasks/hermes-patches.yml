@@ -1,7 +1,8 @@
 ---
 # IIAB local patches on the hermes-agent library, applied at install and after every move of
-# the tree (tasks/update.yml). Same pattern as the flow engine's configure.yml: replace with
-# ignore_errors, then an end-state check that fails loudly.
+# the tree (tasks/update.yml). A replace fails only when its file is missing, which is an
+# upstream refactor and stops the play; a regexp that matches nothing is reported "ok", so the
+# end-state check at the bottom reads the files back and fails loudly.
 
 # Patch 1: Tenant-scoped memory isolation via contextvars
 # Reason: Multi-tenant WhatsApp deployments need per-user memory dirs
@@ -28,13 +29,6 @@
               return base / f"user_{user_digits}"
           return base
   become: true
-  register: patch_tenant
-  ignore_errors: true
-
-- name: "⚠️  tenant isolation patch did not apply"
-  ansible.builtin.debug:
-    msg: "Hermes tenant isolation patch FAILED — upstream may have refactored memory_tool.py"
-  when: patch_tenant is failed
 
 # Patch 2: 4KB USER.md storage cap
 # Reason: Prevent token exhaustion from unbounded user memory growth
@@ -45,13 +39,6 @@
     regexp: 'return self\.user_char_limit if target == "user" else self\.memory_char_limit'
     replace: 'return 4096 if target == "user" else self.memory_char_limit  # IIAB: storage cap for multi-tenant'
   become: true
-  register: patch_cap
-  ignore_errors: true
-
-- name: "⚠️  storage cap patch did not apply"
-  ansible.builtin.debug:
-    msg: "Hermes 4KB storage cap patch FAILED — check tools/memory_tool_store.py"
-  when: patch_cap is failed
 
 # Patch 3: _SafeWriter must be weakref-able
 # Reason: _install_safe_stdio() wraps sys.stdout/stderr in _SafeWriter before
@@ -66,17 +53,9 @@
     regexp: '__slots__ = \("_inner",\)'
     replace: '__slots__ = ("_inner", "__weakref__")  # IIAB: weakref-able for structlog WRITE_LOCKS'
   become: true
-  register: patch_safewriter
-  ignore_errors: true
 
-- name: "⚠️  _SafeWriter weakref patch did not apply"
-  ansible.builtin.debug:
-    msg: "Hermes _SafeWriter weakref patch FAILED — check agent/process_bootstrap.py"
-  when: patch_safewriter is failed
-
-# The `replace` module reports "ok" when its regexp matches NOTHING, so the
-# `is failed` warnings above cannot catch an upstream refactor that moves an
-# anchor. Check the end state instead and stop the play: an agent restarted
+# The `replace` module reports "ok" when its regexp matches NOTHING, so a moved
+# anchor would pass unseen. Check the end state and stop the play: an agent restarted
 # without tenant isolation would share one memory file between every user.
 - name: "Hermes patches: verify they are present (fails loudly on a silent miss)"
   ansible.builtin.shell: |

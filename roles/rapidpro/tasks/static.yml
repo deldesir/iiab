@@ -1,12 +1,24 @@
 ---
 # What nginx and the flow editor serve: the static build, the goflow docs, the permissions, the cache.
 
-- name: Purge legacy spool files from pre-nanorp era
-  ansible.builtin.shell: find {{ rapidpro_dir }}/spool -path '*/dynamo/*.jsonl' -o -path '*/elastic/*.jsonl' | xargs -r rm -fv
+# the spool files of the cloud services (DynamoDB, Elastic) from before the local-first mode; a
+# missing spool directory is nothing to purge
+- name: Find legacy spool files from the pre-nanorp era
+  ansible.builtin.find:
+    paths: "{{ rapidpro_dir }}/spool"
+    patterns: "*.jsonl"
+    recurse: true
+  register: rapidpro_spool_files
   when: not rapidpro_aws_enabled
-  ignore_errors: true
-  register: rapidpro_spool_purge
-  changed_when: rapidpro_spool_purge.stdout | length > 0
+
+- name: Purge legacy spool files from the pre-nanorp era
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ (rapidpro_spool_files.files | default([])) | selectattr('path', 'search', '/(dynamo|elastic)/') | list }}"
+  loop_control:
+    label: "{{ item.path }}"
+  become: true
 
 - name: Collect static files
   ansible.builtin.shell: |
@@ -75,12 +87,23 @@
     - "{{ rapidpro_dir }}/sitestatic/@nyaruka"
   become: true
 
-- name: Enforce Nginx traverse/read permissions over dynamically compiled static assets
-  ansible.builtin.command: "chmod -Rc a+rX {{ rapidpro_dir }}/sitestatic {{ rapidpro_dir }}/media"
+- name: Which of the static directories exist
+  ansible.builtin.stat:
+    path: "{{ rapidpro_dir }}/{{ item }}"
+  loop: [sitestatic, media]
+  register: rapidpro_static_dirs
+
+- name: Give nginx read and traverse rights on the static directories
+  ansible.builtin.file:
+    path: "{{ item.stat.path }}"
+    mode: a+rX
+    recurse: true
+    state: directory
+  loop: "{{ rapidpro_static_dirs.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stat.exists
   become: true
-  ignore_errors: true
-  register: rapidpro_static_perms
-  changed_when: rapidpro_static_perms.stdout | length > 0
 
 - name: Purge Django Valkey/Redis cache resolving Javascript memory desynchronizations
   ansible.builtin.shell: |

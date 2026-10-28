@@ -83,6 +83,7 @@
   become: true
   become_user: "{{ erpnext_user_name }}"
   ansible.builtin.shell: |
+    set -o pipefail
     if git remote | grep -q "^origin$"; then
         REMOTE="origin"
     else
@@ -100,11 +101,12 @@
     [ "$OLD" = "$(git rev-parse HEAD)" ] || echo "UPDATED to $(git rev-parse --short HEAD)"
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item }}
+    executable: /bin/bash
   loop:
     - frappe
     - erpnext
   when: erpnext_enabled | bool
-  ignore_errors: true
+  failed_when: false   # a box without Internet keeps the code it has; the warning below says so
   register: erpnext_core_pull
   changed_when: "'UPDATED' in erpnext_core_pull.stdout"
 
@@ -112,6 +114,7 @@
   become: true
   become_user: "{{ erpnext_user_name }}"
   ansible.builtin.shell: |
+    set -o pipefail
     if git remote | grep -q "^origin$"; then
         REMOTE="origin"
     else
@@ -129,11 +132,22 @@
     [ "$OLD" = "$(git rev-parse HEAD)" ] || echo "UPDATED to $(git rev-parse --short HEAD)"
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item.app_name }}
+    executable: /bin/bash
   loop: "{{ erpnext_extra_apps }}"
+  loop_control:
+    label: "{{ item.app_name }}"
   when: erpnext_enabled | bool
-  ignore_errors: true
+  failed_when: false   # same: an unreachable remote is not a failed install
   register: erpnext_extra_pull
   changed_when: "'UPDATED' in erpnext_extra_pull.stdout"
+
+- name: "⚠️  an app's code pull failed (no network, or a remote gone): the bench keeps the code it has"
+  ansible.builtin.debug:
+    msg: "{{ item.item.app_name | default(item.item) }}: {{ (item.stderr | default('')) | trim | regex_replace('\\n', ' ') | truncate(200) }}"
+  loop: "{{ (erpnext_core_pull.results | default([])) + (erpnext_extra_pull.results | default([])) }}"
+  loop_control:
+    label: "{{ item.item.app_name | default(item.item) }}"
+  when: item.rc is defined and item.rc != 0
 
 - name: Update Python/Node dependencies after code pull (prevents ImportError on new packages)
   become: true
