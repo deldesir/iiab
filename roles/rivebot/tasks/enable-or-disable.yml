@@ -1,15 +1,7 @@
 ---
-- name: Enable & Restart 'rivebot' systemd service, if rivebot_enabled
-  ansible.builtin.systemd:
-    name: rivebot
-    daemon_reload: true
-    enabled: true
-    state: restarted
-  when: rivebot_enabled
-
-- name: Disable & Stop 'rivebot' systemd service, if not rivebot_enabled
-  ansible.builtin.systemd:
-    name: rivebot
-    enabled: false
-    state: stopped
-  when: not rivebot_enabled
+- name: Enable and restart, or disable and stop, RiveBot (roles/uv-service)
+  ansible.builtin.include_role:
+    name: uv-service
+    tasks_from: enable
+  vars:
+    uv_service: "{{ rivebot_service }}"

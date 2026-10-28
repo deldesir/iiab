@@ -1,17 +1,7 @@
 ---
-- name: Enable & (re)start 'email-bridge' systemd service, if email_bridge_enabled
-  ansible.builtin.systemd:
-    name: email-bridge
-    daemon_reload: true
-    enabled: true
-    state: restarted
-  become: true
-  when: email_bridge_enabled
-
-- name: Disable & Stop 'email-bridge' systemd service, if not email_bridge_enabled
-  ansible.builtin.systemd:
-    name: email-bridge
-    enabled: false
-    state: stopped
-  become: true
-  when: not email_bridge_enabled
+- name: Enable and restart, or disable and stop, the email bridge (roles/uv-service)
+  ansible.builtin.include_role:
+    name: uv-service
+    tasks_from: enable
+  vars:
+    uv_service: "{{ email_bridge_service }}"

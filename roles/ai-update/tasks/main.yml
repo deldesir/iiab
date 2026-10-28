@@ -24,45 +24,31 @@
         HOME: "{{ lookup('env', 'HOME') | default('/root', true) }}" # timers and transient units have no HOME
       become: true
       loop:
-        - "{{ ai_update_gateway_dir }}"
-        - /opt/iiab/hermes-agent
-        - /opt/iiab/mempalace
-        - /opt/iiab/talkmaster
-        - /opt/iiab/jwlinker
-        - "{{ ai_update_rivebot_dir }}"
         - "{{ ai_update_rapidpro_dir }}"
         - "{{ ai_update_wuzapi_src_dir }}"
 
     # ═══════════════════════════════════════════════════════════════
-    # STAGE 1: Pull all git repos
+    # STAGE 1: The uv services, through their own update entries
     # ═══════════════════════════════════════════════════════════════
+    # Each entry moves the tree (and the gateway's libraries) to the version
+    # its role defines, re-syncs the venv, re-applies the role's patches and
+    # restarts the service when anything changed.
 
-    # 1a. Gateway cluster (shared venv)
-    - name: "Pull gateway components"
-      ansible.builtin.git:
-        repo: "{{ item.repo }}"
-        dest: "{{ item.dest }}"
-        version: "{{ item.version }}"
-        force: true
-        update: true
-      become: true
-      loop: "{{ ai_update_gateway_components }}"
-      loop_control:
-        label: "{{ item.name }}"
-      when: item.name not in ai_update_skip
-      register: gateway_git_results
+    - name: Move the AI Gateway and its libraries to their wanted versions (roles/ai-gateway, update entry)
+      ansible.builtin.include_role:
+        name: ai-gateway
+        tasks_from: update
+      when: "'ai-gateway' not in ai_update_skip"
 
-    # 1b. RiveBot (own venv)
-    - name: "Pull RiveBot"
-      ansible.builtin.git:
-        repo: "{{ ai_update_rivebot_repo }}"
-        dest: "{{ ai_update_rivebot_dir }}"
-        version: "{{ ai_update_rivebot_version }}"
-        force: true
-        update: true
-      become: true
+    - name: Move RiveBot to its wanted version (roles/rivebot, update entry)
+      ansible.builtin.include_role:
+        name: rivebot
+        tasks_from: update
       when: "'rivebot' not in ai_update_skip"
-      register: rivebot_git_result
+
+    # ═══════════════════════════════════════════════════════════════
+    # STAGE 1b: Pull the other git repos
+    # ═══════════════════════════════════════════════════════════════
 
     # 1c. RapidPro
     - name: "Pull RapidPro"
@@ -205,45 +191,9 @@
     # STAGE 3: Apply patches + resolve dependencies
     # ═══════════════════════════════════════════════════════════════
 
-    # 3a. IIAB local patches (hermes, mempalace, rapidpro)
-    - name: Apply IIAB local patches
+    # 3a. IIAB local patch on the flow engine (the gateway's library patches live in its role)
+    - name: Apply the IIAB local patch on the flow engine
       ansible.builtin.include_tasks: apply-patches.yml
-    - name: Fix ownership on gateway component dirs
-      ansible.builtin.file:
-        path: "{{ item.dest }}"
-        state: directory
-        owner: "{{ ai_update_gateway_user }}"
-        group: "{{ ai_update_gateway_user }}"
-        recurse: true
-      become: true
-      loop: "{{ ai_update_gateway_components }}"
-      loop_control:
-        label: "{{ item.name }}"
-      when: gateway_git_results.changed
-
-    # 3c. ONE gateway uv sync (resolves all editable deps)
-    - name: "Sync ai-gateway venv (all editable deps)"
-      ansible.builtin.command: "{{ ai_update_uv_bin }} sync"
-      args:
-        chdir: "{{ ai_update_gateway_dir }}"
-      become: true
-      environment:
-        PATH: "/root/.local/bin:{{ ansible_env.PATH }}"
-      when: gateway_git_results.changed
-      register: gateway_sync
-      changed_when: "'Installed' in gateway_sync.stderr or 'Uninstalled' in gateway_sync.stderr"
-
-    # 3d. RiveBot uv sync (own venv)
-    - name: "Sync RiveBot venv"
-      ansible.builtin.command: "{{ ai_update_uv_bin }} sync"
-      args:
-        chdir: "{{ ai_update_rivebot_dir }}"
-      become: true
-      environment:
-        PATH: "/root/.local/bin:{{ ansible_env.PATH }}"
-      when: rivebot_git_result.changed | default(false)
-      register: rivebot_sync
-      changed_when: "'Installed' in rivebot_sync.stderr or 'Uninstalled' in rivebot_sync.stderr"
 
     # 3e. RapidPro post-update (configure + migrate + collectstatic + patches)
     - name: RapidPro post-update
@@ -263,44 +213,11 @@
       when: wuzapi_src_result.changed | default(false)
 
     # ═══════════════════════════════════════════════════════════════
-    # STAGE 3e: Clear stale bytecode caches
-    # ═══════════════════════════════════════════════════════════════
-    # Ported from hermes update's _clear_bytecode_cache — prevents
-    # ImportError on gateway restart when updated source references
-    # names that didn't exist in the old bytecode (.pyc files).
-
-    - name: "Clear stale __pycache__ in gateway components"
-      ansible.builtin.shell: find {{ item }} -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-      become: true
-      changed_when: false
-      loop:
-        - "{{ ai_update_gateway_dir }}"
-        - /opt/iiab/hermes-agent
-        - /opt/iiab/mempalace
-      when: gateway_git_results.changed
-
-    # ═══════════════════════════════════════════════════════════════
-    # STAGE 4: Verify imports
-    # ═══════════════════════════════════════════════════════════════
-
-    - name: Verify gateway imports
-      ansible.builtin.command: >
-        {{ ai_update_uv_bin }} run python -c
-        "from run_agent import AIAgent; from mempalace.mcp_server import tool_status; print('Gateway imports OK')"
-      args:
-        chdir: "{{ ai_update_gateway_dir }}"
-      become: true
-      register: gateway_verify
-      failed_when: gateway_verify.rc != 0
-      when: gateway_git_results.changed
-      changed_when: false
-
-    # ═══════════════════════════════════════════════════════════════
     # STAGE 5: Harden permissions (ALWAYS runs)
     # ═══════════════════════════════════════════════════════════════
     # These run unconditionally because ANY stage (git pull, chown,
     # uv sync, collectstatic) can tighten directory permissions that
-    # nginx (www-data) or the hermes service user need.
+    # nginx (www-data) needs.
 
     - name: "Fix RapidPro permissions for nginx"
       ansible.builtin.shell: |
@@ -318,35 +235,9 @@
         - "'rapidpro' not in ai_update_skip"
         - not (rapidpro_aws_enabled | default(false))
 
-    - name: "Fix gateway .cache ownership for hermes service user"
-      ansible.builtin.file:
-        path: "{{ ai_update_gateway_dir }}/.cache"
-        state: directory
-        owner: hermes
-        group: hermes
-        recurse: true
-      become: true
-      changed_when: false
-      failed_when: false
-
     # ═══════════════════════════════════════════════════════════════
-    # STAGE 6: Grouped restarts
+    # STAGE 6: Grouped restarts (the uv services restarted in stage 1)
     # ═══════════════════════════════════════════════════════════════
-
-    - name: Restart ai-gateway
-      ansible.builtin.systemd:
-        name: ai-gateway
-        state: restarted
-        daemon_reload: true
-      become: true
-      when: gateway_git_results.changed
-
-    - name: Restart RiveBot
-      ansible.builtin.systemd:
-        name: rivebot
-        state: restarted
-      become: true
-      when: rivebot_git_result.changed | default(false)
 
     - name: Restart RapidPro services
       ansible.builtin.systemd:

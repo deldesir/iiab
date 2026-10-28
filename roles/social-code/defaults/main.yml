@@ -6,6 +6,12 @@
 
 social_code_src: /opt/iiab/social-code
 social_code_data_dir: /library/social-code
+social_code_user: root
+social_code_uv_bin: /usr/local/bin/uv
+
+# Source repository: cloned when the tree is absent, never moved afterwards (it carries local work)
+social_code_repo: "https://github.com/deldesir/social-code.git"
+social_code_version: main
 
 # AI model, provider/model format (e.g. gemini/..., ollama/...)
 # Default uses Gemini. For offline IIAB deployment, use Ollama:
@@ -13,3 +19,16 @@ social_code_data_dir: /library/social-code
 social_code_ai_model: "gemini/gemini-2.0-flash"
 
 social_code_url: /social-code
+
+# The project as the shared uv-service role sees it (roles/uv-service/README.md): a tree and a
+# venv with its environment file; no unit, the drills run from the shell aliases.
+social_code_service:
+  name: social-code
+  role: social-code
+  dir: "{{ social_code_src }}"
+  user: "{{ social_code_user }}"
+  repo: "{{ social_code_repo }}"
+  version: "{{ social_code_version }}"
+  update: false
+  env: social-code.env.j2
+  enabled: "{{ social_code_enabled }}"

@@ -1,0 +1,94 @@
+---
+# Move an installed uv service to its wanted version (the ai-update path). The tree and its
+# libraries are reset to `version`, local modifications included: this is the update, and a
+# role that keeps patches on a library re-applies them after this include. The dependencies
+# are re-synced when a tree moved. Nothing is restarted here: the calling role applies its
+# patches, verifies, then restarts on uv_service_changed.
+
+- name: Mark the tree and the libraries safe for git run as root (operators and timers)
+  community.general.git_config:
+    scope: global
+    name: safe.directory
+    value: "{{ item }}"
+    add_mode: add
+  loop: "{{ [svc.dir] + (svc.libraries | map(attribute='dest') | list) }}"
+  become: true
+  when: svc.source == 'git' or svc.libraries | length > 0
+
+- name: Move the source tree to the wanted version for {{ svc.name }}
+  ansible.builtin.git:
+    repo: "{{ svc.repo }}"
+    dest: "{{ svc.dir }}"
+    version: "{{ svc.version }}"
+    update: true
+    force: true
+  become: true
+  become_user: "{{ svc.user }}"
+  register: uv_service_git
+  when: svc.source == 'git'
+
+# Fetched as root with root's git credentials (a deploy key covers one repository, the
+# service tree's); the ownership is restored below.
+- name: Move the libraries to their wanted versions for {{ svc.name }}
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ item.dest }}"
+    version: "{{ item.version }}"
+    update: true
+    force: true
+  loop: "{{ svc.libraries }}"
+  loop_control:
+    label: "{{ item.name }}"
+  become: true
+  register: uv_service_libraries
+
+- name: Copy the application files again for {{ svc.name }}
+  ansible.builtin.copy:
+    src: "../../{{ svc.role }}/files/{{ item }}"
+    dest: "{{ svc.dir }}/{{ item }}"
+    owner: "{{ svc.user }}"
+    group: "{{ svc.user }}"
+    mode: "0644"
+  loop: "{{ svc.files }}"
+  become: true
+  register: uv_service_files
+  when: svc.source == 'files'
+
+- name: Note whether a tree moved for {{ svc.name }}
+  ansible.builtin.set_fact:
+    uv_service_moved: "{{ uv_service_git is changed or uv_service_libraries is changed or uv_service_files is changed }}"
+
+- name: Install the dependencies from the lock file (uv sync --frozen)
+  ansible.builtin.command: "{{ uv_service_bin }} sync --frozen"
+  args:
+    chdir: "{{ svc.dir }}"
+  become: true
+  register: uv_service_sync
+  changed_when: "'Installed' in uv_service_sync.stderr or 'Uninstalled' in uv_service_sync.stderr"
+  when: svc.deps == 'lock' and uv_service_moved
+
+- name: Install the requirements into the venv
+  ansible.builtin.command: "{{ uv_service_bin }} pip install -r requirements.txt"
+  args:
+    chdir: "{{ svc.dir }}"
+  environment:
+    VIRTUAL_ENV: "{{ svc.dir }}/.venv"
+  become: true
+  register: uv_service_pip
+  changed_when: "'Installed' in uv_service_pip.stderr"
+  when: svc.deps == 'requirements' and uv_service_moved
+
+- name: Set the ownership of the tree and the libraries of {{ svc.name }}
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ svc.user }}"
+    group: "{{ svc.user }}"
+    recurse: true
+  loop: "{{ [svc.dir] + (svc.libraries | map(attribute='dest') | list) }}"
+  become: true
+  when: uv_service_moved
+
+- name: Record whether anything changed for {{ svc.name }}
+  ansible.builtin.set_fact:
+    uv_service_changed: "{{ uv_service_moved or uv_service_sync is changed or uv_service_pip is changed }}"

@@ -6,20 +6,40 @@
   args:
     executable: /bin/bash
 
-- name: Mark organized-backend directory as safe for git
-  community.general.git_config:
-    scope: global
-    name: safe.directory
-    value: "{{ organized_dir }}"
-    add_mode: add
+# --- System user & directories ---
 
-- name: Clone organized-backend repository
-  ansible.builtin.git:
-    repo: "{{ organized_repo }}"
-    dest: "{{ organized_dir }}"
-    version: "{{ organized_version }}"
-    depth: 1
-    force: true
+- name: Create organized system user
+  ansible.builtin.user:
+    name: "{{ organized_user }}"
+    system: true
+    home: "{{ organized_dir }}"
+    create_home: false
+    shell: /usr/sbin/nologin
+  become: true
+
+- name: Create log directory
+  ansible.builtin.file:
+    path: /var/log/organized
+    state: directory
+    owner: "{{ organized_user }}"
+    group: "{{ organized_user }}"
+    mode: "0755"
+  become: true
+
+- name: Install logrotate config for organized logs
+  ansible.builtin.template:
+    src: organized.logrotate.j2
+    dest: /etc/logrotate.d/organized
+    mode: "0644"
+  become: true
+
+- name: Install postgresql-client
+  ansible.builtin.apt:
+    name: postgresql-client
+    state: present
+  become: true
+
+# --- Frontend (organized-app): a React/Vite PWA built offline, served by nginx ---
 
 - name: Mark organized-app directory as safe for git
   community.general.git_config:
@@ -70,62 +90,20 @@
   environment:
     NODE_OPTIONS: "--max-old-space-size=2048"
 
-- name: Create backend virtualenv with uv
-  ansible.builtin.command: /root/.local/bin/uv venv --python /usr/bin/python3 .venv
-  args:
-    chdir: "{{ organized_dir }}"
-    creates: "{{ organized_dir }}/.venv"
+# --- Backend (organized-backend): Django API in a venv, Gunicorn + Celery units ---
 
-- name: Install backend dependencies with uv
-  ansible.builtin.command: /root/.local/bin/uv pip install -r requirements.txt
-  args:
-    chdir: "{{ organized_dir }}"
-  environment:
-    VIRTUAL_ENV: "{{ organized_dir }}/.venv"
-  ignore_errors: true
-  register: organized_pip
-  changed_when: "'Installed' in organized_pip.stderr"
+# The secret key: the pinned value from local_vars, else one generated for this install.
+# Left unpinned it changes at every reinstall, which invalidates every login (defaults/main.yml).
+- name: Settle the Django secret key for this install
+  ansible.builtin.set_fact:
+    organized_secret_key_effective: "{{ organized_secret_key | default(lookup('password', '/dev/null chars=ascii_letters,digits length=50')) }}"
+  no_log: true
 
-- name: Install postgresql-client
-  ansible.builtin.apt:
-    name: postgresql-client
-    state: present
-  become: true
-
-# --- System user & directories ---
-
-- name: Create organized system user
-  ansible.builtin.user:
-    name: "{{ organized_user }}"
-    system: true
-    home: "{{ organized_dir }}"
-    create_home: false
-    shell: /usr/sbin/nologin
-  become: true
-
-- name: Create log directory
-  ansible.builtin.file:
-    path: /var/log/organized
-    state: directory
-    owner: "{{ organized_user }}"
-    group: "{{ organized_user }}"
-    mode: "0755"
-  become: true
-
-- name: Install logrotate config for organized logs
-  ansible.builtin.template:
-    src: organized.logrotate.j2
-    dest: /etc/logrotate.d/organized
-    mode: "0644"
-  become: true
-
-- name: Set ownership of organized backend
-  ansible.builtin.file:
-    path: "{{ organized_dir }}"
-    owner: "{{ organized_user }}"
-    group: "{{ organized_user }}"
-    recurse: true
-  become: true
+- name: Install the tree, venv, environment file and units of the organized backend (roles/uv-service)
+  ansible.builtin.include_role:
+    name: uv-service
+  vars:
+    uv_service: "{{ organized_service }}"
 
 # --- Database ---
 
@@ -143,41 +121,6 @@
     owner: "{{ organized_db_user }}"
   become: true
   become_user: postgres
-
-# --- Environment file ---
-
-- name: Generate Django secret key
-  ansible.builtin.shell: "{{ organized_dir }}/.venv/bin/python3 -c \"import secrets,string; print(''.join(secrets.choice(string.ascii_letters+string.digits+'!@_+-=') for _ in range(50)))\""
-  register: django_secret_key
-  changed_when: false
-  when: organized_secret_key is not defined
-
-- name: Write organized environment file
-  ansible.builtin.template:
-    src: organized.env.j2
-    dest: /etc/iiab/organized.env
-    owner: "{{ organized_user }}"
-    group: "{{ organized_user }}"
-    mode: "0600"
-  become: true
-  notify: Restart organized
-
-# organized.env is regenerated on every run, so any secret that lives only
-# there is one provisioning away from being lost. organized.env.local is the
-# machine-local override file: created once if absent, NEVER overwritten by
-# Ansible, and loaded after organized.env by the units (EnvironmentFile=-),
-# so its values always win. Same pattern as ai-gateway's .env.local.
-- name: Ensure machine-local env override file exists (never overwritten)
-  ansible.builtin.copy:
-    dest: /etc/iiab/organized.env.local
-    force: false
-    content: |
-      # Machine-local secrets and overrides — NEVER written by Ansible.
-      # Loaded after organized.env by the systemd units, so values here win.
-    owner: "{{ organized_user }}"
-    group: "{{ organized_user }}"
-    mode: "0600"
-  become: true
 
 - name: Install hourglass-check (validate Hourglass exports before import)
   ansible.builtin.copy:
@@ -200,19 +143,6 @@
     mode: "0755"
   become: true
 
-# --- Backend setup ---
-
-- name: Install gunicorn in backend venv
-  ansible.builtin.command: "/root/.local/bin/uv pip install gunicorn"
-  args:
-    chdir: "{{ organized_dir }}"
-  become: true
-  environment:
-    VIRTUAL_ENV: "{{ organized_dir }}/.venv"
-    PATH: "{{ organized_dir }}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-  register: organized_gunicorn
-  changed_when: "'Installed' in organized_gunicorn.stderr"
-
 # Migrations are committed in the backend repo (api/migrations/), so we only
 # apply them here. Running `makemigrations` at deploy time is intentionally
 # omitted — it could generate divergent migrations if models ever drift.
@@ -223,7 +153,7 @@
   become: true
   become_user: "{{ organized_user }}"
   environment:
-    DJANGO_SECRET_KEY: "{{ django_secret_key.stdout | default(organized_secret_key | default('temp-key-for-migrations')) }}"
+    DJANGO_SECRET_KEY: "{{ organized_secret_key_effective }}"
     DB_NAME: "{{ organized_db_name }}"
     DB_USER: "{{ organized_db_user }}"
     DB_PASSWORD: "{{ organized_db_pass }}"
@@ -237,7 +167,7 @@
   become: true
   become_user: "{{ organized_user }}"
   environment:
-    DJANGO_SECRET_KEY: "{{ django_secret_key.stdout | default(organized_secret_key | default('temp-key-for-migrations')) }}"
+    DJANGO_SECRET_KEY: "{{ organized_secret_key_effective }}"
   register: organized_collectstatic
   changed_when: "'0 static files copied' not in organized_collectstatic.stdout"
 
@@ -264,39 +194,6 @@
   loop:
     - { src: organized-sources-generate.js, dest: "{{ organized_sources_generator }}" }
     - { src: organized-sources-fetch.js, dest: "{{ organized_sources_fetcher }}" }
-  become: true
-
-- name: Install source-materials mirror systemd units
-  ansible.builtin.template:
-    src: "{{ item }}"
-    dest: "/etc/systemd/system/{{ item | basename | regex_replace('\\.j2$', '') }}"
-    mode: "0644"
-  loop:
-    - organized-sources.service.j2
-    - organized-sources.timer.j2
-  become: true
-
-# --- Systemd services ---
-
-- name: Install organized systemd service
-  ansible.builtin.template:
-    src: organized.service.j2
-    dest: /etc/systemd/system/organized.service
-    mode: "0644"
-  become: true
-  notify: Restart organized
-
-- name: Install organized celery systemd service
-  ansible.builtin.template:
-    src: organized-celery.service.j2
-    dest: /etc/systemd/system/organized-celery.service
-    mode: "0644"
-  become: true
-  notify: Restart organized-celery
-
-- name: Reload systemd daemon
-  ansible.builtin.systemd:
-    daemon_reload: true
   become: true
 
 # --- Bookkeeping ---

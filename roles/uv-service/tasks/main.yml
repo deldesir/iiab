@@ -1,0 +1,226 @@
+---
+# Install one uv service tree: source, libraries, venv, dependencies, ownership, environment
+# file, units. The calling role keeps what is specific to its service around this include and
+# runs tasks/enable.yml after it. Every task reads `svc` (vars/main.yml): the calling role's
+# uv_service dict over the defaults.
+
+- name: The service definition names the service, its tree and its role
+  ansible.builtin.assert:
+    that:
+      - svc.name | length > 0
+      - svc.dir | length > 0
+      - svc.role | length > 0
+    fail_msg: "uv_service needs at least name, dir and role"
+    quiet: true
+
+- name: Install uv, pinned and checked (roles/uv)
+  ansible.builtin.include_role:
+    name: uv
+
+- name: Create the tree of {{ svc.name }}
+  ansible.builtin.file:
+    path: "{{ svc.dir }}"
+    state: directory
+    owner: "{{ svc.user }}"
+    group: "{{ svc.user }}"
+    mode: "0755"
+  become: true
+
+- name: Create the directories of the libraries of {{ svc.name }}
+  ansible.builtin.file:
+    path: "{{ item.dest }}"
+    state: directory
+    owner: "{{ svc.user }}"
+    group: "{{ svc.user }}"
+    mode: "0755"
+  loop: "{{ svc.libraries }}"
+  loop_control:
+    label: "{{ item.name }}"
+  become: true
+
+- name: Mark the tree and the libraries safe for git run as root (operators and timers)
+  community.general.git_config:
+    scope: global
+    name: safe.directory
+    value: "{{ item }}"
+    add_mode: add
+  loop: "{{ [svc.dir] + (svc.libraries | map(attribute='dest') | list) }}"
+  become: true
+  when: svc.source == 'git' or svc.libraries | length > 0
+
+# The tree is cloned and moved as its owner, so a private repository reached with the
+# owner's deploy key works and nothing in the tree ever belongs to root. A tree with local
+# modifications stops the role (force false) so the operator sees them.
+- name: Clone, or fast-forward to the wanted version, the source tree of {{ svc.name }}
+  ansible.builtin.git:
+    repo: "{{ svc.repo }}"
+    dest: "{{ svc.dir }}"
+    version: "{{ svc.version }}"
+    update: "{{ svc.update | bool }}"
+    force: "{{ svc.force | bool }}"
+    depth: "{{ svc.depth | int if svc.depth | int > 0 else omit }}"
+  become: true
+  become_user: "{{ svc.user }}"
+  register: uv_service_git
+  when: svc.source == 'git'
+
+- name: Copy the application files of {{ svc.name }}
+  ansible.builtin.copy:
+    src: "../../{{ svc.role }}/files/{{ item }}"
+    dest: "{{ svc.dir }}/{{ item }}"
+    owner: "{{ svc.user }}"
+    group: "{{ svc.user }}"
+    mode: "0644"
+  loop: "{{ svc.files }}"
+  become: true
+  register: uv_service_files
+  when: svc.source == 'files'
+
+# Editable dependencies must exist before the sync or their sources fail to resolve. An
+# existing library tree is never touched here (it may carry local work); the update entry
+# moves it with the service. Libraries are fetched as root, with root's git credentials: a
+# deploy key covers one repository, the service tree's.
+- name: Clone the libraries when absent (an existing tree is never touched) for {{ svc.name }}
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ item.dest }}"
+    version: "{{ item.version }}"
+    update: false
+  loop: "{{ svc.libraries }}"
+  loop_control:
+    label: "{{ item.name }}"
+  become: true
+
+- name: Set the ownership of the libraries of {{ svc.name }}
+  ansible.builtin.file:
+    path: "{{ item.dest }}"
+    state: directory
+    owner: "{{ svc.user }}"
+    group: "{{ svc.user }}"
+    recurse: true
+  loop: "{{ svc.libraries }}"
+  loop_control:
+    label: "{{ item.name }}"
+  become: true
+
+# A locked project pins its interpreter: uv reads .python-version and refuses a sync that
+# contradicts it, so the file is written first; the venv is recreated only when it is missing
+# or runs another version, never on a routine run.
+- name: Pin the interpreter version of the venv of {{ svc.name }}
+  ansible.builtin.copy:
+    content: "{{ svc.python }}\n"
+    dest: "{{ svc.dir }}/.python-version"
+    owner: "{{ svc.user }}"
+    group: "{{ svc.user }}"
+    mode: "0644"
+  become: true
+  when: svc.deps == 'lock' and svc.python | length > 0
+
+- name: Which Python the venv runs, if it exists
+  ansible.builtin.command: "{{ svc.dir }}/.venv/bin/python -c 'import sys; print(f\"{sys.version_info[0]}.{sys.version_info[1]}\")'"
+  register: uv_service_venv_python
+  changed_when: false
+  failed_when: false
+  become: true
+  when: svc.deps == 'lock' and svc.python | length > 0
+
+- name: Create the venv (only when missing or on another Python)
+  ansible.builtin.command: "{{ uv_service_bin }} venv .venv --python {{ svc.python }}"
+  args:
+    chdir: "{{ svc.dir }}"
+  become: true
+  when:
+    - svc.deps == 'lock' and svc.python | length > 0
+    - uv_service_venv_python.rc != 0 or uv_service_venv_python.stdout.strip() != svc.python
+  changed_when: true   # runs only when the venv is missing or on another Python
+
+- name: Install the dependencies from the lock file (uv sync --frozen)
+  ansible.builtin.command: "{{ uv_service_bin }} sync --frozen"
+  args:
+    chdir: "{{ svc.dir }}"
+  become: true
+  register: uv_service_sync
+  changed_when: "'Installed' in uv_service_sync.stderr or 'Uninstalled' in uv_service_sync.stderr"
+  when: svc.deps == 'lock'
+
+- name: Create the venv (requirements project; only when missing)
+  ansible.builtin.command: "{{ uv_service_bin }} venv {{ ('--python ' ~ svc.python) if svc.python else '' }} .venv"
+  args:
+    chdir: "{{ svc.dir }}"
+    creates: "{{ svc.dir }}/.venv"
+  become: true
+  when: svc.deps == 'requirements'
+
+- name: Install the requirements into the venv
+  ansible.builtin.command: "{{ uv_service_bin }} pip install -r requirements.txt"
+  args:
+    chdir: "{{ svc.dir }}"
+  environment:
+    VIRTUAL_ENV: "{{ svc.dir }}/.venv"
+  become: true
+  register: uv_service_pip
+  changed_when: "'Installed' in uv_service_pip.stderr"
+  when: svc.deps == 'requirements'
+
+- name: Install the extra packages into the venv
+  ansible.builtin.command: "{{ uv_service_bin }} pip install {{ svc.packages | join(' ') }}"
+  args:
+    chdir: "{{ svc.dir }}"
+  environment:
+    VIRTUAL_ENV: "{{ svc.dir }}/.venv"
+  become: true
+  register: uv_service_packages
+  changed_when: "'Installed' in uv_service_packages.stderr"
+  when: svc.deps == 'requirements' and svc.packages | length > 0
+
+- name: Set the ownership of the tree of {{ svc.name }}
+  ansible.builtin.file:
+    path: "{{ svc.dir }}"
+    state: directory
+    owner: "{{ svc.user }}"
+    group: "{{ svc.user }}"
+    recurse: true
+  become: true
+
+- name: Write the environment file of {{ svc.name }}
+  ansible.builtin.template:
+    src: "../../{{ svc.role }}/templates/{{ svc.env }}"
+    dest: "{{ svc_env_dest }}"
+    owner: "{{ svc.user }}"
+    group: "{{ svc.user }}"
+    mode: "{{ svc.env_mode }}"
+  become: true
+  register: uv_service_env
+  when: svc.env | length > 0
+
+# The environment file is rewritten at every install, so a secret that lives only there is
+# one provisioning away from being lost. The .local file beside it is created once and never
+# rewritten; the units load it last, so its values win.
+- name: Create the machine-local override file once (never rewritten) for {{ svc.name }}
+  ansible.builtin.copy:
+    dest: "{{ svc_env_dest }}.local"
+    force: false
+    content: |
+      # Machine-local secrets and overrides, never written by Ansible. The units load this
+      # file after {{ svc_env_dest | basename }}, so a value here wins.
+    owner: "{{ svc.user }}"
+    group: "{{ svc.user }}"
+    mode: "0600"
+  become: true
+  when: svc.env_local | bool
+
+- name: Install the units of {{ svc.name }}
+  ansible.builtin.template:
+    src: "../../{{ svc.role }}/templates/{{ item }}"
+    dest: "/etc/systemd/system/{{ item | regex_replace('\\.j2$', '') }}"
+    mode: "0644"
+  loop: "{{ svc.units }}"
+  become: true
+  register: uv_service_units
+
+- name: Record whether anything changed for {{ svc.name }}
+  ansible.builtin.set_fact:
+    uv_service_changed: >-
+      {{ uv_service_git is changed or uv_service_files is changed or uv_service_sync is changed
+         or uv_service_pip is changed or uv_service_packages is changed
+         or uv_service_env is changed or uv_service_units is changed }}

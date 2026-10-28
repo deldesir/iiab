@@ -1,0 +1,55 @@
+---
+# The ai-update path: the gateway and its libraries move to their wanted versions, the venv
+# is re-synced, the library patches re-applied, stale bytecode cleared, the imports verified,
+# the service restarted when anything moved.
+- name: Move the AI Gateway and its libraries to their wanted versions and re-sync (roles/uv-service)
+  ansible.builtin.include_role:
+    name: uv-service
+    tasks_from: update
+  vars:
+    uv_service: "{{ ai_gateway_service }}"
+
+- name: Apply the IIAB patches on the hermes-agent library
+  ansible.builtin.include_tasks: hermes-patches.yml
+
+# Stale bytecode (ported from hermes' own update): a restart with old .pyc files that
+# reference names the new source no longer has dies with an ImportError.
+- name: Clear stale bytecode in the gateway and its engines
+  ansible.builtin.shell: find {{ item }} -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+  become: true
+  changed_when: false
+  loop:
+    - "{{ ai_gateway_dir }}"
+    - "{{ ai_gateway_hermes_dir }}"
+    - "{{ ai_gateway_mempalace_dir }}"
+  when: uv_service_changed | bool
+
+- name: Verify the gateway imports its engines
+  ansible.builtin.command: >
+    {{ ai_gateway_uv_bin }} run python -c
+    "from run_agent import AIAgent; from mempalace.mcp_server import tool_status; print('Gateway imports OK')"
+  args:
+    chdir: "{{ ai_gateway_dir }}"
+  become: true
+  register: ai_gateway_verify
+  changed_when: false
+  when: uv_service_changed | bool
+
+- name: Keep the gateway's cache owned by the hermes service user
+  ansible.builtin.file:
+    path: "{{ ai_gateway_dir }}/.cache"
+    state: directory
+    owner: hermes
+    group: hermes
+    recurse: true
+  become: true
+  changed_when: false
+  failed_when: false
+
+- name: Restart the AI Gateway when its tree, libraries or venv changed
+  ansible.builtin.systemd:
+    name: ai-gateway
+    state: restarted
+    daemon_reload: true
+  become: true
+  when: uv_service_changed | bool

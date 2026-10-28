@@ -14,155 +14,41 @@
   args:
     executable: /bin/bash
 
-- name: Install AI Gateway system dependencies
+- name: Install AI Gateway system dependencies (sqlite3 for the monthly VACUUM of the palace)
   ansible.builtin.apt:
     name:
       - git
       - libpq-dev
+      - sqlite3
     state: present
   become: true
 
-- name: Install uv, pinned and checked (roles/uv)
+- name: Install nginx, which fronts the gateway (roles/nginx, once)
   ansible.builtin.include_role:
-    name: uv
+    name: nginx
 
-- name: Create AI Gateway directory
-  ansible.builtin.file:
-    path: "{{ ai_gateway_dir }}"
-    state: directory
-    owner: "{{ ai_gateway_user }}"
-    group: "{{ ai_gateway_user }}"
-    mode: "0755"
-  become: true
-
-- name: Add AI Gateway directory to git safe directories
-  community.general.git_config:
-    name: safe.directory
-    scope: global
-    value: "{{ ai_gateway_dir }}"
-  become: true
-
-# talkmaster + jwlinker are editable dependencies of the gateway (talk-prep
-# chain: talksync, talkprep tools, S-34 imports). They must exist BEFORE
-# `uv sync` or the editable sources fail to resolve. Clone-if-absent only —
-# never reset an existing tree, which may carry local work.
-- name: Clone TalkMaster library (if absent; an existing tree is never touched)
-  ansible.builtin.git:
-    repo: "{{ ai_gateway_talkmaster_repo }}"
-    dest: "{{ ai_gateway_talkmaster_dir }}"
-    version: "{{ ai_gateway_talkmaster_version }}"
-    update: false
-  become: true
-  become_user: "{{ ai_gateway_user }}"
-
-- name: Clone JWLinker library (if absent; an existing tree is never touched)
-  ansible.builtin.git:
-    repo: "{{ ai_gateway_jwlinker_repo }}"
-    dest: "{{ ai_gateway_jwlinker_dir }}"
-    version: "{{ ai_gateway_jwlinker_version }}"
-    update: false
-  become: true
-  become_user: "{{ ai_gateway_user }}"
+- name: Install the IIAB Postgres cluster the gateway's tables live in (roles/postgresql, once)
+  ansible.builtin.include_role:
+    name: postgresql
+  vars:
+    postgresql_install: true
+    postgresql_enabled: true
 
 # The service runs from this working tree. A fast-forward to the wanted version is the only
-# change the role makes to it: a tree with local modifications stops the role (force: no) so
-# the operator sees them, instead of a reset --hard that used to discard them silently and
-# restart the service on every run.
-- name: Clone or fast-forward the AI Gateway repository
-  ansible.builtin.git:
-    repo: "{{ ai_gateway_repo }}"
-    dest: "{{ ai_gateway_dir }}"
-    version: "{{ ai_gateway_repo_version }}"
-    force: false
-    update: true
-  become: true
-  become_user: "{{ ai_gateway_user }}"
-  register: ai_gateway_git
-  notify: Restart ai-gateway
+# change the role makes to it: a tree with local modifications stops the role so the operator
+# sees them. The libraries (hermes-agent, mempalace, talkmaster, jwlinker) are cloned when
+# absent and never touched afterwards; ai-update moves them (tasks/update.yml).
+- name: Install the tree, libraries, venv, environment file and units of the AI Gateway (roles/uv-service)
+  ansible.builtin.include_role:
+    name: uv-service
+  vars:
+    uv_service: "{{ ai_gateway_service }}"
 
-- name: Set ownership of AI Gateway directory
-  ansible.builtin.file:
-    path: "{{ ai_gateway_dir }}"
-    state: directory
-    owner: "{{ ai_gateway_user }}"
-    group: "{{ ai_gateway_user }}"
-    recurse: true
-  become: true
+- name: Apply the IIAB patches on the hermes-agent library
+  ansible.builtin.include_tasks: hermes-patches.yml
 
-# V2: Recreate venv with the latest available Python.
-# Hermes Agent requires >=3.11; this ensures the venv satisfies all deps.
-# Must update .python-version first — uv reads this file and would refuse
-# to sync if it conflicts with pyproject.toml's requires-python.
-- name: Pin the venv's Python for uv (.python-version)
-  ansible.builtin.copy:
-    content: "{{ ai_gateway_python }}\n"
-    dest: "{{ ai_gateway_dir }}/.python-version"
-    owner: "{{ ai_gateway_user }}"
-    group: "{{ ai_gateway_user }}"
-    mode: "0644"
-  become: true
-
-- name: Which Python the AI Gateway venv runs, if it exists
-  ansible.builtin.command: "{{ ai_gateway_dir }}/.venv/bin/python -c 'import sys; print(f\"{sys.version_info[0]}.{sys.version_info[1]}\")'"
-  register: ai_gateway_venv_python
-  changed_when: false
-  failed_when: false
-  become: true
-
-- name: Create the AI Gateway venv (only when missing or on another Python; never cleared on a routine run)
-  ansible.builtin.command: "{{ ai_gateway_uv_bin }} venv .venv --python {{ ai_gateway_python }}"
-  args:
-    chdir: "{{ ai_gateway_dir }}"
-  become: true
-  when: ai_gateway_venv_python.rc != 0 or ai_gateway_venv_python.stdout.strip() != ai_gateway_python
-  changed_when: true   # runs only when the venv is missing or on another Python
-
-- name: Install AI Gateway dependencies from the lock file (uv sync --frozen)
-  ansible.builtin.command: "{{ ai_gateway_uv_bin }} sync --frozen"
-  args:
-    chdir: "{{ ai_gateway_dir }}"
-  register: ai_gateway_sync
-  changed_when: "'Installed' in ai_gateway_sync.stderr or 'Uninstalled' in ai_gateway_sync.stderr"
-  become: true
-
-- name: Fix ownership after uv sync
-  ansible.builtin.file:
-    path: "{{ ai_gateway_dir }}"
-    state: directory
-    owner: "{{ ai_gateway_user }}"
-    group: "{{ ai_gateway_user }}"
-    recurse: true
-  become: true
-
-- name: Deploy AI Gateway environment file from local_vars.yml
-  ansible.builtin.template:
-    src: ai-gateway.env.j2
-    dest: "{{ ai_gateway_dir }}/.env"
-    owner: "{{ ai_gateway_user }}"
-    group: "{{ ai_gateway_user }}"
-    mode: "0600"
-  become: true
-  notify: Restart ai-gateway
-
-# .env is regenerated on every run, so any secret that lives only there is
-# one provisioning away from being lost. .env.local is the machine-local
-# override file: created once if absent, NEVER overwritten by Ansible, and
-# loaded after .env by both the systemd units (EnvironmentFile=-) and the
-# app (load_dotenv override), so its values always win.
-- name: Ensure machine-local env override file exists (never overwritten)
-  ansible.builtin.copy:
-    dest: "{{ ai_gateway_dir }}/.env.local"
-    force: false
-    content: |
-      # Machine-local secrets and overrides — NEVER written by Ansible.
-      # Loaded after .env (systemd EnvironmentFile order + app load_dotenv
-      # override), so values here win. Put anything here that is set on this
-      # box only and must survive `ansible-playbook` re-runs.
-    owner: "{{ ai_gateway_user }}"
-    group: "{{ ai_gateway_user }}"
-    mode: "0600"
-  become: true
-
+# Hermes and MemPalace keep their state inside the gateway's data/ directory (IIAB's data-vs-code
+# separation; the units point HERMES_HOME and MEMPALACE_PALACE_PATH there).
 - name: Ensure AI Gateway data directories exist
   ansible.builtin.file:
     path: "{{ item }}"
@@ -198,94 +84,21 @@
     force: false # Don't overwrite if operator has customized it
   become: true
 
-- name: Install AI Gateway systemd service
-  ansible.builtin.template:
-    src: ai-gateway.service.j2
-    dest: /etc/systemd/system/ai-gateway.service
-    mode: "0644"
-  become: true
-  notify: Restart ai-gateway
-
-- name: Install MemPalace compaction systemd service
-  ansible.builtin.template:
-    src: ai-gateway-compact.service.j2
-    dest: /etc/systemd/system/ai-gateway-compact.service
-    mode: "0644"
-  become: true
-
-- name: Install MemPalace compaction systemd timer
-  ansible.builtin.template:
-    src: ai-gateway-compact.timer.j2
-    dest: /etc/systemd/system/ai-gateway-compact.timer
-    mode: "0644"
-  become: true
-
-- name: Ensure MemPalace compaction timer is enabled and running
-  ansible.builtin.systemd:
-    name: ai-gateway-compact.timer
-    enabled: true
-    state: started
-    daemon_reload: true
-  become: true
-
-- name: Install cognitive-pipeline job units (KG extract, KG->Wiki render, morning nudge, backup, radar, person sync, daily brief, synthesis)
-  ansible.builtin.template:
-    src: "{{ item }}.j2"
-    dest: "/etc/systemd/system/{{ item }}"
-    mode: "0644"
-  loop:
-    - ai-gateway-kgextract.service
-    - ai-gateway-kgextract.timer
-    - ai-gateway-kgwiki.service
-    - ai-gateway-kgwiki.timer
-    - ai-gateway-nudge.service
-    - ai-gateway-nudge.timer
-    - ai-gateway-talksync.service
-    - ai-gateway-talksync.timer
-    - ai-gateway-radar.service
-    - ai-gateway-radar.timer
-    - ai-gateway-personsync.service
-    - ai-gateway-personsync.timer
-    - ai-gateway-dailybrief.service
-    - ai-gateway-dailybrief.timer
-    - ai-gateway-synthesis.service
-    - ai-gateway-synthesis.timer
-    - ai-gateway-weekly.service
-    - ai-gateway-weekly.timer
-    - ai-gateway-eveningwrap.service
-    - ai-gateway-eveningwrap.timer
-    - ai-gateway-sitrep.service
-    - ai-gateway-sitrep.timer
-    - ai-gateway-monthend.service
-    - ai-gateway-monthend.timer
-    - ai-gateway-reminders.service
-    - ai-gateway-reminders.timer
-    - ai-gateway-weekahead.service
-    - ai-gateway-weekahead.timer
-    - ai-gateway-spiritual.service
-    - ai-gateway-spiritual.timer
-    - ai-gateway-home.service
-    - ai-gateway-home.timer
-    - ai-gateway-shepherd.service
-    - ai-gateway-shepherd.timer
-    - ai-gateway-siyuancapture.service
-    - ai-gateway-siyuancapture.timer
-    - ai-gateway-persontouches.service
-    - ai-gateway-persontouches.timer
-    - ai-gateway-ldctwp.service
-    - ai-gateway-ldctwp.timer
-    - ai-gateway-ldcpeople.service
-    - ai-gateway-ldcpeople.timer
-    - ai-gateway-contactsync.service
-    - ai-gateway-contactsync.timer
-    - pipeline-health-check.service
-    - pipeline-health-check.timer
-    - second-brain-backup.service
-    - second-brain-backup.timer
-    - fleet-backup-mail.service
-    - fleet-backup-mail.timer
-    - fleet-backup-mail-hub.service
-    - fleet-backup-mail-hub.timer
+# ChromaDB keeps the palace's metadata in SQLite (chroma.sqlite3); deletes and updates leave
+# dead pages that bloat the file. A monthly VACUUM reclaims them, on the 1st at 03:00, when
+# the free space is at least three times the file.
+- name: Deploy the monthly VACUUM of the palace's SQLite file
+  ansible.builtin.cron:
+    name: "mempalace-vacuum"
+    minute: "0"
+    hour: "3"
+    day: "1"
+    job: >
+      DB={{ ai_gateway_mempalace_palace_path }}/chroma.sqlite3;
+      DB_SIZE=$(stat -c%s "$DB" 2>/dev/null || echo 0);
+      FREE_SPACE=$(df -k "$(dirname "$DB")" | awk 'NR==2 {print $4 * 1024}');
+      [ "$FREE_SPACE" -gt $((DB_SIZE * 3)) ] && sqlite3 "$DB" "VACUUM;" || echo "VACUUM skipped: insufficient space" | logger -t mempalace
+    user: "{{ ai_gateway_user }}"
   become: true
 
 - name: Install pipeline maintenance scripts
@@ -311,39 +124,6 @@
     dest: /etc/sudoers.d/hermes-elevate
     mode: "0440"
     validate: "visudo -cf %s"
-  become: true
-
-- name: Ensure pipeline timers are enabled and running
-  ansible.builtin.systemd:
-    name: "{{ item }}"
-    enabled: true
-    state: started
-    daemon_reload: true
-  loop:
-    - ai-gateway-kgextract.timer
-    - ai-gateway-kgwiki.timer
-    - ai-gateway-nudge.timer
-    - ai-gateway-talksync.timer
-    - ai-gateway-radar.timer
-    - ai-gateway-personsync.timer
-    - ai-gateway-dailybrief.timer
-    - ai-gateway-synthesis.timer
-    - ai-gateway-weekly.timer
-    - ai-gateway-eveningwrap.timer
-    - ai-gateway-sitrep.timer
-    - ai-gateway-monthend.timer
-    - ai-gateway-reminders.timer
-    - ai-gateway-weekahead.timer
-    - ai-gateway-spiritual.timer
-    - ai-gateway-home.timer
-    - ai-gateway-shepherd.timer
-    - ai-gateway-siyuancapture.timer
-    - ai-gateway-persontouches.timer
-    - ai-gateway-ldctwp.timer
-    - ai-gateway-ldcpeople.timer
-    - ai-gateway-contactsync.timer
-    - pipeline-health-check.timer
-    - second-brain-backup.timer
   become: true
 
 # Emailed Frappe backups run from ONE hub box: the box whose operator wrote
@@ -374,18 +154,6 @@
   changed_when: false
   args:
     executable: /bin/bash
-
-# V2: Verify that Hermes Agent and MemPalace are importable after uv sync.
-# This catches dependency conflicts early rather than at runtime.
-# - name: Verify V2 imports (Hermes + MemPalace)
-#   command: >
-#     {{ ai_gateway_uv_bin }} run python -c
-#     "from run_agent import AIAgent; from mempalace.mcp_server import tool_status; print('V2 imports OK')"
-#   args:
-#     chdir: "{{ ai_gateway_dir }}"
-#   become: yes
-#   register: verify_v2
-#   failed_when: verify_v2.rc != 0
 
 - name: Add ai_gateway_disk_usage to {{ iiab_ini_file }}
   community.general.ini_file:

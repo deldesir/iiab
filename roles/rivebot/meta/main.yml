@@ -6,6 +6,6 @@ galaxy_info:
   license: AGPL-3.0
   min_ansible_version: "2.10"
 
-dependencies:
-  - role: ai-gateway
-    when: ai_gateway_install | bool
+# The stage playbook runs ai-gateway before rivebot; a rivebot run on its own no longer re-runs
+# (and restarts) the gateway.
+dependencies: []

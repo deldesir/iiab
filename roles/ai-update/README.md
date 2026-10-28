@@ -9,8 +9,9 @@ This role actively updates and configures the following subsystems:
 2.  **Mailroom**: The intelligent message router connecting WhatsApp channels to RapidPro flows. (Pulls the latest dual-arch binary from GitHub releases).
 3.  **Courier**: The RapidPro message sender. (Pulls binary from GitHub releases).
 4.  **Wuzapi**: The Go-based Baileys interface for WhatsApp Multi-Device. (Pulls binary from GitHub releases).
-5.  **Hermes Agent & MemPalace**: The AI personas and cognitive memory (vector database) engines.
-6.  **TalkMaster & JWLinker**: Additional ecosystem integration hubs.
+5.  **AI Gateway** with its in-process libraries (Hermes Agent, MemPalace, TalkMaster, JWLinker) and **RiveBot**: moved through their own roles' update entries (`roles/ai-gateway/tasks/update.yml`, `roles/rivebot/tasks/update.yml`), so their sources and versions are defined once, in those roles' defaults.
+
+Skip a component with `-e '{"ai_update_skip": ["wuzapi"]}'`; the names are `ai-gateway`, `rivebot`, `rapidpro`, `courier`, `mailroom`, `wuzapi`.
 
 ## Usage
 Because this role frequently updates core binary architectures and pulls live releases, it interacts dynamically with the IIAB state mechanism.

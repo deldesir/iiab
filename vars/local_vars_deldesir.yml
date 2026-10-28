@@ -478,11 +478,6 @@ ai_gateway_gemini_api_key: "CHANGEME"    # Google AI Studio key: the gateway run
 # ai_gateway_admin_phone: "YOUR_PHONE"
 
 
-hermes_agent_install: True
-hermes_agent_enabled: True
-mempalace_install: True
-mempalace_enabled: True
-
 rivebot_install: True
 rivebot_enabled: True
 
