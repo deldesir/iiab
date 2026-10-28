@@ -24,6 +24,7 @@
 
 - name: Generate WebDAV credentials once
   ansible.builtin.shell: |
+    set -o pipefail
     PASS=$(openssl rand -base64 18 | tr -d '/+=' | head -c 24)
     printf 'user: siyuan\npassword: %s\n' "$PASS" > /etc/iiab/siyuan-sync-webdav.credentials
     chmod 0600 /etc/iiab/siyuan-sync-webdav.credentials
@@ -31,6 +32,7 @@
     chown {{ siyuan_user }} /etc/iiab/siyuan-sync-webdav.htpasswd
     chmod 0600 /etc/iiab/siyuan-sync-webdav.htpasswd
   args:
+    executable: /bin/bash
     creates: /etc/iiab/siyuan-sync-webdav.credentials
   become: true
 

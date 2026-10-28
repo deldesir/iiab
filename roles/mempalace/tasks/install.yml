@@ -1,8 +1,10 @@
 ---
 - name: Record (initial) disk space used
-  ansible.builtin.shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: set -o pipefail && df -B1 --output=used / | tail -1
   register: df1
   changed_when: false
+  args:
+    executable: /bin/bash
 
 - name: Add mempalace directory to git safe directories
   community.general.git_config:
@@ -79,9 +81,11 @@
 # RECORD MEMPALACE AS INSTALLED
 
 - name: Record (final) disk space used
-  ansible.builtin.shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: set -o pipefail && df -B1 --output=used / | tail -1
   register: df2
   changed_when: false
+  args:
+    executable: /bin/bash
 
 - name: Add 'mempalace_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
   community.general.ini_file:

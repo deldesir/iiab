@@ -1,8 +1,10 @@
 ---
 - name: Record (initial) disk space used
-  ansible.builtin.shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: set -o pipefail && df -B1 --output=used / | tail -1
   register: df1
   changed_when: false
+  args:
+    executable: /bin/bash
 
 - name: Install RiveBot system dependencies
   ansible.builtin.apt:
@@ -79,6 +81,7 @@
 # macro call 403s (fail-closed) and the whole chat layer silently dies.
 - name: Read the gateway internal key from the gateway env (if var unset)
   ansible.builtin.shell: >-
+    set -o pipefail &&
     grep -hoP '^GATEWAY_INTERNAL_KEY=\K.*'
     /opt/iiab/ai-gateway/.env.local /opt/iiab/ai-gateway/.env
     2>/dev/null | tail -1 | tr -d '"'
@@ -88,6 +91,8 @@
   no_log: true
   become: true
   when: not (rivebot_gateway_internal_key | default(''))
+  args:
+    executable: /bin/bash
 
 - name: Adopt the probed gateway internal key
   ansible.builtin.set_fact:
@@ -118,9 +123,11 @@
 # RECORD RiveBot AS INSTALLED
 
 - name: Record (final) disk space used
-  ansible.builtin.shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: set -o pipefail && df -B1 --output=used / | tail -1
   register: df2
   changed_when: false
+  args:
+    executable: /bin/bash
 
 - name: Add 'rivebot_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
   community.general.ini_file:

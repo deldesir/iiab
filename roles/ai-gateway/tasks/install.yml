@@ -8,9 +8,11 @@
   when: ai_gateway_enabled | default(false) | bool
 
 - name: Record (initial) disk space used
-  ansible.builtin.shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: set -o pipefail && df -B1 --output=used / | tail -1
   register: df1
   changed_when: false
+  args:
+    executable: /bin/bash
 
 - name: Install AI Gateway system dependencies
   ansible.builtin.apt:
@@ -363,9 +365,11 @@
 # RECORD AI Gateway AS INSTALLED
 
 - name: Record (final) disk space used
-  ansible.builtin.shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: set -o pipefail && df -B1 --output=used / | tail -1
   register: df2
   changed_when: false
+  args:
+    executable: /bin/bash
 
 # V2: Verify that Hermes Agent and MemPalace are importable after uv sync.
 # This catches dependency conflicts early rather than at runtime.
