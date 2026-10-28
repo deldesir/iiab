@@ -1,0 +1,92 @@
+---
+# Stage 2: the Go services' release binaries (the pinned tags), built from source only when a
+# download fails.
+
+# ═══════════════════════════════════════════════════════════════
+# STAGE 2: Go binaries — download release, build only if needed
+# ═══════════════════════════════════════════════════════════════
+# Strategy: try pre-built release binaries first (seconds).
+# Fall back to local Go compilation only when the download fails
+# (e.g. fork has commits newer than the latest GitHub release).
+
+# ── 2a. Courier (gzip-preferred download, raw fallback, source build last) ──
+# Prefer the gzipped release asset (much smaller download); fall back to the
+# raw binary if no .gz exists, then to a local source build if both fail.
+- name: "Install courier binary (gz-preferred, checksum-verified)"
+  ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ rapidpro_courier_binary_url }}" "{{ rapidpro_courier_bin }}"
+  become: true
+  when:
+    - "'courier' not in ai_update_skip"
+    - courier_git_result.changed | default(false)
+  register: courier_download_result
+  failed_when: false
+  changed_when: "'installed' in courier_download_result.stdout"
+
+- name: "Build courier from source (fallback)"
+  ansible.builtin.shell: >
+    {{ ai_update_go_bin }} build -ldflags="-s -w"
+    -o {{ rapidpro_courier_bin }}
+    ./cmd/courier
+  args:
+    chdir: "{{ rapidpro_courier_src_dir }}"
+  environment:
+    CGO_ENABLED: "0"
+    GOOS: linux
+    GOARCH: "{{ rapidpro_go_arch }}"
+  become: true
+  when:
+    - "'courier' not in ai_update_skip"
+    - courier_git_result.changed | default(false)
+    - courier_download_result.rc | default(1) != 0
+  register: courier_build_result
+  changed_when: true   # runs only after a code change when the release download failed
+
+- name: "⚙️  courier: {{ 'downloaded release' if (courier_download_result.rc | default(1) == 0) else 'built from source' }}"
+  ansible.builtin.debug:
+    msg: "courier binary updated"
+  when: courier_git_result.changed | default(false)
+  changed_when: true
+
+# ── 2b. Mailroom (gzip-preferred download, raw fallback, source build last) ──
+- name: "Install mailroom binary (gz-preferred, checksum-verified)"
+  ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ rapidpro_mailroom_binary_url }}" "{{ rapidpro_mailroom_bin }}"
+  become: true
+  when:
+    - "'mailroom' not in ai_update_skip"
+    - mailroom_git_result.changed | default(false)
+  register: mailroom_download_result
+  failed_when: false
+  changed_when: "'installed' in mailroom_download_result.stdout"
+
+- name: "Build mailroom from source (fallback)"
+  ansible.builtin.shell: >
+    {{ ai_update_go_bin }} build -ldflags="-s -w"
+    -o {{ rapidpro_mailroom_bin }}
+    ./cmd/mailroom
+  args:
+    chdir: "{{ rapidpro_mailroom_src_dir }}"
+  environment:
+    CGO_ENABLED: "0"
+    GOOS: linux
+    GOARCH: "{{ rapidpro_go_arch }}"
+  become: true
+  when:
+    - "'mailroom' not in ai_update_skip"
+    - mailroom_git_result.changed | default(false)
+    - mailroom_download_result.rc | default(1) != 0
+  register: mailroom_build_result
+  changed_when: true   # same
+
+- name: "⚙️  mailroom: {{ 'downloaded release' if (mailroom_download_result.rc | default(1) == 0) else 'built from source' }}"
+  ansible.builtin.debug:
+    msg: "mailroom binary updated"
+  when: mailroom_git_result.changed | default(false)
+  changed_when: true
+
+# ── 2c. WuzAPI (gzip-preferred download, raw fallback) ───────
+- name: "Install WuzAPI binary (gz-preferred, checksum-verified)"
+  ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ wuzapi_binary_url }}" "{{ wuzapi_dir }}/wuzapi"
+  become: true
+  when: "'wuzapi' not in ai_update_skip"
+  register: wuzapi_binary_result
+  changed_when: "'installed' in wuzapi_binary_result.stdout"

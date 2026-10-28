@@ -1,0 +1,37 @@
+---
+# Stage 4: restart what changed.
+
+# ═══════════════════════════════════════════════════════════════
+# STAGE 6: Grouped restarts (the uv services restarted in stage 1)
+# ═══════════════════════════════════════════════════════════════
+
+- name: Restart RapidPro services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: restarted
+  become: true
+  loop:
+    - rapidpro-gunicorn
+    - rapidpro-celery
+  when: rapidpro_git_result.changed | default(false)
+
+- name: Restart courier
+  ansible.builtin.systemd:
+    name: rapidpro-courier
+    state: restarted
+  become: true
+  when: courier_git_result.changed | default(false)
+
+- name: Restart mailroom
+  ansible.builtin.systemd:
+    name: rapidpro-mailroom
+    state: restarted
+  become: true
+  when: mailroom_git_result.changed | default(false)
+
+- name: Restart wuzapi
+  ansible.builtin.systemd:
+    name: wuzapi
+    state: restarted
+  become: true
+  when: wuzapi_binary_result.changed | default(false)

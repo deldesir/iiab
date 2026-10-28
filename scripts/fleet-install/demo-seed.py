@@ -6,10 +6,16 @@
 # then creates the demo catalogue ERPNext ships (item group, 10 items with pictures,
 # customers, suppliers), sells prices, opening stock, a POS Profile for POS Next, and
 # website items for the storefront when the webshop app is present. Administrator's
-# password becomes DEMO_PASSWORD. Never run it on a real site.
+# password becomes DEMO_PASSWORD. It runs only on a site whose config carries demo: 1.
 import json
 import frappe
 from frappe.utils import nowdate
+
+# Refuse any site not marked as a demo (bench --site <site> set-config demo 1, which demo-rebuild.sh
+# and demo-seed-drill.sh do for the sites they build): the seed resets Administrator's password to
+# a public constant, so a real site must never be able to run it by accident.
+if not frappe.conf.get("demo"):
+    raise RuntimeError("demo seed refused: this site is not marked as a demo (set-config demo 1 on a demo site only)")
 
 DEMO_PASSWORD = "demo1234"
 COMPANY, ABBR = "Demo Shop", "DS"

@@ -51,6 +51,9 @@ KEEP_CHECKS = 90
 
 HUB_BACKUPS = Path(os.environ.get("FLEET_HUB_BACKUPS", "/library/backups/fleet"))
 
+# where `fleet offboard` keeps a box's final backup (FLEET_OFFBOARD_DIR for the tests)
+OFFBOARD_DIR = Path(os.environ.get("FLEET_OFFBOARD_DIR", "/library/backups/offboard"))
+
 
 LEVELS = {"CRIT": 3, "STALE": 2, "WARN": 1, "INFO": 0}
 
