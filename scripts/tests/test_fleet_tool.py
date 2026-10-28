@@ -7,7 +7,7 @@ import re
 
 import pytest
 
-from fleet_tool import checks, cli, config, releases, site, transport
+from fleet_tool import checks, cli, config, lifecycle, releases, site, transport, upgrade
 
 
 def test_real_transport_refuses_while_the_tests_run():
@@ -214,6 +214,151 @@ def test_digest_carries_the_hub_notes_before_the_boxes(scratch):
     text = checks.build_digest(inv, {}, ["hub: the installed fleet tool differs from the repository (fleet): run scripts/fleet-install/install-fleet.sh"])
     head, _, rest = text.partition("- ?? ")
     assert "· WARN: hub: the installed fleet tool differs" in head and "install-fleet.sh" in head and "never checked" in rest
+
+
+def _script_bench_run(fake, host, log_prefix, final_line):
+    """Teach the fake what a followed bench run looks like on a box: the box's date, the log's
+    length before the run, the unit start, and a tail that ends with the script's verdict."""
+    run = fake.hosts[host]["run"]
+    run["date +%F"] = (0, "2026-10-28")
+    run["wc -l <"] = (0, "4")
+    run["systemd-run"] = (0, "")
+    run[f"tail -n +5 /root/{log_prefix}-2026-10-28.log"] = (0, "step 3\n" + final_line)
+
+
+def test_upgrade_follows_the_log_then_checks_the_box(scratch, fake, capsys, monkeypatch):
+    monkeypatch.setattr(upgrade.time, "sleep", lambda s: None)
+    _script_bench_run(fake, "shop.example.test", "bench-upgrade", "UPGRADE-OK 2026.10-r1")
+    assert cli.main(["upgrade", "shop", "--now"]) == 0
+    out = capsys.readouterr().out
+    assert "release: 2026.10-r1" in out and "UPGRADE-OK" in out and "post-upgrade check OK" in out
+    copies = [c for c in fake.calls if c[0] == "scp_to"]
+    assert [c[3] for c in copies] == ["/root/bench-upgrade.sh", "/root/bench-upgrade.manifest"] and copies[1][4] == "0644"
+    started = next(c[2] for c in fake.calls if c[0] == "run_on" and "systemd-run" in c[2])
+    assert "--setenv=MANIFEST=/root/bench-upgrade.manifest" in started and "bench-upgrade.sh" in started
+    assert "upgrade box-002 release=2026.10-r1 preflight=False result=ok" in (scratch / "state" / "actions.log").read_text()
+    assert json.loads((scratch / "state" / "checks" / "box-002" / "latest.json").read_text())["status"] == "OK"
+
+
+def test_upgrade_stops_the_rollout_at_the_first_failed_box(scratch, fake, capsys, monkeypatch):
+    monkeypatch.setattr(upgrade.time, "sleep", lambda s: None)
+    _script_bench_run(fake, "shop.example.test", "bench-upgrade", "UPGRADE-FAILED: migrate")
+    assert cli.main(["upgrade", "shop", "hotel", "--now"]) == 1
+    out = capsys.readouterr().out
+    assert "UPGRADE-FAILED box-002" in out and "stopping the rollout" in out
+    assert not [c for c in fake.calls if c[0] in ("run_on", "scp_to") and c[1] == "box-003"]   # the canary failed: nothing reached the next box
+    assert "result=FAILED" in (scratch / "state" / "actions.log").read_text()
+
+
+def test_upgrade_waits_for_the_window_and_skips_a_suspended_box(scratch, fake, capsys, monkeypatch):
+    monkeypatch.setattr(upgrade, "in_window", lambda b: False)
+    assert cli.main(["upgrade", "shop"]) == 1
+    assert "outside its maintenance window" in capsys.readouterr().out
+    assert not [c for c in fake.calls if c[0] in ("run_on", "scp_to")]
+    inv = config.load_inventory()
+    lifecycle.set_status(inv, _box(inv, "box-002"), "suspended")
+    assert cli.main(["upgrade", "shop", "--preflight"]) == 0
+    assert "skipped (suspended)" in capsys.readouterr().out and not fake.calls
+
+
+def test_upgrade_refuses_an_allow_discard_that_is_not_a_plain_pattern(scratch, fake, capsys):
+    with pytest.raises(SystemExit, match="plain regular expression"):
+        cli.main(["upgrade", "shop", "--now", "--allow-discard", "erpnext; rm -rf /"])
+    assert not [c for c in fake.calls if c[0] == "run_on" and "systemd-run" in c[2]]
+
+
+def test_rollback_dry_run_prints_the_plan_and_a_real_one_is_followed(scratch, fake, capsys, monkeypatch):
+    monkeypatch.setattr(upgrade.time, "sleep", lambda s: None)
+    run = fake.hosts["shop.example.test"]["run"]
+    run["DRY_RUN=1"] = (0, "would reset frappe to aaaa\nROLLBACK-PLAN-OK")
+    assert cli.main(["rollback", "shop", "--dry-run"]) == 0
+    assert "ROLLBACK-PLAN-OK" in capsys.readouterr().out
+    assert not [c for c in fake.calls if c[0] == "run_on" and "systemd-run" in c[2]]
+    _script_bench_run(fake, "shop.example.test", "bench-rollback", "ROLLBACK-OK")
+    assert cli.main(["rollback", "shop", "--now", "--no-restore"]) == 0
+    out = capsys.readouterr().out
+    assert "rollback of the last upgrade (code only)" in out and "post-rollback check OK" in out
+    started = next(c[2] for c in fake.calls if c[0] == "run_on" and "systemd-run" in c[2])
+    assert "--setenv=RESTORE=0" in started and "bench-rollback.sh" in started
+    assert "rollback box-002 release=last-upgrade restore=False result=ok" in (scratch / "state" / "actions.log").read_text()
+
+
+def test_rollback_refuses_an_offline_box_and_the_window(scratch, fake, capsys, monkeypatch):
+    inv = config.load_inventory()
+    monkeypatch.setattr(upgrade, "in_window", lambda b: False)
+    with pytest.raises(SystemExit, match="outside its maintenance window"):
+        cli.main(["rollback", "shop"])
+    lifecycle.set_field(inv, _box(inv, "box-003"), "connectivity", "offline")
+    with pytest.raises(SystemExit, match="rolls back from its own console"):
+        cli.main(["rollback", "hotel", "--now"])
+    assert not fake.calls
+
+
+def test_suspend_and_resume_flip_the_maintenance_page_and_the_status(scratch, fake, capsys):
+    run = fake.hosts["shop.example.test"]["run"]
+    run["set-maintenance-mode on"] = (0, "")
+    run["set-maintenance-mode off"] = (0, "")
+    assert cli.main(["suspend", "shop", "--reason", "unpaid"]) == 0
+    assert "suspended (maintenance page on)" in capsys.readouterr().out
+    box = _box(config.load_inventory(), "box-002")
+    assert box["status"] == "suspended" and "suspended_for" not in box
+    cmd = next(c[2] for c in fake.calls if c[0] == "run_on" and "set-maintenance-mode on" in c[2])
+    assert "sudo -u frappe" in cmd and "clear-cache" in cmd and "restart frappe-bench-frappe-web" in cmd
+    assert cli.main(["resume", "shop"]) == 0
+    assert _box(config.load_inventory(), "box-002")["status"] == "active"
+    log = (scratch / "state" / "actions.log").read_text()
+    assert "suspend box-002 reason='unpaid' cause=operator" in log and "resume box-002" in log
+
+
+def test_suspend_reports_a_box_that_refused_the_command(scratch, fake, capsys):
+    fake.hosts["shop.example.test"]["run"]["set-maintenance-mode on"] = (1, "bench: site not found")
+    assert cli.main(["suspend", "shop"]) == 1
+    assert "site not found" in capsys.readouterr().out
+    assert _box(config.load_inventory(), "box-002")["status"] == "active"
+
+
+def test_dunning_moves_a_box_through_grace_suspension_and_back(scratch, fake):
+    inv = config.load_inventory()
+    run = fake.hosts["shop.example.test"]["run"]
+    run["set-maintenance-mode on"] = (0, "")
+    run["set-maintenance-mode off"] = (0, "")
+    overdue = {"box-002": {"overdue_days": 5}}
+    assert lifecycle.apply_dunning(inv, overdue, apply=False) == ["box-002 shop: overdue 5 d -> grace"]
+    assert _box(inv, "box-002")["status"] == "grace"
+    lines = lifecycle.apply_dunning(inv, {"box-002": {"overdue_days": 20}}, apply=False)
+    assert lines == ["box-002 shop: 20 d past due, grace 14 d over -> would suspend (fleet dunning --apply)"]
+    assert _box(inv, "box-002")["status"] == "grace" and not fake.calls
+    lines = lifecycle.apply_dunning(inv, {"box-002": {"overdue_days": 20}}, apply=True)
+    assert lines == ["box-002 shop: box-002 shop suspended (maintenance page on). Reason: unpaid 20 d past due, grace 14 d"]
+    box = _box(inv, "box-002")
+    assert box["status"] == "suspended" and box["suspended_for"] == "unpaid"
+    assert lifecycle.apply_dunning(inv, {"box-002": {"overdue_days": 0}}, apply=True) == ["box-002 shop: paid -> box-002 shop resumed"]
+    assert _box(inv, "box-002")["status"] == "active"
+    lifecycle.apply_dunning(inv, {"box-001": {"overdue_days": 99}}, apply=True)
+    assert _box(inv, "box-001")["status"] == "active"      # our own boxes never follow the money
+
+
+def test_offboard_takes_the_final_backup_and_marks_the_box(scratch, fake, capsys):
+    fake.hosts["shop.example.test"]["run"]["backup --with-files"] = (0, "")
+    assert cli.main(["offboard", "shop"]) == 0
+    out = capsys.readouterr().out
+    assert "marked offboarded" in out and "bench drop-site site.local --force" in out
+    copies = [c for c in fake.calls if c[0] == "rsync"]
+    assert copies[0][1] == "root@shop.example.test:/home/frappe/frappe-bench/sites/site.local/private/backups/"
+    dest = next((scratch / "offboard" / "box-002").iterdir())
+    assert "A customer shop" in (dest / "HANDOVER.txt").read_text()
+    assert _box(config.load_inventory(), "box-002")["status"] == "offboarded"
+    with pytest.raises(SystemExit, match="refusing to offboard"):
+        cli.main(["offboard", "hubby"])
+
+
+def test_ssh_sessions_share_one_connection_per_box(scratch):
+    opts = transport.ssh_options()
+    assert "ControlMaster=auto" in opts and "ControlPersist=60" in opts and "BatchMode=yes" in opts
+    path = opts[opts.index("ControlMaster=auto") + 2]
+    assert path.startswith("ControlPath=") and path.endswith("/%C")
+    sockets = scratch / "state" / "ssh"
+    assert sockets.is_dir() and oct(sockets.stat().st_mode & 0o777) == "0o700"
 
 
 def test_help_names_every_command(capsys):
