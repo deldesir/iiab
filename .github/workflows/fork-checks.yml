@@ -12,12 +12,22 @@ env:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    # No third-party actions: the repository allows only actions from its own account, so the
+    # checkout and the Python tooling are plain commands on the runner (git, the runner's
+    # python3, a venv). The commit checked is the event's own (a pull request's merge commit).
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install -q ansible-lint yamllint ruff pytest pyyaml requests && sudo apt-get install -y -q shellcheck >/dev/null
+      - name: Check out the commit under test
+        run: |
+          git init -q .
+          git fetch -q --depth=1 "https://github.com/$GITHUB_REPOSITORY" "$GITHUB_SHA"
+          git checkout -q FETCH_HEAD
+      - name: The tooling in a venv (ansible-lint, yamllint, ruff, pytest) and shellcheck
+        run: |
+          python3 -m venv .ci && .ci/bin/pip install -q ansible-lint yamllint ruff pytest pyyaml requests
+          echo "$PWD/.ci/bin" >> "$GITHUB_PATH"
+          sudo apt-get install -y -q shellcheck >/dev/null
+      - name: The collections the fork roles use (the syntax check resolves their modules)
+        run: ansible-galaxy collection install -p "$HOME/.ansible/collections" community.general community.postgresql ansible.posix ansible.mysql >/dev/null
       - name: yamllint on the fork roles
         run: yamllint -f parsable $(for r in $FORK_ROLES; do echo roles/$r; done)
       - name: every fork task file parses by import (not only by role)
