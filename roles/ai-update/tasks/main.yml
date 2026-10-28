@@ -14,17 +14,12 @@
     # Repos are owned by iiab-admin but Ansible runs as root.
     # The git module fails on dubious ownership before we can pull.
 
-    - name: "Get existing git safe.directory entries"
-      ansible.builtin.command: git config --global --get-all safe.directory
-      environment:
-        HOME: "{{ lookup('env', 'HOME') | default('/root', true) }}" # timers and transient units have no HOME
-      register: _safe_dirs
-      changed_when: false
-      failed_when: false
-      become: true
-
     - name: "Add missing dirs to git safe.directory"
-      ansible.builtin.command: git config --global --add safe.directory "{{ item }}"
+      community.general.git_config:
+        scope: global
+        name: safe.directory
+        value: "{{ item }}"
+        add_mode: add
       environment:
         HOME: "{{ lookup('env', 'HOME') | default('/root', true) }}" # timers and transient units have no HOME
       become: true
@@ -37,8 +32,6 @@
         - "{{ ai_update_rivebot_dir }}"
         - "{{ ai_update_rapidpro_dir }}"
         - "{{ ai_update_wuzapi_src_dir }}"
-      when: item not in (_safe_dirs.stdout_lines | default([]))
-      changed_when: true   # runs only for an entry that is absent
 
     # ═══════════════════════════════════════════════════════════════
     # STAGE 1: Pull all git repos

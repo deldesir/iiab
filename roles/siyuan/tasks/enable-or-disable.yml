@@ -14,7 +14,7 @@
     dest: /etc/nginx/conf.d/siyuan.conf
   become: true
   when: siyuan_enabled
-  notify: reload nginx
+  notify: Reload nginx
 
 # std-mode kernel binds loopback only; nginx republishes it on the tailnet
 # at the native URL. ip_nonlocal_bind lets nginx bind the tailscale address
@@ -35,7 +35,7 @@
     dest: /etc/nginx/sites-enabled/siyuan-native.conf
   become: true
   when: siyuan_enabled
-  notify: reload nginx
+  notify: Reload nginx
 
 - name: Disable & Stop 'siyuan' systemd service, if not siyuan_enabled
   ansible.builtin.systemd:
@@ -50,4 +50,4 @@
     state: absent
   become: true
   when: not siyuan_enabled
-  notify: reload nginx
+  notify: Reload nginx

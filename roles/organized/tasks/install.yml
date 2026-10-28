@@ -7,10 +7,11 @@
     executable: /bin/bash
 
 - name: Mark organized-backend directory as safe for git
-  ansible.builtin.shell: git config --global --get-all safe.directory | grep -qxF "{{ organized_dir }}" || { git config --global --add safe.directory "{{ organized_dir }}" && echo added; }
-  ignore_errors: true
-  register: organized_safe_dir
-  changed_when: "'added' in organized_safe_dir.stdout"
+  community.general.git_config:
+    scope: global
+    name: safe.directory
+    value: "{{ organized_dir }}"
+    add_mode: add
 
 - name: Clone organized-backend repository
   ansible.builtin.git:
@@ -21,10 +22,11 @@
     force: true
 
 - name: Mark organized-app directory as safe for git
-  ansible.builtin.shell: git config --global --get-all safe.directory | grep -qxF "{{ organized_app_dir }}" || { git config --global --add safe.directory "{{ organized_app_dir }}" && echo added; }
-  ignore_errors: true
-  register: organized_app_safe_dir
-  changed_when: "'added' in organized_app_safe_dir.stdout"
+  community.general.git_config:
+    scope: global
+    name: safe.directory
+    value: "{{ organized_app_dir }}"
+    add_mode: add
 
 - name: Clone organized-app repository
   ansible.builtin.git:
@@ -158,7 +160,7 @@
     group: "{{ organized_user }}"
     mode: "0600"
   become: true
-  notify: restart organized
+  notify: Restart organized
 
 # organized.env is regenerated on every run, so any secret that lives only
 # there is one provisioning away from being lost. organized.env.local is the
@@ -282,7 +284,7 @@
     dest: /etc/systemd/system/organized.service
     mode: "0644"
   become: true
-  notify: restart organized
+  notify: Restart organized
 
 - name: Install organized celery systemd service
   ansible.builtin.template:
@@ -290,7 +292,7 @@
     dest: /etc/systemd/system/organized-celery.service
     mode: "0644"
   become: true
-  notify: restart organized-celery
+  notify: Restart organized-celery
 
 - name: Reload systemd daemon
   ansible.builtin.systemd:

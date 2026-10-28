@@ -58,7 +58,7 @@
 
 # The 3.x data-format upgrades are ONE-WAY: snapshot the workspace before
 # replacing the kernel so a bad upgrade is recoverable.
-- name: Snapshot workspace before upgrading an existing install
+- name: Snapshot workspace before upgrading an existing install # noqa: command-instead-of-module (creates an archive; no module does)
   ansible.builtin.shell: >
     tar -czf "/library/backups/siyuan-pre-{{ siyuan_version }}-$(date +%F).tar.gz"
     --exclude='temp' -C "{{ siyuan_workspace | dirname }}" "{{ siyuan_workspace | basename }}"
@@ -83,7 +83,7 @@
 #   guide/                — user guide notebook
 #   changelogs/           — release notes
 
-- name: Extract SiYuan server resources from tarball
+- name: Extract SiYuan server resources from tarball # noqa: command-instead-of-module (one subtree with stripped components)
   ansible.builtin.shell: >
     tar xzf "/tmp/siyuan-{{ siyuan_version }}.tar.gz"
     --strip-components=2

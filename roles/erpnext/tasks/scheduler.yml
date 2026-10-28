@@ -20,12 +20,10 @@
       [Unit]
       Wants=frappe-bench-frappe-schedule.service
     mode: "0644"
-  register: _scheduler_dropin
+  notify: Reload systemd
 
-- name: Reload systemd after the scheduler drop-in
-  ansible.builtin.systemd:
-    daemon_reload: true
-  when: _scheduler_dropin is changed
+- name: Apply the drop-in before the scheduler is started
+  ansible.builtin.meta: flush_handlers
 
 - name: Ensure the Frappe scheduler is running
   ansible.builtin.systemd:

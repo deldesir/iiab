@@ -11,14 +11,16 @@
   when: rapidpro_force_drop_db | default(false)
   block:
     - name: Stop RapidPro services before DB drop
-      ansible.builtin.shell: "systemctl stop {{ item }} 2>/dev/null || true"
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+      failed_when: false   # a unit absent on a first install is fine
       loop:
         - rapidpro-gunicorn
         - rapidpro-courier
         - rapidpro-mailroom
         - rapidpro-celery
       become: true
-      changed_when: false
       when: not is_proot
 
     - name: Terminate all connections to the 'temba' database
@@ -104,17 +106,13 @@
   ansible.builtin.include_role:
     name: nodejs
 
-- name: Check if rapidpro directory is already safe
-  ansible.builtin.command: git config --global --get-all safe.directory
-  register: git_safe_dirs
-  changed_when: false
-  ignore_errors: true
-
 - name: Add rapidpro directory to git safe directories
-  ansible.builtin.command: git config --global --add safe.directory {{ rapidpro_dir }}
+  community.general.git_config:
+    scope: global
+    name: safe.directory
+    value: "{{ rapidpro_dir }}"
+    add_mode: add
   become: true
-  when: rapidpro_dir not in (git_safe_dirs.stdout_lines | default([]))
-  changed_when: true   # runs only when the entry is absent
 
 - name: Clone/update RapidPro repository
   ansible.builtin.git:

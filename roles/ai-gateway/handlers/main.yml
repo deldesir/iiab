@@ -1,13 +1,13 @@
 ---
-- name: restart ai-gateway
-  systemd:
+- name: Restart ai-gateway
+  ansible.builtin.systemd:
     name: ai-gateway
     state: restarted
-    daemon_reload: yes
-  become: yes
+    daemon_reload: true
+  become: true
 
-- name: restart nginx
-  service:
+- name: Restart nginx
+  ansible.builtin.service:
     name: nginx
     state: reloaded
-  become: yes
+  become: true

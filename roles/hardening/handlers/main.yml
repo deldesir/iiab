@@ -1,0 +1,11 @@
+---
+- name: Reload sshd
+  ansible.builtin.systemd:
+    name: ssh
+    state: reloaded
+  become: true
+
+- name: Reload systemd and clear the wait-online failed state # noqa: command-instead-of-module (reset-failed has no module)
+  ansible.builtin.shell: systemctl daemon-reload && systemctl reset-failed systemd-networkd-wait-online.service || true
+  become: true
+  changed_when: true

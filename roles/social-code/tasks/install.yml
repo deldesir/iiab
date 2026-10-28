@@ -35,7 +35,6 @@
     src: social-code.env.j2
     dest: "{{ social_code_src }}/.env"
     mode: "0600"
-  notify: Restart social-code
 
 - name: "Initialize Small Talk database"
   ansible.builtin.command:

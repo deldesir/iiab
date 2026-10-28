@@ -9,14 +9,7 @@
     mode: "0644"
     validate: "/usr/sbin/sshd -t -f %s" # Ansible requires %s: the drop-in is checked on its own before it lands
   become: true
-  register: sshd_hardening
-
-- name: Reload sshd
-  ansible.builtin.systemd:
-    name: ssh
-    state: reloaded
-  become: true
-  when: sshd_hardening.changed
+  notify: Reload sshd
 
 - name: Install fail2ban
   ansible.builtin.apt:
@@ -49,10 +42,4 @@
     dest: /etc/systemd/system/systemd-networkd-wait-online.service.d/any.conf
     mode: "0644"
   become: true
-  register: wait_online_dropin
-
-- name: Reload systemd and clear the unit's stale failed state
-  ansible.builtin.shell: systemctl daemon-reload && systemctl reset-failed systemd-networkd-wait-online.service || true
-  become: true
-  when: wait_online_dropin.changed
-  changed_when: true   # runs only when the drop-in changed
+  notify: Reload systemd and clear the wait-online failed state

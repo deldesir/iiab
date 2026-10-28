@@ -92,7 +92,7 @@
   # skips every item ("No .last_modified file found ... Skipping update"),
   # pushing nothing. --publish then promotes the pushed draft_blocks to the live
   # `blocks` field so the storefront actually renders the customer's design.
-  ansible.builtin.shell: builder push --force --publish
+  ansible.builtin.command: builder push --force --publish
   args:
     chdir: "{{ storefront_dir }}"
   register: push_result
@@ -104,7 +104,7 @@
 - name: Clear ERPNext site cache so the published storefront renders immediately
   become: true
   become_user: "{{ erpnext_user_name }}"
-  ansible.builtin.shell: ~/.local/bin/bench --site {{ erpnext_site_name }} clear-cache
+  ansible.builtin.command: /home/{{ erpnext_user_name }}/.local/bin/bench --site {{ erpnext_site_name }} clear-cache
   args:
     chdir: "/home/{{ erpnext_user_name }}/frappe-bench"
   environment:
