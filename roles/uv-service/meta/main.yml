@@ -1,0 +1,9 @@
+---
+galaxy_info:
+  role_name: uv-service
+  description: "One parameterised role for the services that run from a uv project tree (source, venv, environment file, units)"
+  author: deldesir
+  license: AGPL-3.0
+  min_ansible_version: "2.10"
+
+dependencies: []

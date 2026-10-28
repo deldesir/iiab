@@ -1,0 +1,41 @@
+---
+# Enable and restart, or disable and stop, the units and timers of one uv service. Included
+# by the calling role's enable-or-disable.yml on every run, as IIAB roles do.
+
+- name: Enable and restart the services of {{ svc.name }}
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    daemon_reload: true
+    enabled: true
+    state: restarted
+  loop: "{{ svc.services }}"
+  become: true
+  when: svc.enabled | bool
+
+- name: Disable and stop the services of {{ svc.name }}
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop: "{{ svc.services }}"
+  become: true
+  when: not svc.enabled | bool
+
+- name: Enable and start the timers of {{ svc.name }}
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    daemon_reload: true
+    enabled: true
+    state: started
+  loop: "{{ svc.timers }}"
+  become: true
+  when: svc.enabled | bool
+
+- name: Disable and stop the timers of {{ svc.name }}
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop: "{{ svc.timers }}"
+  become: true
+  when: not svc.enabled | bool

@@ -1,0 +1,16 @@
+---
+# The ai-update path: move the tree to the wanted version, re-sync, restart when it moved.
+- name: Move RiveBot to the wanted version and re-sync its venv (roles/uv-service)
+  ansible.builtin.include_role:
+    name: uv-service
+    tasks_from: update
+  vars:
+    uv_service: "{{ rivebot_service }}"
+
+- name: Restart RiveBot when its tree or venv changed
+  ansible.builtin.systemd:
+    name: rivebot
+    state: restarted
+    daemon_reload: true
+  become: true
+  when: uv_service_changed | bool

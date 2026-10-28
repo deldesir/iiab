@@ -1,28 +1,11 @@
 ---
 # social-code/tasks/install.yml — Install Social Code training suite
 
-- name: Install uv, pinned and checked (roles/uv)
+- name: Install the tree, venv and environment file of Social Code (roles/uv-service)
   ansible.builtin.include_role:
-    name: uv
-
-- name: "Ensure social-code source exists"
-  ansible.builtin.stat:
-    path: "{{ social_code_src }}/pyproject.toml"
-  register: sc_source
-
-- name: "Clone social-code repo if missing"
-  ansible.builtin.git:
-    repo: "https://github.com/iiab/social-code.git"
-    dest: "{{ social_code_src }}"
-    version: main
-  when: not sc_source.stat.exists
-
-- name: "Install Python dependencies from the lock file (uv sync --frozen)"
-  ansible.builtin.command:
-    cmd: "{{ uv_bin }} sync --frozen"
-    chdir: "{{ social_code_src }}"
-  register: social_code_sync
-  changed_when: "'Installed' in social_code_sync.stderr or 'Uninstalled' in social_code_sync.stderr"
+    name: uv-service
+  vars:
+    uv_service: "{{ social_code_service }}"
 
 - name: "Create data directory"
   ansible.builtin.file:
@@ -30,18 +13,12 @@
     state: directory
     mode: "0755"
 
-- name: "Create .env file from template"
-  ansible.builtin.template:
-    src: social-code.env.j2
-    dest: "{{ social_code_src }}/.env"
-    mode: "0600"
-
+# `creates` keeps this to the first run: the command resets the database, and without --force
+# it asks for a confirmation no provisioning run can give.
 - name: "Initialize Small Talk database"
   ansible.builtin.command:
-    cmd: /root/.local/bin/uv run --package small-talk st init
+    cmd: "{{ social_code_uv_bin }} run --package small-talk st init --force"
     chdir: "{{ social_code_src }}"
-  environment:
-    PATH: "/root/.local/bin:{{ ansible_env.PATH }}"
   args:
     creates: "{{ social_code_data_dir }}/small_talk.db"
 

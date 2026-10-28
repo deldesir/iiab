@@ -529,14 +529,6 @@ siyuan_install: False
 siyuan_enabled: False
 siyuan_port: 6806
 
-# Hermes Agent: Autonomous reasoning engine (in-process library for AI Gateway)
-hermes_agent_install: False
-hermes_agent_enabled: False
-
-# MemPalace: Structured memory with ChromaDB (in-process library for AI Gateway)
-mempalace_install: False
-mempalace_enabled: False
-
 # AI Update: Unified update role for the cognitive pipeline (./runrole ai-update)
 ai_update_install: True
 ai_update_enabled: True

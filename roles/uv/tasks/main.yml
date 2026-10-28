@@ -1,31 +1,31 @@
 # Install the pinned uv release when the installed one differs. No installer script from the
 # network: the release archive, checked against its published checksum.
 - name: Which uv is installed, if any
-  command: "{{ uv_bin }} --version"
+  ansible.builtin.command: "{{ uv_bin }} --version"
   register: uv_installed
   changed_when: false
   failed_when: false
 
 - name: Machine architecture (uname rather than a gathered fact, since role runs may not gather any)
-  set_fact:
+  ansible.builtin.set_fact:
     uv_arch: "{{ lookup('pipe', 'uname -m') }}"
 
 - name: The release archive for this machine
-  set_fact:
+  ansible.builtin.set_fact:
     uv_triple: "{{ uv_arch }}-unknown-linux-gnu"
     uv_sha256: "{{ uv_checksums[uv_arch] }}"
 
-- name: Fetch uv {{ uv_version }} (checked against its published checksum)
-  get_url:
+- name: Fetch the pinned uv release, checked against its published checksum, {{ uv_version }}
+  ansible.builtin.get_url:
     url: "https://github.com/astral-sh/uv/releases/download/{{ uv_version }}/uv-{{ uv_triple }}.tar.gz"
     dest: "/tmp/uv-{{ uv_version }}-{{ uv_triple }}.tar.gz"
     checksum: "sha256:{{ uv_sha256 }}"
     mode: '0644'
-  become: yes
+  become: true
   when: uv_installed.rc != 0 or ('uv ' + uv_version) not in uv_installed.stdout
 
-- name: Install uv and uvx into {{ uv_bin | dirname }}
-  unarchive:
+- name: Install uv and uvx into the directory of {{ uv_bin }}
+  ansible.builtin.unarchive:
     src: "/tmp/uv-{{ uv_version }}-{{ uv_triple }}.tar.gz"
     dest: "{{ uv_bin | dirname }}"
     remote_src: yes
@@ -33,11 +33,11 @@
     mode: '0755'
     owner: root
     group: root
-  become: yes
+  become: true
   when: uv_installed.rc != 0 or ('uv ' + uv_version) not in uv_installed.stdout
 
 - name: Remove the archive
-  file:
+  ansible.builtin.file:
     path: "/tmp/uv-{{ uv_version }}-{{ uv_triple }}.tar.gz"
     state: absent
-  become: yes
+  become: true

@@ -41,3 +41,16 @@ rivebot_rapidpro_api_token: "{{ rapidpro_auth_token | default('') }}"
 # the role reads it from the gateway's live env files at install time so a
 # re-render can never strip it (fail-closed = every chat macro 403s).
 rivebot_gateway_internal_key: ""
+
+# The service as the shared uv-service role sees it (roles/uv-service/README.md)
+rivebot_service:
+  name: rivebot
+  role: rivebot
+  dir: "{{ rivebot_home }}"
+  user: "{{ rivebot_user }}"
+  repo: "{{ rivebot_repo }}"
+  version: "{{ rivebot_repo_version }}"
+  env: rivebot.env.j2
+  units: [rivebot.service.j2]
+  services: [rivebot]
+  enabled: "{{ rivebot_enabled }}"

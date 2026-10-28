@@ -27,13 +27,51 @@ ai_gateway_erpnext_host: ""
 ai_gateway_erpnext_api_key: ""
 ai_gateway_erpnext_api_secret: ""
 
-# Domain libraries (cloned automatically by the role)
+# Libraries the gateway imports in-process. Each is an editable path source in the gateway's
+# pyproject.toml ([tool.uv.sources]) and is installed by the gateway's own `uv sync`; the role
+# clones a library when absent and never touches an existing tree, ai-update moves them with
+# the gateway (tasks/update.yml).
 ai_gateway_talkmaster_repo: "https://github.com/deldesir/talkmaster.git"
 ai_gateway_talkmaster_dir: /opt/iiab/talkmaster
 ai_gateway_talkmaster_version: main
 ai_gateway_jwlinker_repo: "https://github.com/deldesir/jwlinker.git"
 ai_gateway_jwlinker_dir: /opt/iiab/jwlinker
 ai_gateway_jwlinker_version: master
+# hermes-agent has NO fork commits (the deldesir fork is a stale mirror): the customisations
+# are the deploy-time patches in tasks/hermes-patches.yml (tenant isolation, user storage cap,
+# _SafeWriter slots; all three verified present at v0.22.3). So the gateway tracks upstream
+# directly, PINNED to a release tag. Bump it deliberately after a staged test (scratch gateway
+# copy, uv sync against a worktree of the tag with the patches applied, gateway test suite
+# green). Upstream re-numbered its tags in 2026-10 (v2026.9.24 → v0.22.x); at v0.22.2 the
+# gateway surface was audited compatible: AIAgent kwargs, run_conversation / chat (now on
+# agent/turn_facade.py), SessionDB(db_path=), tools.registry.register, the gemini provider and
+# the session:compress event. Voice/A2A/MCP2 are optional extras the gateway does NOT install.
+ai_gateway_hermes_repo: "https://github.com/nousresearch/hermes-agent.git"
+ai_gateway_hermes_dir: /opt/iiab/hermes-agent
+ai_gateway_hermes_version: v0.22.3
+# The deldesir fork is the integration point: upstream MemPalace is merged INTO it
+# deliberately (feature-aware, e.g. the embeddinggemma default is too heavy for 4 GB targets).
+ai_gateway_mempalace_repo: "https://github.com/deldesir/mempalace.git"
+ai_gateway_mempalace_dir: /opt/iiab/mempalace
+ai_gateway_mempalace_version: develop
+
+ai_gateway_libraries:
+  - name: hermes-agent
+    repo: "{{ ai_gateway_hermes_repo }}"
+    dest: "{{ ai_gateway_hermes_dir }}"
+    version: "{{ ai_gateway_hermes_version }}"
+  - name: mempalace
+    repo: "{{ ai_gateway_mempalace_repo }}"
+    dest: "{{ ai_gateway_mempalace_dir }}"
+    version: "{{ ai_gateway_mempalace_version }}"
+  - name: talkmaster
+    repo: "{{ ai_gateway_talkmaster_repo }}"
+    dest: "{{ ai_gateway_talkmaster_dir }}"
+    version: "{{ ai_gateway_talkmaster_version }}"
+  - name: jwlinker
+    repo: "{{ ai_gateway_jwlinker_repo }}"
+    dest: "{{ ai_gateway_jwlinker_dir }}"
+    version: "{{ ai_gateway_jwlinker_version }}"
 
 # Service
 ai_gateway_port: 8086
@@ -119,8 +157,9 @@ ai_gateway_postgres_uri: "postgresql+asyncpg://{{ rapidpro_db_user | default('te
 # Fallback persona when no channel→persona mapping exists
 ai_gateway_default_persona: "konex-support"
 
+# Hermes runs in the gateway's process: these go into the service unit's environment.
 ai_gateway_hermes_max_iterations: 15
-ai_gateway_hermes_thread_pool_size: 2         # Default 2; increase to 3 on 4GB+ devices
+ai_gateway_hermes_thread_pool_size: 2         # 2 on a 4 GB box; 3 on roomier ones
 ai_gateway_hermes_home: "{{ ai_gateway_dir }}/data/hermes"
 
 # MemPalace structured memory (ChromaDB backend)
@@ -145,3 +184,61 @@ ai_gateway_contact_sync_wuzapi_channel: ""
 # name in Organized) to enable; without it the job aborts loudly.
 talk_sync_language: "ht"
 talk_sync_pub: "s34"
+
+# The service as the shared uv-service role sees it (roles/uv-service/README.md). The
+# cognitive-pipeline jobs are oneshot units with a timer each (templates
+# ai-gateway-<job>.service.j2 and .timer.j2); the maintenance units are installed everywhere,
+# their timers enabled here except the emailed fleet backups, which only the hub enables
+# (tasks/install.yml).
+ai_gateway_jobs:
+  - compact
+  - kgextract
+  - kgwiki
+  - nudge
+  - talksync
+  - radar
+  - personsync
+  - dailybrief
+  - synthesis
+  - weekly
+  - eveningwrap
+  - sitrep
+  - monthend
+  - reminders
+  - weekahead
+  - spiritual
+  - home
+  - shepherd
+  - siyuancapture
+  - persontouches
+  - ldctwp
+  - ldcpeople
+  - contactsync
+ai_gateway_maintenance_units:
+  - pipeline-health-check
+  - second-brain-backup
+  - fleet-backup-mail
+  - fleet-backup-mail-hub
+ai_gateway_units: >-
+  {{ ['ai-gateway.service.j2']
+     + (ai_gateway_jobs | map('regex_replace', '^', 'ai-gateway-') | product(['.service.j2', '.timer.j2']) | map('join') | list)
+     + (ai_gateway_maintenance_units | product(['.service.j2', '.timer.j2']) | map('join') | list) }}
+ai_gateway_timers: >-
+  {{ (ai_gateway_jobs | map('regex_replace', '^', 'ai-gateway-') | map('regex_replace', '$', '.timer') | list)
+     + ['pipeline-health-check.timer', 'second-brain-backup.timer'] }}
+
+ai_gateway_service:
+  name: ai-gateway
+  role: ai-gateway
+  dir: "{{ ai_gateway_dir }}"
+  user: "{{ ai_gateway_user }}"
+  repo: "{{ ai_gateway_repo }}"
+  version: "{{ ai_gateway_repo_version }}"
+  libraries: "{{ ai_gateway_libraries }}"
+  python: "{{ ai_gateway_python }}"
+  env: ai-gateway.env.j2
+  env_local: true
+  units: "{{ ai_gateway_units }}"
+  services: [ai-gateway]
+  timers: "{{ ai_gateway_timers }}"
+  enabled: "{{ ai_gateway_enabled }}"

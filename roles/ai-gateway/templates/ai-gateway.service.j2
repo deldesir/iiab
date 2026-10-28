@@ -33,10 +33,10 @@ Environment="SIYUAN_NOTEBOOK_ID={{ ai_gateway_siyuan_notebook_id }}"
 Environment="DEFAULT_PERSONA={{ ai_gateway_default_persona | default('assistant') }}"
 
 # V2 — Hermes + MemPalace + ChromaDB threading constraints
-Environment="HERMES_HOME={{ hermes_agent_home | default(ai_gateway_dir ~ '/data/hermes') }}"
-Environment="MEMPALACE_PALACE_PATH={{ mempalace_palace_path | default(ai_gateway_dir ~ '/data/palace') }}"
-Environment="HERMES_MAX_ITERATIONS={{ hermes_agent_max_iterations | default(15) }}"
-Environment="HERMES_THREAD_POOL_SIZE={{ hermes_agent_thread_pool_size | default(3) }}"
+Environment="HERMES_HOME={{ ai_gateway_hermes_home }}"
+Environment="MEMPALACE_PALACE_PATH={{ ai_gateway_mempalace_palace_path }}"
+Environment="HERMES_MAX_ITERATIONS={{ ai_gateway_hermes_max_iterations }}"
+Environment="HERMES_THREAD_POOL_SIZE={{ ai_gateway_hermes_thread_pool_size }}"
 Environment="OMP_NUM_THREADS=1"
 Environment="TOKENIZERS_PARALLELISM=false"
 

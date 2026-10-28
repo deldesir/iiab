@@ -14,63 +14,6 @@
     state: present
   become: true
 
-- name: Install uv, pinned and checked (roles/uv)
-  ansible.builtin.include_role:
-    name: uv
-
-- name: Create RiveBot home directory
-  ansible.builtin.file:
-    path: "{{ rivebot_home }}"
-    state: directory
-    owner: "{{ rivebot_user }}"
-    group: "{{ rivebot_user }}"
-    mode: "0755"
-  become: true
-
-- name: Add rivebot directory to git safe directories
-  community.general.git_config:
-    scope: global
-    name: safe.directory
-    value: "{{ rivebot_home }}"
-    add_mode: add
-  become: true
-
-- name: Clone / update RiveBot repository
-  ansible.builtin.git:
-    repo: "{{ rivebot_repo }}"
-    dest: "{{ rivebot_home }}"
-    version: "{{ rivebot_repo_version }}"
-    force: true
-    update: true
-  become: true
-  notify: Restart rivebot
-
-- name: Set ownership of RiveBot directory
-  ansible.builtin.file:
-    path: "{{ rivebot_home }}"
-    state: directory
-    owner: "{{ rivebot_user }}"
-    group: "{{ rivebot_user }}"
-    recurse: true
-  become: true
-
-- name: Sync RiveBot Python dependencies (uv sync)
-  ansible.builtin.command: "{{ rivebot_uv_bin }} sync --frozen"
-  args:
-    chdir: "{{ rivebot_home }}"
-  register: rivebot_sync
-  changed_when: "'Installed' in rivebot_sync.stderr or 'Uninstalled' in rivebot_sync.stderr"
-  become: true
-
-- name: Fix ownership after uv sync
-  ansible.builtin.file:
-    path: "{{ rivebot_home }}"
-    state: directory
-    owner: "{{ rivebot_user }}"
-    group: "{{ rivebot_user }}"
-    recurse: true
-  become: true
-
 # The gateway internal key is hand-managed in the gateway's env files (it is
 # not an Ansible var on existing installs). Read it from there when the var
 # is unset so re-rendering .env can never strip the key — without it every
@@ -96,25 +39,13 @@
   no_log: true
   when:
     - not (rivebot_gateway_internal_key | default(''))
-    - rivebot_gateway_key_probe.stdout | default('')
+    - rivebot_gateway_key_probe.stdout | default('') | length > 0
 
-- name: Deploy RiveBot environment file
-  ansible.builtin.template:
-    src: rivebot.env.j2
-    dest: "{{ rivebot_home }}/.env"
-    owner: "{{ rivebot_user }}"
-    group: "{{ rivebot_user }}"
-    mode: "0600"
-  become: true
-  notify: Restart rivebot
-
-- name: Install RiveBot systemd service
-  ansible.builtin.template:
-    src: rivebot.service.j2
-    dest: /etc/systemd/system/rivebot.service
-    mode: "0644"
-  become: true
-  notify: Restart rivebot
+- name: Install the tree, venv, environment file and unit of RiveBot (roles/uv-service)
+  ansible.builtin.include_role:
+    name: uv-service
+  vars:
+    uv_service: "{{ rivebot_service }}"
 
 # RECORD RiveBot AS INSTALLED
 

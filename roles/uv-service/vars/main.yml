@@ -1,0 +1,4 @@
+---
+# The calling role's dict over the defaults. Every task reads `svc`.
+svc: "{{ uv_service_defaults | combine(uv_service) }}"
+svc_env_dest: "{{ svc.env_dest or (svc.dir ~ '/.env') }}"

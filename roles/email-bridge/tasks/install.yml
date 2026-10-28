@@ -13,63 +13,12 @@
     state: present
   become: true
 
-- name: Install uv, pinned and checked (roles/uv)
-  ansible.builtin.include_role:
-    name: uv
-
-- name: Create email-bridge home directory
-  ansible.builtin.file:
-    path: "{{ email_bridge_home }}"
-    state: directory
-    owner: "{{ email_bridge_user }}"
-    group: "{{ email_bridge_user }}"
-    mode: "0755"
-  become: true
-
-- name: Deploy email-bridge application files
-  ansible.builtin.copy:
-    src: "{{ item }}"
-    dest: "{{ email_bridge_home }}/{{ item }}"
-    owner: "{{ email_bridge_user }}"
-    group: "{{ email_bridge_user }}"
-    mode: "0644"
-  loop:
-    - email_bridge.py
-    - pyproject.toml
-    - create_email_channel.py
-  become: true
-  notify: Restart email-bridge
-
-- name: Add email-bridge directory to git safe directories (uv quirk)
-  community.general.git_config:
-    scope: global
-    name: safe.directory
-    value: "{{ email_bridge_home }}"
-    add_mode: add
-  become: true
-
-- name: Sync email-bridge Python dependencies (uv sync)
-  ansible.builtin.command: "{{ email_bridge_uv_bin }} sync --frozen"
-  args:
-    chdir: "{{ email_bridge_home }}"
-  register: email_bridge_sync
-  changed_when: "'Installed' in email_bridge_sync.stderr or 'Uninstalled' in email_bridge_sync.stderr"
-  become: true
-
-- name: Fix ownership after uv sync
-  ansible.builtin.file:
-    path: "{{ email_bridge_home }}"
-    state: directory
-    owner: "{{ email_bridge_user }}"
-    group: "{{ email_bridge_user }}"
-    recurse: true
-  become: true
-
 # ── Auto-provision the RapidPro External (mailto) channel ────────────────────
 # Best-effort: when no channel UUID is pinned and RapidPro + a bot address are
 # present, get-or-create the channel and capture its UUID for the .env. Soft —
 # if RapidPro isn't ready the bridge still installs and you can create it later
 # (manually or on the next run); inbound polling stays off until the UUID is set.
+# Runs before the tree is written because the UUID goes into the environment file.
 - name: Check whether RapidPro is available for channel auto-provisioning
   ansible.builtin.stat:
     path: "{{ email_bridge_rapidpro_dir }}/.venv/bin/python"
@@ -80,7 +29,7 @@
   ansible.builtin.command:
     cmd: >-
       {{ email_bridge_rapidpro_dir }}/.venv/bin/python manage.py shell
-      -c "exec(open('{{ email_bridge_home }}/create_email_channel.py').read())"
+      -c "exec(open('{{ role_path }}/files/create_email_channel.py').read())"
     chdir: "{{ email_bridge_rapidpro_dir }}"
   environment:
     EMAIL_BOT_ADDR: "{{ email_bridge_from }}"
@@ -106,15 +55,11 @@
     - email_bridge_channel_out.stdout is defined
     - "'UUID=' in email_bridge_channel_out.stdout"
 
-- name: Deploy email-bridge environment file
-  ansible.builtin.template:
-    src: email-bridge.env.j2
-    dest: "{{ email_bridge_home }}/.env"
-    owner: "{{ email_bridge_user }}"
-    group: "{{ email_bridge_user }}"
-    mode: "0600"
-  become: true
-  notify: Restart email-bridge
+- name: Install the tree, venv, environment file and unit of the email bridge (roles/uv-service)
+  ansible.builtin.include_role:
+    name: uv-service
+  vars:
+    uv_service: "{{ email_bridge_service }}"
 
 - name: Check for the auto-generated send-auth token file
   ansible.builtin.stat:
@@ -127,14 +72,6 @@
     mode: "0600"
   become: true
   when: email_bridge_token_file.stat.exists   # the service writes it on first start
-
-- name: Install email-bridge systemd service
-  ansible.builtin.template:
-    src: email-bridge.service.j2
-    dest: /etc/systemd/system/email-bridge.service
-    mode: "0644"
-  become: true
-  notify: Restart email-bridge
 
 # Failure alerting: any unit carrying `OnFailure=notify-failure@%n.service`
 # emails the operator through this bridge when it enters failed state.

@@ -5,58 +5,11 @@ ai_update_enabled: True
 # uv binary
 ai_update_uv_bin: /usr/local/bin/uv
 
-# ── Gateway cluster (shared venv, ONE uv sync, ONE restart) ────────
-ai_update_gateway_dir: /opt/iiab/ai-gateway
-ai_update_gateway_user: "{{ iiab_admin_user }}"
-
-ai_update_gateway_components:
-  - name: ai-gateway
-    repo: "https://github.com/deldesir/gateway.git"
-    dest: /opt/iiab/ai-gateway
-    version: main
-
-  # hermes-agent has NO IIAB fork commits — the deldesir fork is a stale mirror.
-  # IIAB's only customizations are the deploy-time memory_tool patches in
-  # apply-patches.yml (all 3 targets verified present at v0.22.3: tenant
-  # isolation regex, user_char_limit cap, _SafeWriter slots). So track upstream
-  # directly, PINNED to a release tag for reproducibility — bump it deliberately
-  # after a staged test (scratch gateway copy, uv sync against a worktree of
-  # the tag with the 3 patches applied, gateway test suite green). Upstream
-  # re-numbered its tags in 2026-10 (v2026.9.24 → v0.22.x; v0.22.2 descends
-  # from v2026.9.24). At v0.22.2 the gateway surface was audited compatible:
-  # AIAgent kwargs (none removed since v2026.9.24), run_conversation /
-  # chat signatures (now on agent/turn_facade.py), SessionDB(db_path=),
-  # tools.registry.register, the gemini provider and the session:compress
-  # event (SILENT_MARKER moved to cron/scheduler.py; the gateway does not
-  # import it). Voice/A2A/MCP2 are optional extras the gateway does NOT
-  # install.
-  - name: hermes-agent
-    repo: "https://github.com/nousresearch/hermes-agent.git"
-    dest: /opt/iiab/hermes-agent
-    version: v0.22.3
-
-  # deldesir fork is the integration point. Upstream MemPalace/mempalace is synced
-  # INTO this fork deliberately (feature-aware — e.g. the embeddinggemma default is
-  # too heavy for 4 GB targets), not force-pulled here.
-  - name: mempalace
-    repo: "https://github.com/deldesir/mempalace.git"
-    dest: /opt/iiab/mempalace
-    version: develop
-
-  - name: talkmaster
-    repo: "https://github.com/deldesir/talkmaster.git"
-    dest: /opt/iiab/talkmaster
-    version: main
-
-  - name: jwlinker
-    repo: "https://github.com/deldesir/jwlinker.git"
-    dest: /opt/iiab/jwlinker
-    version: master
-
-# ── RiveBot (own venv, own restart) ─────────────────────────────────
-ai_update_rivebot_dir: /opt/iiab/rivebot
-ai_update_rivebot_repo: "https://github.com/deldesir/rivebot.git"
-ai_update_rivebot_version: main
+# ── The uv services (ai-gateway with its libraries, rivebot) ────────
+# Their sources, versions and venvs are defined ONCE, in their own roles
+# (roles/ai-gateway/defaults, roles/rivebot/defaults); this role runs each
+# role's update entry (tasks/update.yml), which moves the trees, re-syncs
+# and restarts when anything changed.
 
 # ── RapidPro (Django — needs migrations + static + patches) ────────
 ai_update_rapidpro_dir: /opt/iiab/rapidpro
@@ -98,4 +51,5 @@ ai_update_wuzapi_dir: /opt/iiab/wuzapi
 
 # ── Skip list (set via -e to skip specific components) ─────────────
 # Usage: ./runrole ai-update -e '{"ai_update_skip": ["wuzapi", "rapidpro"]}'
+# Names: ai-gateway (with its libraries), rivebot, rapidpro, courier, mailroom, wuzapi
 ai_update_skip: []

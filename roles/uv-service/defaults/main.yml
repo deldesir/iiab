@@ -1,0 +1,34 @@
+---
+# The shared role behind the services that run from a uv project tree (ai-gateway, rivebot,
+# email-bridge, social-code, the organized backend). A calling role passes ONE dict, uv_service,
+# and includes this role: tasks/main.yml installs the tree, tasks/enable.yml enables or disables
+# its units, tasks/update.yml moves an installed tree to the wanted version (ai-update). The
+# calling role keeps everything specific to its service (asserts, data directories, database
+# objects, nginx) around the include. README.md documents the keys; these are their defaults.
+uv_service_bin: /usr/local/bin/uv
+
+uv_service_defaults:
+  name: ""               # the service's label; a unit of that name is what `services` usually lists
+  role: ""               # the calling role's directory name: its templates/ and files/ are read from there
+  dir: ""                # the project tree (pyproject.toml, uv.lock, .venv)
+  user: root             # owns the tree and runs the units
+  source: git            # git | files | none
+  repo: ""               # git: the repository
+  version: main          # git: branch, tag or commit
+  update: true           # git: an existing tree is fast-forwarded to `version`; false = clone only when absent
+  force: false           # git: discard local modifications (the update entry always does)
+  depth: 0               # git: shallow clone depth, 0 = full history
+  files: []              # files: names under roles/<role>/files copied into `dir`
+  libraries: []          # editable dependencies, each {name, repo, dest, version}: cloned when absent, moved with the service by the update entry
+  python: ""             # lock: the venv's interpreter version (written to .python-version; another version recreates the venv)
+                         # requirements: the interpreter the venv is created with (a path or a version); "" lets uv choose
+  deps: lock             # lock (uv sync --frozen) | requirements (uv pip install -r requirements.txt) | none
+  packages: []           # requirements: extra packages installed into the venv
+  env: ""                # the environment file's template under roles/<role>/templates, "" = none
+  env_dest: ""           # where it is written; "" = <dir>/.env
+  env_mode: "0600"
+  env_local: false       # also create <env_dest>.local once (machine-local overrides, never rewritten)
+  units: []              # unit templates under roles/<role>/templates: foo.service.j2 lands at /etc/systemd/system/foo.service
+  services: []           # units enabled and restarted when `enabled`, disabled and stopped otherwise
+  timers: []             # timers enabled and started when `enabled`, disabled and stopped otherwise
+  enabled: false

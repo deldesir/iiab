@@ -91,3 +91,17 @@ email_bridge_attachment_max_bytes: 20971520   # 20 MB (under Gmail's 25 MB cap)
 # can read them) and their paths appended to the forwarded text.
 email_bridge_inbound_dir: "{{ email_bridge_home }}/inbound"
 email_bridge_save_inbound: True
+
+# The service as the shared uv-service role sees it (roles/uv-service/README.md). The bridge
+# ships with this repository: its files (and the lock file a frozen sync needs) are copied in.
+email_bridge_service:
+  name: email-bridge
+  role: email-bridge
+  dir: "{{ email_bridge_home }}"
+  user: "{{ email_bridge_user }}"
+  source: files
+  files: [email_bridge.py, pyproject.toml, uv.lock, create_email_channel.py]
+  env: email-bridge.env.j2
+  units: [email-bridge.service.j2]
+  services: [email-bridge]
+  enabled: "{{ email_bridge_enabled }}"

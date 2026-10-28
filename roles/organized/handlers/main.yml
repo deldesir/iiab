@@ -4,15 +4,3 @@
     name: nginx
     state: reloaded
   become: true
-
-- name: Restart organized
-  ansible.builtin.systemd:
-    name: organized
-    state: restarted
-  become: true
-
-- name: Restart organized-celery
-  ansible.builtin.systemd:
-    name: organized-celery
-    state: restarted
-  become: true

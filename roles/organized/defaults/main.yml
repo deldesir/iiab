@@ -98,3 +98,31 @@ organized_source_languages: ['E']
 # Point auto-import at the local mirror; leave announcements disabled (no SaaS).
 organized_source_materials_api: "/organized-sources"
 organized_notifications_api: ""
+
+# The backend as the shared uv-service role sees it (roles/uv-service/README.md): a
+# requirements.txt project in a venv on the system Python, gunicorn added, its environment
+# file under /etc/iiab with a machine-local override beside it, the two services and the
+# source-materials mirror timer.
+organized_python: /usr/bin/python3
+organized_service:
+  name: organized
+  role: organized
+  dir: "{{ organized_dir }}"
+  user: "{{ organized_user }}"
+  repo: "{{ organized_repo }}"
+  version: "{{ organized_version }}"
+  depth: 1
+  python: "{{ organized_python }}"
+  deps: requirements
+  packages: [gunicorn]
+  env: organized.env.j2
+  env_dest: /etc/iiab/organized.env
+  env_local: true
+  units:
+    - organized.service.j2
+    - organized-celery.service.j2
+    - organized-sources.service.j2
+    - organized-sources.timer.j2
+  services: [organized, organized-celery]
+  timers: [organized-sources.timer]
+  enabled: "{{ organized_enabled }}"

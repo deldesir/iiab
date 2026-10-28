@@ -134,10 +134,6 @@ wuzapi_install: False
 wuzapi_enabled: False
 ai_gateway_install: False
 ai_gateway_enabled: False
-hermes_agent_install: False
-hermes_agent_enabled: False
-mempalace_install: False
-mempalace_enabled: False
 rivebot_install: False
 rivebot_enabled: False
 siyuan_install: False

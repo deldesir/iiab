@@ -11,7 +11,7 @@ WorkingDirectory={{ ai_gateway_dir }}
 EnvironmentFile={{ ai_gateway_dir }}/.env
 # Machine-local overrides — never written by Ansible; loaded last, so it wins.
 EnvironmentFile=-{{ ai_gateway_dir }}/.env.local
-Environment="MEMPALACE_PALACE_PATH={{ mempalace_palace_path | default(ai_gateway_dir ~ '/data/palace') }}"
+Environment="MEMPALACE_PALACE_PATH={{ ai_gateway_mempalace_palace_path }}"
 # Retry a few times with a gap: the palace lock is held only transiently by
 # the always-on gateway during active memory ops, so a run that collides at
 # 03:00 clears on a retry a minute later (avoids a false OnFailure alert).
