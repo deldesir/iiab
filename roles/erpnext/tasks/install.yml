@@ -453,7 +453,7 @@
     rm -f  /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/assets.json
     rm -f  /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/assets-rtl.json
   when: erpnext_enabled | bool
-  changed_when: true   # always wipes; the build flag below checks the assets file this removes, so every run rebuilds
+  changed_when: true   # always wipes; install.yml runs at install or --reinstall only, and within it the build is unconditional (the flag checks the file this removes)
 
 - name: Create ERPNext database
   ansible.mysql.mysql_db:
