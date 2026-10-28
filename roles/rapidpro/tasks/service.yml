@@ -31,6 +31,8 @@
 
 - name: "Android (pdsm): enable the RapidPro services"
   ansible.builtin.command: /usr/local/bin/pdsm enable {{ item }}
+  args:
+    creates: /usr/local/pdsm/services-enabled/{{ item }}   # pdsm enable = this symlink; it prints "enabled" either way
   loop:
     - postgresql
     - valkey
