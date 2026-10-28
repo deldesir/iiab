@@ -9,8 +9,7 @@ profile: production
 skip_list:
   - role-name                     # IIAB role names (0-init, 1-prep, ai-update) predate the rule
   - var-naming[no-role-prefix]    # IIAB's variable names are an upstream convention shared with local_vars
-  - no-changed-when               # sweep in progress: change conditions on shell tasks (#188 was the first slice)
-  - risky-shell-pipe              # same sweep: pipefail on piped shell tasks
+  - no-changed-when               # eight Android/proot tasks left (#188, #192, #193 did the rest); removed when a device run can test them
   - risky-file-permissions        # sweep: explicit mode on every file/copy/template that creates a file
   - ignore-errors                 # sweep: failed_when with the real condition instead of ignore_errors
   - no-handler                    # sweep: tasks gated on x.changed become handlers
