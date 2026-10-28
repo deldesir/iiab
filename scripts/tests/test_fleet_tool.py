@@ -188,6 +188,34 @@ def test_digest_lists_findings(scratch):
     assert "- WARN box-002 shop (A customer shop): disk 10G" in text and "· WARN: disk free 10 GB" in text and "never checked" in text
 
 
+def test_copy_drift_names_the_files_that_differ_or_are_missing_or_left_over(tmp_path):
+    repo, sbin, lib = tmp_path / "scripts", tmp_path / "sbin", tmp_path / "lib"
+    for d in (repo / "fleet_tool", sbin, lib / "fleet_tool"):
+        d.mkdir(parents=True)
+    (repo / "fleet").write_text("#!stub v2\n")
+    (sbin / "fleet").write_text("#!stub v1\n")
+    (repo / "fleet_tool" / "cli.py").write_text("same\n")
+    (lib / "fleet_tool" / "cli.py").write_text("same\n")
+    (repo / "fleet_tool" / "new.py").write_text("new module\n")
+    (lib / "fleet_tool" / "stale.py").write_text("gone from the repository\n")
+    assert checks.copy_drift(repo, sbin, lib) == ["fleet", "fleet_tool/new.py", "fleet_tool/stale.py"]
+    (sbin / "fleet").write_text("#!stub v2\n")
+    (lib / "fleet_tool" / "new.py").write_text("new module\n")
+    (lib / "fleet_tool" / "stale.py").unlink()
+    assert checks.copy_drift(repo, sbin, lib) == []
+
+
+def test_installed_copy_drift_is_silent_when_the_tool_runs_from_the_repository():
+    assert checks.installed_copy_drift() == []       # the tests import the package from the repository
+
+
+def test_digest_carries_the_hub_notes_before_the_boxes(scratch):
+    inv = config.load_inventory()
+    text = checks.build_digest(inv, {}, ["hub: the installed fleet tool differs from the repository (fleet): run scripts/fleet-install/install-fleet.sh"])
+    head, _, rest = text.partition("- ?? ")
+    assert "· WARN: hub: the installed fleet tool differs" in head and "install-fleet.sh" in head and "never checked" in rest
+
+
 def test_help_names_every_command(capsys):
     with pytest.raises(SystemExit) as e:
         cli.main(["--help"])
