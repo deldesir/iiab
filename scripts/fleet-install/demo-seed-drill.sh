@@ -26,6 +26,7 @@ SQL
 rm -rf "$B/sites/$SITE"
 asf "bench new-site $SITE --admin-password 'drill-initial' --db-name $DB --db-password '$PW' --no-setup-db --force" >/dev/null || { echo "DRILL-FAILED: new-site"; exit 1; }
 asf "bench --site $SITE set-config pause_scheduler 1" >/dev/null
+asf "bench --site $SITE set-config demo 1" >/dev/null   # the seed refuses a site without this mark
 apps=${DRILL_APPS:-}; if [ -z "$apps" ]; then for a in $WANT; do grep -qx $a "$B/sites/apps.txt" && apps="$apps $a"; done; fi
 for a in $apps; do step "install-app $a"; asf "bench --site $SITE install-app $a" >/dev/null || { echo "DRILL-FAILED: install-app $a"; exit 1; }; done
 step "seed"

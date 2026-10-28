@@ -32,4 +32,6 @@ in the Hospitality PMS with rate plans, posting profile, guests, stays, folio li
 restaurant menu with an order signed to a room, a Bar POS profile, housekeeping and a room
 out of order; idempotent; needs the `hospitality_pms` app, see
 `vars/local_vars_demo_hotel.yml`) and `demo-seed-drill.sh` (proves the shop seed on a scratch
-site, then drops it).
+site, then drops it). Both seeds reset Administrator's password to the documented demo value, so
+they refuse any site whose config does not carry `demo: 1`; `demo-rebuild.sh` and the drill mark
+the sites they build, and a demo site built another way needs `bench --site <site> set-config demo 1` once.
