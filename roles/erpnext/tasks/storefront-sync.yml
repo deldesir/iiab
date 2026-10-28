@@ -39,6 +39,7 @@
     npm run build
   args:
     chdir: "{{ builder_cli_dir | default('/opt/iiab/builder-cli') }}"
+  changed_when: true   # always rebuilds
 
 - name: Globally install builder-cli executable
   ansible.builtin.shell: |
@@ -46,6 +47,7 @@
     chmod +x dist/index.js
   args:
     chdir: "{{ builder_cli_dir | default('/opt/iiab/builder-cli') }}"
+  changed_when: true   # always reinstalls
 
 - name: Clone or pull storefront repository
   ansible.builtin.git:
@@ -58,13 +60,14 @@
   become: true
   become_user: "{{ erpnext_user_name }}"
   ansible.builtin.shell: |
-    ~/.local/bin/bench --site {{ erpnext_site_name }} execute 'exec("import frappe\nfrom frappe.core.doctype.user.user import generate_keys\nuser = frappe.get_doc(\"User\", \"Administrator\")\nkey = user.api_key\ntry:\n    sec = user.get_password(\"api_secret\")\nexcept:\n    sec = None\nif not key or not sec:\n    generate_keys(\"Administrator\")\n    frappe.db.commit()\n    user.reload()\n    key = user.api_key\n    sec = user.get_password(\"api_secret\")\nprint(f\"{key}:{sec}\")")'
+    ~/.local/bin/bench --site {{ erpnext_site_name }} execute 'exec("import frappe\nfrom frappe.core.doctype.user.user import generate_keys\nuser = frappe.get_doc(\"User\", \"Administrator\")\nkey = user.api_key\ntry:\n    sec = user.get_password(\"api_secret\")\nexcept:\n    sec = None\nif not key or not sec:\n    generate_keys(\"Administrator\")\n    import sys; print(\"GENERATED\", file=sys.stderr)\n    frappe.db.commit()\n    user.reload()\n    key = user.api_key\n    sec = user.get_password(\"api_secret\")\nprint(f\"{key}:{sec}\")")'
   args:
     chdir: "/home/{{ erpnext_user_name }}/frappe-bench"
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   register: admin_keys_result
   no_log: true
+  changed_when: "'GENERATED' in admin_keys_result.stderr"
 
 - name: Set API key and secret facts
   ansible.builtin.set_fact:
@@ -96,6 +99,7 @@
   until: push_result is succeeded
   retries: 3
   delay: 5
+  changed_when: true   # publishes on every run
 
 - name: Clear ERPNext site cache so the published storefront renders immediately
   become: true
@@ -105,3 +109,4 @@
     chdir: "/home/{{ erpnext_user_name }}/frappe-bench"
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  changed_when: true   # always clears
