@@ -1,0 +1,27 @@
+---
+# Stage 0: the roles' variables and git's safe.directory entries.
+
+# ═══════════════════════════════════════════════════════════════
+# STAGE 0: Ensure git safe.directory for all repos
+# ═══════════════════════════════════════════════════════════════
+# Repos are owned by iiab-admin but Ansible runs as root.
+# The git module fails on dubious ownership before we can pull.
+
+- name: The flow engine's and the bridge's variables, from their roles' defaults (one source for sources, versions and releases)
+  ansible.builtin.include_tasks: load-role-defaults.yml
+  loop: [rapidpro, wuzapi]
+  loop_control:
+    loop_var: role_defaults_of
+
+- name: "Add missing dirs to git safe.directory"
+  community.general.git_config:
+    scope: global
+    name: safe.directory
+    value: "{{ item }}"
+    add_mode: add
+  environment:
+    HOME: "{{ lookup('env', 'HOME') | default('/root', true) }}" # timers and transient units have no HOME
+  become: true
+  loop:
+    - "{{ rapidpro_dir }}"
+    - "{{ wuzapi_src_dir }}"

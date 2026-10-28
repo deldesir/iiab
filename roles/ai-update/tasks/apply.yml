@@ -1,0 +1,51 @@
+---
+# Stage 3: the flow engine's local patch and post-update steps, the bridge's static assets, the
+# permissions nginx needs, the stale spool files.
+
+# ═══════════════════════════════════════════════════════════════
+# STAGE 3: Apply patches + resolve dependencies
+# ═══════════════════════════════════════════════════════════════
+
+# 3a. IIAB local patch on the flow engine (the gateway's library patches live in its role)
+- name: Apply the IIAB local patch on the flow engine
+  ansible.builtin.include_tasks: apply-patches.yml
+
+# 3e. RapidPro post-update (configure + migrate + collectstatic + patches)
+- name: RapidPro post-update
+  ansible.builtin.include_tasks: rapidpro-post-update.yml
+  when: rapidpro_git_result.changed | default(false)
+
+# 3f. WuzAPI static assets
+- name: Copy updated WuzAPI static assets
+  ansible.builtin.copy:
+    mode: preserve
+    src: "{{ wuzapi_src_dir }}/static"
+    dest: "{{ wuzapi_dir }}/"
+    remote_src: true
+    owner: "{{ ai_update_gateway_user }}"
+    group: "{{ ai_update_gateway_user }}"
+  become: true
+  when: wuzapi_src_result.changed | default(false)
+
+# ═══════════════════════════════════════════════════════════════
+# STAGE 5: Harden permissions (ALWAYS runs)
+# ═══════════════════════════════════════════════════════════════
+# These run unconditionally because ANY stage (git pull, chown,
+# uv sync, collectstatic) can tighten directory permissions that
+# nginx (www-data) needs.
+
+- name: "Fix RapidPro permissions for nginx"
+  ansible.builtin.shell: |
+    chmod -R a+rX {{ rapidpro_dir }}/sitestatic {{ rapidpro_dir }}/media 2>/dev/null || true
+    chmod 755 {{ rapidpro_dir }}/run 2>/dev/null || true
+  become: true
+  changed_when: false
+  when: "'rapidpro' not in ai_update_skip"
+
+- name: "Clean stale DynamoDB/ES spool files (local-first mode)"
+  ansible.builtin.shell: rm -f {{ rapidpro_dir }}/spool/*/dynamo/*.jsonl {{ rapidpro_dir }}/spool/*/elastic/*.jsonl
+  become: true
+  changed_when: false
+  when:
+    - "'rapidpro' not in ai_update_skip"
+    - not (rapidpro_aws_enabled | default(false))
