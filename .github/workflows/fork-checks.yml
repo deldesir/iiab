@@ -26,10 +26,8 @@ jobs:
             printf -- "- hosts: localhost\n  gather_facts: no\n  tasks:\n    - import_tasks: $PWD/$f\n" > /tmp/syntax.yml
             ansible-playbook --syntax-check /tmp/syntax.yml >/dev/null || { echo "syntax: $f"; exit 1; }
           done
-      - name: ansible-lint, production profile, on the fork roles
-        run: |
-          printf 'profile: production\nskip_list: [role-name]\n' > /tmp/lint.yml
-          ansible-lint --offline -c /tmp/lint.yml $(for r in $FORK_ROLES; do echo roles/$r; done)
+      - name: ansible-lint, production profile, on every fork task file (by path, not by role directory)
+        run: ansible-lint --offline -c .ansible-lint-fork.yml $(for r in $FORK_ROLES; do ls roles/$r/tasks/*.yml; done)
       - name: ruff on the fleet tooling
         run: ruff check --config scripts/ruff.toml $FORK_PY
       - name: shellcheck on the fork scripts

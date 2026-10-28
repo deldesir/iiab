@@ -1,17 +1,17 @@
 ---
 - name: Enable & Restart 'siyuan' systemd service, if siyuan_enabled
-  systemd:
+  ansible.builtin.systemd:
     name: siyuan
-    daemon_reload: yes
-    enabled: yes
+    daemon_reload: true
+    enabled: true
     state: restarted
   when: siyuan_enabled
 
 - name: Install SiYuan Nginx config, if siyuan_enabled
-  template:
+  ansible.builtin.template:
     src: siyuan-nginx.conf.j2
     dest: /etc/nginx/conf.d/siyuan.conf
-  become: yes
+  become: true
   when: siyuan_enabled
   notify: reload nginx
 
@@ -19,33 +19,33 @@
 # at the native URL. ip_nonlocal_bind lets nginx bind the tailscale address
 # even when tailscale0 comes up after nginx at boot.
 - name: Allow nginx to bind the tailscale address before the interface exists
-  sysctl:
+  ansible.posix.sysctl:
     name: net.ipv4.ip_nonlocal_bind
-    value: '1'
+    value: "1"
     state: present
     sysctl_file: /etc/sysctl.d/90-siyuan-native.conf
-  become: yes
+  become: true
   when: siyuan_enabled
 
 - name: Publish SiYuan natively on the tailnet, if siyuan_enabled
-  template:
+  ansible.builtin.template:
     src: siyuan-native.conf.j2
     dest: /etc/nginx/sites-enabled/siyuan-native.conf
-  become: yes
+  become: true
   when: siyuan_enabled
   notify: reload nginx
 
 - name: Disable & Stop 'siyuan' systemd service, if not siyuan_enabled
-  systemd:
+  ansible.builtin.systemd:
     name: siyuan
-    enabled: no
+    enabled: false
     state: stopped
   when: not siyuan_enabled
 
 - name: Remove SiYuan Nginx config, if not siyuan_enabled
-  file:
+  ansible.builtin.file:
     path: /etc/nginx/conf.d/siyuan.conf
     state: absent
-  become: yes
+  become: true
   when: not siyuan_enabled
   notify: reload nginx

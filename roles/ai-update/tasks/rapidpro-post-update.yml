@@ -6,19 +6,19 @@
 # that). settings_common.py is tracked in the fork and arrives with the code.
 
 - name: Ensure PostgreSQL is running before RapidPro update
-  systemd:
+  ansible.builtin.systemd:
     name: postgresql-iiab
     state: started
-  become: yes
+  become: true
 
 - name: Backup RapidPro database before migration (a failed dump stops the update, migrate never runs without one)
-  shell: sudo -u postgres pg_dump -Fc temba > /var/backups/temba-pre-update-$(date +%Y%m%d%H%M).dump
-  become: yes
+  ansible.builtin.shell: sudo -u postgres pg_dump -Fc temba > /var/backups/temba-pre-update-$(date +%Y%m%d%H%M).dump
+  become: true
   changed_when: true
 
 - name: Fix RapidPro ownership after git pull
-  command: "chown -R {{ ai_update_gateway_user }}:{{ ai_update_gateway_user }} {{ ai_update_rapidpro_dir }}"
-  become: yes
+  ansible.builtin.command: "chown -R {{ ai_update_gateway_user }}:{{ ai_update_gateway_user }} {{ ai_update_rapidpro_dir }}"
+  become: true
   changed_when: false
 
 # The pgvector/bun tasks need the rapidpro role's defaults, but include_vars
@@ -28,17 +28,16 @@
 # they reference each other), then put the remembered values back with
 # set_fact, which outranks include_vars.
 - name: Remember rapidpro variables that are already defined (local_vars, default_vars)
-  set_fact:
+  ansible.builtin.set_fact:
     _rapidpro_defined_vars: "{{ _rapidpro_defined_vars | default({}) | combine({item: lookup('vars', item)}) }}"
   loop: "{{ (lookup('file', '/opt/iiab/iiab/roles/rapidpro/defaults/main.yml') | from_yaml).keys() | list }}"
   when: lookup('vars', item, default='__undefined__') != '__undefined__'
   no_log: true
 
 - name: Load rapidpro role defaults (pgvector + bun vars)
-  include_vars: /opt/iiab/iiab/roles/rapidpro/defaults/main.yml
-
+  ansible.builtin.include_vars: /opt/iiab/iiab/roles/rapidpro/defaults/main.yml
 - name: Put the already-defined values back on top of the role defaults
-  set_fact:
+  ansible.builtin.set_fact:
     "{{ item.key }}": "{{ item.value }}"
   loop: "{{ _rapidpro_defined_vars | default({}) | dict2items }}"
   loop_control:
@@ -46,87 +45,81 @@
   no_log: true
 
 - name: Ensure pgvector for the knowledge app
-  include_tasks: /opt/iiab/iiab/roles/rapidpro/tasks/pgvector.yml
-
+  ansible.builtin.include_tasks: /opt/iiab/iiab/roles/rapidpro/tasks/pgvector.yml
 - name: Ensure bun for the components build
-  include_tasks: /opt/iiab/iiab/roles/rapidpro/tasks/bun.yml
-
-# Django 6.1 (RapidPro v26.3.55+) refuses to boot when the legacy EMAIL_* settings
-# coexist with the MAILERS dict that settings_common.py now defines. settings.py is
-# device-local and never re-rendered here, but older renders wrote
-# `EMAIL_BACKEND = ...` into it — strip any legacy email setting idempotently.
+  ansible.builtin.include_tasks: /opt/iiab/iiab/roles/rapidpro/tasks/bun.yml
 - name: Strip legacy Django email settings superseded by MAILERS from settings.py
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: "{{ ai_update_rapidpro_dir }}/temba/settings.py"
-    regexp: '^\s*EMAIL_(BACKEND|HOST|PORT|HOST_USER|HOST_PASSWORD|USE_TLS|USE_SSL|TIMEOUT|SSL_KEYFILE|SSL_CERTFILE)\s*='
+    regexp: "^\\s*EMAIL_(BACKEND|HOST|PORT|HOST_USER|HOST_PASSWORD|USE_TLS|USE_SSL|TIMEOUT|SSL_KEYFILE|SSL_CERTFILE)\\s*="
     state: absent
-  become: yes
+  become: true
 
 - name: Sync RapidPro Python dependencies
-  shell: |
+  ansible.builtin.shell: |
     export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
     uv sync
   args:
     chdir: "{{ ai_update_rapidpro_dir }}"
-  become: yes
+  become: true
   become_user: "{{ ai_update_gateway_user }}"
 
 - name: Run database migrations
-  shell: |
+  ansible.builtin.shell: |
     export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
     uv run python manage.py migrate
   args:
     chdir: "{{ ai_update_rapidpro_dir }}"
-  become: yes
+  become: true
   become_user: "{{ ai_update_gateway_user }}"
 
 - name: Create the Postgres search indexes
-  shell: |
+  ansible.builtin.shell: |
     export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
     uv run python manage.py nanorp_indexes
   args:
     chdir: "{{ ai_update_rapidpro_dir }}"
-  become: yes
+  become: true
   become_user: "{{ ai_update_gateway_user }}"
   when: not (rapidpro_aws_enabled | default(false))
 
 - name: Collect static files
-  shell: |
+  ansible.builtin.shell: |
     export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
     uv run python manage.py collectstatic --noinput
   args:
     chdir: "{{ ai_update_rapidpro_dir }}"
-  become: yes
+  become: true
   become_user: "{{ ai_update_gateway_user }}"
 
 - name: Remove the retired front-end URL patch script
-  file:
+  ansible.builtin.file:
     path: /usr/local/sbin/rapidpro-patch-frontend-urls
     state: absent
-  become: yes
+  become: true
 
 - name: Purge Django cache
-  shell: |
+  ansible.builtin.shell: |
     {{ ai_update_rapidpro_dir }}/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
   args:
     chdir: "{{ ai_update_rapidpro_dir }}"
-  become: yes
-  ignore_errors: yes
+  become: true
+  ignore_errors: true
 
 # RedBeat keeps beat entries in valkey after they leave CELERY_BEAT_SCHEDULE, so a
 # task upstream removed would keep firing as "unregistered". Prune against the
 # freshly rendered settings (idempotent; internal redbeat:: keys untouched).
 - name: Prune RedBeat schedule entries no longer in CELERY_BEAT_SCHEDULE
-  shell: |
+  ansible.builtin.shell: |
     {{ ai_update_rapidpro_dir }}/.venv/bin/python manage.py shell -c "$(cat /opt/iiab/iiab/roles/ai-update/files/prune_redbeat_entries.py)"
   args:
     chdir: "{{ ai_update_rapidpro_dir }}"
-  become: yes
-  ignore_errors: yes
+  become: true
+  ignore_errors: true
 
 - name: Fix Nginx permissions on static assets and socket directory
-  shell: |
+  ansible.builtin.shell: |
     chmod -R a+rX {{ ai_update_rapidpro_dir }}/sitestatic {{ ai_update_rapidpro_dir }}/media
     chmod 755 {{ ai_update_rapidpro_dir }}/run
-  become: yes
-  ignore_errors: yes
+  become: true
+  ignore_errors: true

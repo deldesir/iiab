@@ -7,7 +7,6 @@
 #   ./runrole ai-update -e '{"ai_update_skip": ["wuzapi"]}'
 
 - block:
-
     # ═══════════════════════════════════════════════════════════════
     # STAGE 0: Ensure git safe.directory for all repos
     # ═══════════════════════════════════════════════════════════════
@@ -15,19 +14,19 @@
     # The git module fails on dubious ownership before we can pull.
 
     - name: "Get existing git safe.directory entries"
-      command: git config --global --get-all safe.directory
+      ansible.builtin.command: git config --global --get-all safe.directory
       environment:
-        HOME: "{{ lookup('env', 'HOME') | default('/root', true) }}"   # timers and transient units have no HOME
+        HOME: "{{ lookup('env', 'HOME') | default('/root', true) }}" # timers and transient units have no HOME
       register: _safe_dirs
       changed_when: false
       failed_when: false
-      become: yes
+      become: true
 
     - name: "Add missing dirs to git safe.directory"
-      command: git config --global --add safe.directory "{{ item }}"
+      ansible.builtin.command: git config --global --add safe.directory "{{ item }}"
       environment:
-        HOME: "{{ lookup('env', 'HOME') | default('/root', true) }}"   # timers and transient units have no HOME
-      become: yes
+        HOME: "{{ lookup('env', 'HOME') | default('/root', true) }}" # timers and transient units have no HOME
+      become: true
       loop:
         - "{{ ai_update_gateway_dir }}"
         - /opt/iiab/hermes-agent
@@ -45,13 +44,13 @@
 
     # 1a. Gateway cluster (shared venv)
     - name: "Pull gateway components"
-      git:
+      ansible.builtin.git:
         repo: "{{ item.repo }}"
         dest: "{{ item.dest }}"
         version: "{{ item.version }}"
-        force: yes
-        update: yes
-      become: yes
+        force: true
+        update: true
+      become: true
       loop: "{{ ai_update_gateway_components }}"
       loop_control:
         label: "{{ item.name }}"
@@ -60,61 +59,61 @@
 
     # 1b. RiveBot (own venv)
     - name: "Pull RiveBot"
-      git:
+      ansible.builtin.git:
         repo: "{{ ai_update_rivebot_repo }}"
         dest: "{{ ai_update_rivebot_dir }}"
         version: "{{ ai_update_rivebot_version }}"
-        force: yes
-        update: yes
-      become: yes
+        force: true
+        update: true
+      become: true
       when: "'rivebot' not in ai_update_skip"
       register: rivebot_git_result
 
     # 1c. RapidPro
     - name: "Pull RapidPro"
-      git:
+      ansible.builtin.git:
         repo: "{{ ai_update_rapidpro_repo }}"
         dest: "{{ ai_update_rapidpro_dir }}"
         version: "{{ ai_update_rapidpro_version }}"
-        force: yes
-        update: yes
-      become: yes
+        force: true
+        update: true
+      become: true
       when: "'rapidpro' not in ai_update_skip"
       register: rapidpro_git_result
 
     # 1d. WuzAPI source (static assets)
     - name: "Pull WuzAPI source (static assets)"
-      git:
+      ansible.builtin.git:
         repo: "{{ ai_update_wuzapi_src_repo }}"
         dest: "{{ ai_update_wuzapi_src_dir }}"
         version: main
-        force: yes
-        update: yes
-      become: yes
+        force: true
+        update: true
+      become: true
       when: "'wuzapi' not in ai_update_skip"
       register: wuzapi_src_result
 
     # 1e. Courier (Go source for local build)
     - name: "Pull Courier source"
-      git:
+      ansible.builtin.git:
         repo: "{{ ai_update_courier_repo }}"
         dest: "{{ ai_update_courier_dir }}"
         version: "{{ ai_update_courier_version }}"
-        force: yes
-        update: yes
-      become: yes
+        force: true
+        update: true
+      become: true
       when: "'courier' not in ai_update_skip"
       register: courier_git_result
 
     # 1f. Mailroom (Go source for local build)
     - name: "Pull Mailroom source"
-      git:
+      ansible.builtin.git:
         repo: "{{ ai_update_mailroom_repo }}"
         dest: "{{ ai_update_mailroom_dir }}"
         version: "{{ ai_update_mailroom_version }}"
-        force: yes
-        update: yes
-      become: yes
+        force: true
+        update: true
+      become: true
       when: "'mailroom' not in ai_update_skip"
       register: mailroom_git_result
 
@@ -129,8 +128,8 @@
     # Prefer the gzipped release asset (much smaller download); fall back to the
     # raw binary if no .gz exists, then to a local source build if both fail.
     - name: "Install courier binary (gz-preferred, checksum-verified)"
-      command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ ai_update_go_courier_url }}" "{{ ai_update_go_courier_dest }}"
-      become: yes
+      ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ ai_update_go_courier_url }}" "{{ ai_update_go_courier_dest }}"
+      become: true
       when:
         - "'courier' not in ai_update_skip"
         - courier_git_result.changed | default(false)
@@ -139,7 +138,7 @@
       changed_when: courier_download_result.rc == 0
 
     - name: "Build courier from source (fallback)"
-      shell: >
+      ansible.builtin.shell: >
         {{ ai_update_go_bin }} build -ldflags="-s -w"
         -o {{ ai_update_go_courier_dest }}
         ./cmd/courier
@@ -149,7 +148,7 @@
         CGO_ENABLED: "0"
         GOOS: linux
         GOARCH: "{{ ai_update_go_arch }}"
-      become: yes
+      become: true
       when:
         - "'courier' not in ai_update_skip"
         - courier_git_result.changed | default(false)
@@ -157,15 +156,15 @@
       register: courier_build_result
 
     - name: "⚙️  courier: {{ 'downloaded release' if (courier_download_result.rc | default(1) == 0) else 'built from source' }}"
-      debug:
+      ansible.builtin.debug:
         msg: "courier binary updated"
       when: courier_git_result.changed | default(false)
       changed_when: true
 
     # ── 2b. Mailroom (gzip-preferred download, raw fallback, source build last) ──
     - name: "Install mailroom binary (gz-preferred, checksum-verified)"
-      command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ ai_update_go_mailroom_url }}" "{{ ai_update_go_mailroom_dest }}"
-      become: yes
+      ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ ai_update_go_mailroom_url }}" "{{ ai_update_go_mailroom_dest }}"
+      become: true
       when:
         - "'mailroom' not in ai_update_skip"
         - mailroom_git_result.changed | default(false)
@@ -174,7 +173,7 @@
       changed_when: mailroom_download_result.rc == 0
 
     - name: "Build mailroom from source (fallback)"
-      shell: >
+      ansible.builtin.shell: >
         {{ ai_update_go_bin }} build -ldflags="-s -w"
         -o {{ ai_update_go_mailroom_dest }}
         ./cmd/mailroom
@@ -184,7 +183,7 @@
         CGO_ENABLED: "0"
         GOOS: linux
         GOARCH: "{{ ai_update_go_arch }}"
-      become: yes
+      become: true
       when:
         - "'mailroom' not in ai_update_skip"
         - mailroom_git_result.changed | default(false)
@@ -192,15 +191,15 @@
       register: mailroom_build_result
 
     - name: "⚙️  mailroom: {{ 'downloaded release' if (mailroom_download_result.rc | default(1) == 0) else 'built from source' }}"
-      debug:
+      ansible.builtin.debug:
         msg: "mailroom binary updated"
       when: mailroom_git_result.changed | default(false)
       changed_when: true
 
     # ── 2c. WuzAPI (gzip-preferred download, raw fallback) ───────
     - name: "Install WuzAPI binary (gz-preferred, checksum-verified)"
-      command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ ai_update_go_wuzapi_url }}" /opt/iiab/wuzapi/wuzapi
-      become: yes
+      ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ ai_update_go_wuzapi_url }}" /opt/iiab/wuzapi/wuzapi
+      become: true
       when: "'wuzapi' not in ai_update_skip"
       register: wuzapi_binary_result
       changed_when: wuzapi_binary_result.rc == 0
@@ -211,17 +210,15 @@
 
     # 3a. IIAB local patches (hermes, mempalace, rapidpro)
     - name: Apply IIAB local patches
-      include_tasks: apply-patches.yml
-
-    # 3b. Fix ownership on gateway components
+      ansible.builtin.include_tasks: apply-patches.yml
     - name: Fix ownership on gateway component dirs
-      file:
+      ansible.builtin.file:
         path: "{{ item.dest }}"
         state: directory
         owner: "{{ ai_update_gateway_user }}"
         group: "{{ ai_update_gateway_user }}"
-        recurse: yes
-      become: yes
+        recurse: true
+      become: true
       loop: "{{ ai_update_gateway_components }}"
       loop_control:
         label: "{{ item.name }}"
@@ -229,38 +226,38 @@
 
     # 3c. ONE gateway uv sync (resolves all editable deps)
     - name: "Sync ai-gateway venv (all editable deps)"
-      command: "{{ ai_update_uv_bin }} sync"
+      ansible.builtin.command: "{{ ai_update_uv_bin }} sync"
       args:
         chdir: "{{ ai_update_gateway_dir }}"
-      become: yes
+      become: true
       environment:
         PATH: "/root/.local/bin:{{ ansible_env.PATH }}"
       when: gateway_git_results.changed
 
     # 3d. RiveBot uv sync (own venv)
     - name: "Sync RiveBot venv"
-      command: "{{ ai_update_uv_bin }} sync"
+      ansible.builtin.command: "{{ ai_update_uv_bin }} sync"
       args:
         chdir: "{{ ai_update_rivebot_dir }}"
-      become: yes
+      become: true
       environment:
         PATH: "/root/.local/bin:{{ ansible_env.PATH }}"
       when: rivebot_git_result.changed | default(false)
 
     # 3e. RapidPro post-update (configure + migrate + collectstatic + patches)
     - name: RapidPro post-update
-      include_tasks: rapidpro-post-update.yml
+      ansible.builtin.include_tasks: rapidpro-post-update.yml
       when: rapidpro_git_result.changed | default(false)
 
     # 3f. WuzAPI static assets
     - name: Copy updated WuzAPI static assets
-      copy:
+      ansible.builtin.copy:
         src: "{{ ai_update_wuzapi_src_dir }}/static"
         dest: "{{ ai_update_wuzapi_dir }}/"
-        remote_src: yes
+        remote_src: true
         owner: "{{ ai_update_gateway_user }}"
         group: "{{ ai_update_gateway_user }}"
-      become: yes
+      become: true
       when: wuzapi_src_result.changed | default(false)
 
     # ═══════════════════════════════════════════════════════════════
@@ -271,8 +268,8 @@
     # names that didn't exist in the old bytecode (.pyc files).
 
     - name: "Clear stale __pycache__ in gateway components"
-      shell: find {{ item }} -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-      become: yes
+      ansible.builtin.shell: find {{ item }} -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+      become: true
       changed_when: false
       loop:
         - "{{ ai_update_gateway_dir }}"
@@ -285,12 +282,12 @@
     # ═══════════════════════════════════════════════════════════════
 
     - name: Verify gateway imports
-      command: >
+      ansible.builtin.command: >
         {{ ai_update_uv_bin }} run python -c
         "from run_agent import AIAgent; from mempalace.mcp_server import tool_status; print('Gateway imports OK')"
       args:
         chdir: "{{ ai_update_gateway_dir }}"
-      become: yes
+      become: true
       register: gateway_verify
       failed_when: gateway_verify.rc != 0
       when: gateway_git_results.changed
@@ -303,29 +300,29 @@
     # nginx (www-data) or the hermes service user need.
 
     - name: "Fix RapidPro permissions for nginx"
-      shell: |
+      ansible.builtin.shell: |
         chmod -R a+rX {{ ai_update_rapidpro_dir }}/sitestatic {{ ai_update_rapidpro_dir }}/media 2>/dev/null || true
         chmod 755 {{ ai_update_rapidpro_dir }}/run 2>/dev/null || true
-      become: yes
+      become: true
       changed_when: false
       when: "'rapidpro' not in ai_update_skip"
 
     - name: "Clean stale DynamoDB/ES spool files (local-first mode)"
-      shell: rm -f {{ ai_update_rapidpro_dir }}/spool/*/dynamo/*.jsonl {{ ai_update_rapidpro_dir }}/spool/*/elastic/*.jsonl
-      become: yes
+      ansible.builtin.shell: rm -f {{ ai_update_rapidpro_dir }}/spool/*/dynamo/*.jsonl {{ ai_update_rapidpro_dir }}/spool/*/elastic/*.jsonl
+      become: true
       changed_when: false
       when:
         - "'rapidpro' not in ai_update_skip"
         - not (rapidpro_aws_enabled | default(false))
 
     - name: "Fix gateway .cache ownership for hermes service user"
-      file:
+      ansible.builtin.file:
         path: "{{ ai_update_gateway_dir }}/.cache"
         state: directory
         owner: hermes
         group: hermes
-        recurse: yes
-      become: yes
+        recurse: true
+      become: true
       changed_when: false
       failed_when: false
 
@@ -334,49 +331,49 @@
     # ═══════════════════════════════════════════════════════════════
 
     - name: Restart ai-gateway
-      systemd:
+      ansible.builtin.systemd:
         name: ai-gateway
         state: restarted
-        daemon_reload: yes
-      become: yes
+        daemon_reload: true
+      become: true
       when: gateway_git_results.changed
 
     - name: Restart RiveBot
-      systemd:
+      ansible.builtin.systemd:
         name: rivebot
         state: restarted
-      become: yes
+      become: true
       when: rivebot_git_result.changed | default(false)
 
     - name: Restart RapidPro services
-      systemd:
+      ansible.builtin.systemd:
         name: "{{ item }}"
         state: restarted
-      become: yes
+      become: true
       loop:
         - rapidpro-gunicorn
         - rapidpro-celery
       when: rapidpro_git_result.changed | default(false)
 
     - name: Restart courier
-      systemd:
+      ansible.builtin.systemd:
         name: rapidpro-courier
         state: restarted
-      become: yes
+      become: true
       when: courier_git_result.changed | default(false)
 
     - name: Restart mailroom
-      systemd:
+      ansible.builtin.systemd:
         name: rapidpro-mailroom
         state: restarted
-      become: yes
+      become: true
       when: mailroom_git_result.changed | default(false)
 
     - name: Restart wuzapi
-      systemd:
+      ansible.builtin.systemd:
         name: wuzapi
         state: restarted
-      become: yes
+      become: true
       when: wuzapi_binary_result.changed | default(false)
 
     # ═══════════════════════════════════════════════════════════════
@@ -384,7 +381,7 @@
     # ═══════════════════════════════════════════════════════════════
 
     - name: Add 'ai_update' variable values to {{ iiab_ini_file }}
-      ini_file:
+      community.general.ini_file:
         path: "{{ iiab_ini_file }}"
         section: ai-update
         option: "{{ item.option }}"
@@ -404,10 +401,10 @@
           value: "{{ ai_update_skip | join(',') or 'none' }}"
 
     - name: Update complete
-      debug:
+      ansible.builtin.debug:
         msg: "Cognitive pipeline updated. All changed services restarted."
 
   rescue:
-    - name: 'UPDATE FAILED — SEE ERROR ABOVE'
-      fail:
+    - name: "UPDATE FAILED — SEE ERROR ABOVE"
+      ansible.builtin.fail:
         msg: "Pipeline update failed. Check the error above. Some services may need manual restart."

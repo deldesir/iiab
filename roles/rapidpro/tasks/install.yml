@@ -1,9 +1,7 @@
 ---
 # This file will contain all the installation tasks for RapidPro.
-
-
 - name: The database password must be set in local_vars (no default, so a public repository never ships a working credential)
-  assert:
+  ansible.builtin.assert:
     that:
       - rapidpro_db_pass | default('') | length > 0
     fail_msg: "rapidpro_db_pass is empty - set it in /etc/iiab/local_vars.yml (an existing install keeps its current value: set that)"
@@ -13,49 +11,47 @@
   when: rapidpro_force_drop_db | default(false)
   block:
     - name: Stop RapidPro services before DB drop
-      shell: "systemctl stop {{ item }} 2>/dev/null || true"
+      ansible.builtin.shell: "systemctl stop {{ item }} 2>/dev/null || true"
       loop:
         - rapidpro-gunicorn
         - rapidpro-courier
         - rapidpro-mailroom
         - rapidpro-celery
-      become: yes
+      become: true
       changed_when: false
       when: not is_proot
 
     - name: Terminate all connections to the 'temba' database
-      postgresql_query:
+      community.postgresql.postgresql_query:
         query: "SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '{{ rapidpro_db_name }}' AND pid <> pg_backend_pid();"
-      become: yes
+      become: true
       become_user: postgres
 
     - name: Drop RapidPro PostgreSQL database
-      postgresql_db:
+      community.postgresql.postgresql_db:
         name: "{{ rapidpro_db_name }}"
         state: absent
-      become: yes
+      become: true
       become_user: postgres
 
     - name: Drop RapidPro PostgreSQL user
-      postgresql_user:
+      community.postgresql.postgresql_user:
         name: "{{ rapidpro_db_user }}"
         state: absent
-      become: yes
+      become: true
       become_user: postgres
-
 
 - name: Uninstall RapidPro if reinstalling
   when: reinstall is defined and reinstall
   block:
     - name: Remove RapidPro directory
-      file:
+      ansible.builtin.file:
         path: "{{ rapidpro_dir }}"
         state: absent
-      become: yes
-
+      become: true
 
 - name: Install essential build tools and libraries
-  apt:
+  ansible.builtin.apt:
     name:
       - git
       - build-essential
@@ -66,30 +62,28 @@
       - postgis
       - screen
     state: present
-  become: yes
+  become: true
 
 - name: Ensure pgvector for the knowledge app
-  include_tasks: pgvector.yml
-
+  ansible.builtin.include_tasks: pgvector.yml
 - name: Ensure bun for the components build
-  include_tasks: bun.yml
-
+  ansible.builtin.include_tasks: bun.yml
 - name: Install Valkey/Redis
   block:
     - name: Try installing valkey-server
-      apt:
+      ansible.builtin.apt:
         name: valkey-server
         state: present
-      become: yes
+      become: true
   rescue:
     - name: Fallback to redis-server
-      apt:
+      ansible.builtin.apt:
         name: redis-server
         state: present
-      become: yes
+      become: true
 
 - name: Install Python build dependencies
-  apt:
+  ansible.builtin.apt:
     name:
       - make
       - libssl-dev
@@ -99,92 +93,91 @@
       - curl
       - python3-openssl
     state: present
-  become: yes
+  become: true
 
 - name: "Set 'nodejs_install: True' and 'nodejs_enabled: True'"
-  set_fact:
-    nodejs_install: True
-    nodejs_enabled: True
+  ansible.builtin.set_fact:
+    nodejs_install: true
+    nodejs_enabled: true
 
 - name: Include nodejs role
-  include_role:
+  ansible.builtin.include_role:
     name: nodejs
 
 - name: Check if rapidpro directory is already safe
-  command: git config --global --get-all safe.directory
+  ansible.builtin.command: git config --global --get-all safe.directory
   register: git_safe_dirs
   changed_when: false
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Add rapidpro directory to git safe directories
-  command: git config --global --add safe.directory {{ rapidpro_dir }}
-  become: yes
+  ansible.builtin.command: git config --global --add safe.directory {{ rapidpro_dir }}
+  become: true
   when: rapidpro_dir not in (git_safe_dirs.stdout_lines | default([]))
 
 - name: Clone/update RapidPro repository
-  git:
-    repo: 'https://github.com/deldesir/rapidpro.git'
+  ansible.builtin.git:
+    repo: "https://github.com/deldesir/rapidpro.git"
     dest: "{{ rapidpro_dir }}"
-    force: yes
+    force: true
     # OPTIONAL STATIC TAG (Option B): Uncomment below and comment 'main' above to use auto-manipulator script.
     # version: v26.1.87
     version: main
-  become: yes
+  become: true
   register: rapidpro_git_clone
 
 - name: Set ownership of project directory (fast)
-  command: "chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} {{ rapidpro_dir }}"
-  become: yes
+  ansible.builtin.command: "chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} {{ rapidpro_dir }}"
+  become: true
   changed_when: false
 
-
 - name: Deploy Branding Script and Assets
-  copy:
+  ansible.builtin.copy:
     src: branding/
     dest: /opt/iiab/
     owner: "{{ iiab_admin_user }}"
-    mode: '0755'
-  become: yes
+    mode: "0755"
+  become: true
 
 - name: "Widen Python version constraint in pyproject.toml"
-  replace:
+  ansible.builtin.replace:
     path: "{{ rapidpro_dir }}/pyproject.toml"
     regexp: 'requires-python = ">=3\.\d+(\.\d+)?,<3\.\d+"'
     replace: 'requires-python = ">=3.12"'
-  become: yes
-  ignore_errors: yes
+  become: true
+  ignore_errors: true
 
 - name: uv, pinned and checked (roles/uv)
-  include_role:
+  ansible.builtin.include_role:
     name: uv
 
 - name: Install required Python version via uv
-  shell: |
+  ansible.builtin.shell: |
     {{ uv_bin }} python install
   args:
     chdir: "{{ rapidpro_dir }}"
-  become: yes
+  become: true
   become_user: "{{ iiab_admin_user }}"
   changed_when: false
 
 - name: Create uv virtual environment (only when missing; a routine run never clears it)
-  command: "{{ uv_bin }} venv"
+  ansible.builtin.command: "{{ uv_bin }} venv"
   args:
     chdir: "{{ rapidpro_dir }}"
     creates: "{{ rapidpro_dir }}/.venv/bin/python"
-  become: yes
+  become: true
   become_user: "{{ iiab_admin_user }}"
 
 # The fork's uv.lock is the truth: no `uv lock --upgrade` here (it silently bumped every
 # dependency on each run and once brought in a database driver change that took the gateway
 # down). A dependency change is a commit to the fork.
 - name: Sync dependencies from the lock file (uv sync --frozen)
-  command: "{{ uv_bin }} sync --frozen"
+  ansible.builtin.command: "{{ uv_bin }} sync --frozen"
   args:
     chdir: "{{ rapidpro_dir }}"
   register: rapidpro_sync
   changed_when: "'Installed' in rapidpro_sync.stderr or 'Uninstalled' in rapidpro_sync.stderr"
-  become: yes
+  become: true
   become_user: "{{ iiab_admin_user }}"
 
 # temba's own JS tooling is bun (bun.lock + bunfig.toml are tracked; its
@@ -193,40 +186,39 @@
 # installed through yarn or npm any more. Run as the service user so no
 # root-owned files land in the checkout.
 - name: Install JavaScript dependencies (bun, locked)
-  command: /usr/local/bin/bun install --frozen-lockfile
+  ansible.builtin.command: /usr/local/bin/bun install --frozen-lockfile
   args:
     chdir: "{{ rapidpro_dir }}"
-  become: yes
+  become: true
   become_user: "{{ iiab_admin_user }}"
   register: rapidpro_bun_install
   changed_when: "'no changes' not in rapidpro_bun_install.stdout"
 
 - name: Build CSS assets
-  command: /usr/local/bin/bun run tw-build
+  ansible.builtin.command: /usr/local/bin/bun run tw-build
   args:
     chdir: "{{ rapidpro_dir }}"
-  become: yes
+  become: true
   become_user: "{{ iiab_admin_user }}"
   changed_when: false
 
 - name: Remove the yarn lockfile earlier role runs generated
-  file:
+  ansible.builtin.file:
     path: "{{ rapidpro_dir }}/yarn.lock"
     state: absent
-  become: yes
+  become: true
 
 - name: Restore RapidPro Directory Ownership (after root build steps)
-  command: "chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} {{ rapidpro_dir }}"
-  become: yes
+  ansible.builtin.command: "chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} {{ rapidpro_dir }}"
+  become: true
   when: rapidpro_git_clone.changed or rapidpro_bun_install.changed
 
 - name: Allow Nginx traversal of RapidPro directory (Professional Fix)
-  file:
+  ansible.builtin.file:
     path: "{{ rapidpro_dir }}"
-    mode: '0755'
+    mode: "0755"
     state: directory
-  become: yes
-
+  become: true
 
 - name: Install RapidPro Binaries (Universal)
-  include_tasks: install_binary.yml
+  ansible.builtin.include_tasks: install_binary.yml

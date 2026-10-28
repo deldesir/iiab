@@ -1,3 +1,4 @@
+---
 # social-code/tasks/enable-or-disable.yml
 
 - name: "Enable Social Code alias"

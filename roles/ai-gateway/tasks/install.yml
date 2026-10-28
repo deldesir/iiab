@@ -1,6 +1,6 @@
 ---
 - name: The model key must be set in local_vars when the gateway is enabled
-  assert:
+  ansible.builtin.assert:
     that:
       - ai_gateway_gemini_api_key | default('') | length > 0
     fail_msg: "ai_gateway_gemini_api_key is empty - set it in /etc/iiab/local_vars.yml"
@@ -8,54 +8,54 @@
   when: ai_gateway_enabled | default(false) | bool
 
 - name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: df -B1 --output=used / | tail -1
   register: df1
   changed_when: false
 
 - name: Install AI Gateway system dependencies
-  apt:
+  ansible.builtin.apt:
     name:
       - git
       - libpq-dev
     state: present
-  become: yes
+  become: true
 
 - name: uv, pinned and checked (roles/uv)
-  include_role:
+  ansible.builtin.include_role:
     name: uv
 
 - name: Create AI Gateway directory
-  file:
+  ansible.builtin.file:
     path: "{{ ai_gateway_dir }}"
     state: directory
     owner: "{{ ai_gateway_user }}"
     group: "{{ ai_gateway_user }}"
-    mode: '0755'
-  become: yes
+    mode: "0755"
+  become: true
 
 - name: Add AI Gateway directory to git safe directories
   community.general.git_config:
     name: safe.directory
     scope: global
     value: "{{ ai_gateway_dir }}"
-  become: yes
+  become: true
 
 # talkmaster + jwlinker are editable dependencies of the gateway (talk-prep
 # chain: talksync, talkprep tools, S-34 imports). They must exist BEFORE
 # `uv sync` or the editable sources fail to resolve. Clone-if-absent only —
 # never reset an existing tree, which may carry local work.
 - name: Clone TalkMaster library (if absent)
-  shell: git clone --branch "{{ ai_gateway_talkmaster_version }}" --origin origin "{{ ai_gateway_talkmaster_repo }}" "{{ ai_gateway_talkmaster_dir }}"
+  ansible.builtin.shell: git clone --branch "{{ ai_gateway_talkmaster_version }}" --origin origin "{{ ai_gateway_talkmaster_repo }}" "{{ ai_gateway_talkmaster_dir }}"
   args:
     creates: "{{ ai_gateway_talkmaster_dir }}/.git"
-  become: yes
+  become: true
   become_user: "{{ ai_gateway_user }}"
 
 - name: Clone JWLinker library (if absent)
-  shell: git clone --branch "{{ ai_gateway_jwlinker_version }}" --origin origin "{{ ai_gateway_jwlinker_repo }}" "{{ ai_gateway_jwlinker_dir }}"
+  ansible.builtin.shell: git clone --branch "{{ ai_gateway_jwlinker_version }}" --origin origin "{{ ai_gateway_jwlinker_repo }}" "{{ ai_gateway_jwlinker_dir }}"
   args:
     creates: "{{ ai_gateway_jwlinker_dir }}/.git"
-  become: yes
+  become: true
   become_user: "{{ ai_gateway_user }}"
 
 # The service runs from this working tree. A fast-forward to the wanted version is the only
@@ -63,78 +63,78 @@
 # the operator sees them, instead of a reset --hard that used to discard them silently and
 # restart the service on every run.
 - name: Clone or fast-forward the AI Gateway repository
-  git:
+  ansible.builtin.git:
     repo: "{{ ai_gateway_repo }}"
     dest: "{{ ai_gateway_dir }}"
     version: "{{ ai_gateway_repo_version }}"
-    force: no
-    update: yes
-  become: yes
+    force: false
+    update: true
+  become: true
   become_user: "{{ ai_gateway_user }}"
   register: ai_gateway_git
   notify: restart ai-gateway
 
 - name: Set ownership of AI Gateway directory
-  file:
+  ansible.builtin.file:
     path: "{{ ai_gateway_dir }}"
     state: directory
     owner: "{{ ai_gateway_user }}"
     group: "{{ ai_gateway_user }}"
-    recurse: yes
-  become: yes
+    recurse: true
+  become: true
 
 # V2: Recreate venv with the latest available Python.
 # Hermes Agent requires >=3.11; this ensures the venv satisfies all deps.
 # Must update .python-version first — uv reads this file and would refuse
 # to sync if it conflicts with pyproject.toml's requires-python.
 - name: Pin the venv's Python for uv (.python-version)
-  copy:
+  ansible.builtin.copy:
     content: "{{ ai_gateway_python }}\n"
     dest: "{{ ai_gateway_dir }}/.python-version"
     owner: "{{ ai_gateway_user }}"
     group: "{{ ai_gateway_user }}"
-    mode: '0644'
-  become: yes
+    mode: "0644"
+  become: true
 
 - name: Which Python the AI Gateway venv runs, if it exists
-  command: "{{ ai_gateway_dir }}/.venv/bin/python -c 'import sys; print(f\"{sys.version_info[0]}.{sys.version_info[1]}\")'"
+  ansible.builtin.command: "{{ ai_gateway_dir }}/.venv/bin/python -c 'import sys; print(f\"{sys.version_info[0]}.{sys.version_info[1]}\")'"
   register: ai_gateway_venv_python
   changed_when: false
   failed_when: false
-  become: yes
+  become: true
 
 - name: Create the AI Gateway venv (only when missing or on another Python; never cleared on a routine run)
-  command: "{{ ai_gateway_uv_bin }} venv .venv --python {{ ai_gateway_python }}"
+  ansible.builtin.command: "{{ ai_gateway_uv_bin }} venv .venv --python {{ ai_gateway_python }}"
   args:
     chdir: "{{ ai_gateway_dir }}"
-  become: yes
+  become: true
   when: ai_gateway_venv_python.rc != 0 or ai_gateway_venv_python.stdout.strip() != ai_gateway_python
 
 - name: Install AI Gateway dependencies from the lock file (uv sync --frozen)
-  command: "{{ ai_gateway_uv_bin }} sync --frozen"
+  ansible.builtin.command: "{{ ai_gateway_uv_bin }} sync --frozen"
   args:
     chdir: "{{ ai_gateway_dir }}"
   register: ai_gateway_sync
   changed_when: "'Installed' in ai_gateway_sync.stderr or 'Uninstalled' in ai_gateway_sync.stderr"
-  become: yes
+  become: true
 
 - name: Fix ownership after uv sync
-  file:
+  ansible.builtin.file:
     path: "{{ ai_gateway_dir }}"
     state: directory
     owner: "{{ ai_gateway_user }}"
     group: "{{ ai_gateway_user }}"
-    recurse: yes
-  become: yes
+    recurse: true
+  become: true
 
 - name: Deploy AI Gateway environment file from local_vars.yml
-  template:
+  ansible.builtin.template:
     src: ai-gateway.env.j2
     dest: "{{ ai_gateway_dir }}/.env"
     owner: "{{ ai_gateway_user }}"
     group: "{{ ai_gateway_user }}"
-    mode: '0600'
-  become: yes
+    mode: "0600"
+  become: true
   notify: restart ai-gateway
 
 # .env is regenerated on every run, so any secret that lives only there is
@@ -143,9 +143,9 @@
 # loaded after .env by both the systemd units (EnvironmentFile=-) and the
 # app (load_dotenv override), so its values always win.
 - name: Ensure machine-local env override file exists (never overwritten)
-  copy:
+  ansible.builtin.copy:
     dest: "{{ ai_gateway_dir }}/.env.local"
-    force: no
+    force: false
     content: |
       # Machine-local secrets and overrides — NEVER written by Ansible.
       # Loaded after .env (systemd EnvironmentFile order + app load_dotenv
@@ -153,79 +153,79 @@
       # box only and must survive `ansible-playbook` re-runs.
     owner: "{{ ai_gateway_user }}"
     group: "{{ ai_gateway_user }}"
-    mode: '0600'
-  become: yes
+    mode: "0600"
+  become: true
 
 - name: Ensure AI Gateway data directories exist
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: "{{ ai_gateway_user }}"
     group: "{{ ai_gateway_user }}"
-    mode: '0755'
+    mode: "0755"
   loop:
     - "{{ ai_gateway_dir }}/data/knowledge"
     - "{{ ai_gateway_hermes_home }}"
     - "{{ ai_gateway_mempalace_palace_path }}"
-  become: yes
+  become: true
 
 - name: Deploy TalkPrep knowledge file
-  copy:
+  ansible.builtin.copy:
     src: talkprep-knowledge.md
     dest: "{{ ai_gateway_dir }}/data/knowledge/talkprep.md"
     owner: "{{ ai_gateway_user }}"
     group: "{{ ai_gateway_user }}"
-    mode: '0644'
-  become: yes
+    mode: "0644"
+  become: true
 
 # V2: Seed SOUL.md identity file for Hermes Agent (§7.9 of architecture spec).
 # Without this, Hermes uses its built-in "coding assistant" identity instead
 # of the IIAB-specific WhatsApp assistant identity.
 - name: Deploy SOUL.md identity for Hermes Agent
-  copy:
+  ansible.builtin.copy:
     src: SOUL.md
     dest: "{{ ai_gateway_hermes_home }}/SOUL.md"
     owner: "{{ ai_gateway_user }}"
     group: "{{ ai_gateway_user }}"
-    mode: '0644'
-    force: no    # Don't overwrite if operator has customized it
-  become: yes
+    mode: "0644"
+    force: false # Don't overwrite if operator has customized it
+  become: true
 
 - name: Install AI Gateway systemd service
-  template:
+  ansible.builtin.template:
     src: ai-gateway.service.j2
     dest: /etc/systemd/system/ai-gateway.service
-    mode: '0644'
-  become: yes
+    mode: "0644"
+  become: true
   notify: restart ai-gateway
 
 - name: Install MemPalace compaction systemd service
-  template:
+  ansible.builtin.template:
     src: ai-gateway-compact.service.j2
     dest: /etc/systemd/system/ai-gateway-compact.service
-    mode: '0644'
-  become: yes
+    mode: "0644"
+  become: true
 
 - name: Install MemPalace compaction systemd timer
-  template:
+  ansible.builtin.template:
     src: ai-gateway-compact.timer.j2
     dest: /etc/systemd/system/ai-gateway-compact.timer
-    mode: '0644'
-  become: yes
+    mode: "0644"
+  become: true
 
 - name: Ensure MemPalace compaction timer is enabled and running
-  systemd:
+  ansible.builtin.systemd:
     name: ai-gateway-compact.timer
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
-  become: yes
+    daemon_reload: true
+  become: true
 
 - name: Install cognitive-pipeline job units (KG extract, KG->Wiki render, morning nudge, backup, radar, person sync, daily brief, synthesis)
-  template:
+  ansible.builtin.template:
     src: "{{ item }}.j2"
     dest: "/etc/systemd/system/{{ item }}"
-    mode: '0644'
+    mode: "0644"
   loop:
     - ai-gateway-kgextract.service
     - ai-gateway-kgextract.timer
@@ -279,39 +279,39 @@
     - fleet-backup-mail.timer
     - fleet-backup-mail-hub.service
     - fleet-backup-mail-hub.timer
-  become: yes
+  become: true
 
 - name: Install pipeline maintenance scripts
-  copy:
+  ansible.builtin.copy:
     src: "{{ item }}"
     dest: "/usr/local/sbin/{{ item }}"
-    mode: '0755'
+    mode: "0755"
   loop:
     - second-brain-backup
     - fleet-backup-mail
     - jwlinker-refresh
     - hermes-elevate
     - pipeline-health-check
-  become: yes
+  become: true
 
 # TOTP-gated root window for the chat assistant (hermes-elevate).
 # Enrollment stays MANUAL and one-time: `hermes-elevate generate` as
 # root writes the authenticator secret — the role never creates or
 # rotates it.
 - name: Allow the gateway user to reach the elevation wrapper
-  copy:
+  ansible.builtin.copy:
     content: "iiab-admin ALL=(root) NOPASSWD: /usr/local/sbin/hermes-elevate\n"
     dest: /etc/sudoers.d/hermes-elevate
-    mode: '0440'
-    validate: 'visudo -cf %s'
-  become: yes
+    mode: "0440"
+    validate: "visudo -cf %s"
+  become: true
 
 - name: Ensure pipeline timers are enabled and running
-  systemd:
+  ansible.builtin.systemd:
     name: "{{ item }}"
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   loop:
     - ai-gateway-kgextract.timer
     - ai-gateway-kgwiki.timer
@@ -337,32 +337,32 @@
     - ai-gateway-contactsync.timer
     - pipeline-health-check.timer
     - second-brain-backup.timer
-  become: yes
+  become: true
 
 # Emailed Frappe backups run from ONE hub box: the box whose operator wrote
 # /etc/iiab/fleet-backup.conf (recipient + box list). Everywhere else the
 # script and units are installed but stay dormant.
 - name: Is this box the fleet-backup hub?
-  stat:
+  ansible.builtin.stat:
     path: /etc/iiab/fleet-backup.conf
   register: fleet_backup_conf
 
 - name: Enable the emailed fleet-backup timers on the hub (the morning run, and the afternoon hub-only retry)
-  systemd:
+  ansible.builtin.systemd:
     name: "{{ item }}"
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   loop:
     - fleet-backup-mail.timer
     - fleet-backup-mail-hub.timer
   when: fleet_backup_conf.stat.exists
-  become: yes
+  become: true
 
 # RECORD AI Gateway AS INSTALLED
 
 - name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: df -B1 --output=used / | tail -1
   register: df2
   changed_when: false
 
@@ -379,18 +379,18 @@
 #   failed_when: verify_v2.rc != 0
 
 - name: Add 'ai_gateway_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-  ini_file:
+  community.general.ini_file:
     path: "{{ iiab_ini_file }}"
     section: ai-gateway
     option: ai_gateway_disk_usage
     value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'ai_gateway_installed: True'"
-  set_fact:
-    ai_gateway_installed: True
+  ansible.builtin.set_fact:
+    ai_gateway_installed: true
 
 - name: "Add 'ai_gateway_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: "{{ iiab_state_file }}"
-    regexp: '^ai_gateway_installed'
-    line: 'ai_gateway_installed: True'
+    regexp: "^ai_gateway_installed"
+    line: "ai_gateway_installed: True"

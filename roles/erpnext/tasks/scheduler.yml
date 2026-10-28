@@ -1,3 +1,4 @@
+---
 # bench's generated frappe-bench-workers.target does not Want the scheduler
 # service, and that service has no [Install] section, so nothing restarts it
 # after a reboot or a restart of the target: scheduled jobs (stock reposting,
@@ -5,28 +6,28 @@
 # Runs on every role run so existing benches get it too.
 
 - name: Create the drop-in directory of the workers target (a fresh bench has none)
-  file:
+  ansible.builtin.file:
     path: /etc/systemd/system/frappe-bench-workers.target.d
     state: directory
-    mode: '0755'
+    mode: "0755"
 
 - name: Make the workers target start the Frappe scheduler
-  copy:
+  ansible.builtin.copy:
     dest: /etc/systemd/system/frappe-bench-workers.target.d/scheduler.conf
     content: |
       # IIAB: bench's generated target omits the scheduler; without this, scheduled
       # jobs stop at the next reboot.
       [Unit]
       Wants=frappe-bench-frappe-schedule.service
-    mode: '0644'
+    mode: "0644"
   register: _scheduler_dropin
 
 - name: Reload systemd after the scheduler drop-in
-  systemd:
-    daemon_reload: yes
+  ansible.builtin.systemd:
+    daemon_reload: true
   when: _scheduler_dropin is changed
 
 - name: Ensure the Frappe scheduler is running
-  systemd:
+  ansible.builtin.systemd:
     name: frappe-bench-frappe-schedule.service
     state: started

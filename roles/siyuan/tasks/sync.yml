@@ -8,22 +8,22 @@
 # signing in with a PRO/subscriber account in Settings → Account.
 
 - name: Install rclone
-  apt:
+  ansible.builtin.apt:
     name: rclone
     state: present
-  become: yes
+  become: true
 
 - name: Create sync store directory
-  file:
+  ansible.builtin.file:
     path: "{{ siyuan_sync_dir }}"
     state: directory
     owner: "{{ siyuan_user }}"
     group: "{{ siyuan_user }}"
-    mode: '0750'
-  become: yes
+    mode: "0750"
+  become: true
 
 - name: Generate WebDAV credentials once
-  shell: |
+  ansible.builtin.shell: |
     PASS=$(openssl rand -base64 18 | tr -d '/+=' | head -c 24)
     printf 'user: siyuan\npassword: %s\n' "$PASS" > /etc/iiab/siyuan-sync-webdav.credentials
     chmod 0600 /etc/iiab/siyuan-sync-webdav.credentials
@@ -32,25 +32,25 @@
     chmod 0600 /etc/iiab/siyuan-sync-webdav.htpasswd
   args:
     creates: /etc/iiab/siyuan-sync-webdav.credentials
-  become: yes
+  become: true
 
 - name: Install WebDAV systemd service
-  template:
+  ansible.builtin.template:
     src: siyuan-sync-webdav.service.j2
     dest: /etc/systemd/system/siyuan-sync-webdav.service
-  become: yes
+  become: true
 
 - name: Enable WebDAV sync endpoint
-  systemd:
+  ansible.builtin.systemd:
     name: siyuan-sync-webdav
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
-  become: yes
+    daemon_reload: true
+  become: true
 
 - name: Publish WebDAV on the tailnet
-  template:
+  ansible.builtin.template:
     src: siyuan-sync.conf.j2
     dest: /etc/nginx/sites-enabled/siyuan-sync.conf
-  become: yes
+  become: true
   notify: reload nginx

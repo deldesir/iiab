@@ -1,32 +1,32 @@
+---
 # SSL/TLS Certificate Automation — main entry point
 # Installs certbot, obtains Let's Encrypt certificate, sets up auto-renewal
 
 # ── Assert booleans ──────────────────────────────────────────
 - name: Assert that "ssl_install is sameas true" (boolean not string etc)
-  assert:
+  ansible.builtin.assert:
     that: ssl_install is sameas true
     fail_msg: "PLEASE SET 'ssl_install: True' e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
+    quiet: true
 
 - name: Assert that "ssl_enabled | type_debug == 'bool'" (boolean not string etc)
-  assert:
+  ansible.builtin.assert:
     that: ssl_enabled | type_debug == 'bool'
     fail_msg: >-
       PLEASE GIVE VARIABLE 'ssl_enabled' A PROPER (UNQUOTED) ANSIBLE
       BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml
-    quiet: yes
+    quiet: true
 
 # ── Main block with rescue ───────────────────────────────────
 - block:
-
     # VALIDATION
     - name: Assert that iiab_ssl_enabled is True
-      assert:
+      ansible.builtin.assert:
         that: iiab_ssl_enabled | bool
         fail_msg: "SSL role requires iiab_ssl_enabled: True in local_vars.yml"
 
     - name: Assert that iiab_ssl_domain is set and not the default 'box.lan'
-      assert:
+      ansible.builtin.assert:
         that:
           - iiab_ssl_domain is defined
           - iiab_ssl_domain | length > 0
@@ -34,44 +34,39 @@
         fail_msg: "SSL role requires iiab_ssl_domain to be set to your real domain in local_vars.yml (not 'box.lan')"
 
     - name: Assert that iiab_ssl_certbot_email is set
-      assert:
+      ansible.builtin.assert:
         that:
           - iiab_ssl_certbot_email is defined
           - iiab_ssl_certbot_email | length > 0
         fail_msg: "SSL role requires iiab_ssl_certbot_email to be set in local_vars.yml"
 
-
     # INSTALL
     - name: Install SSL certificate automation (certbot + Let's Encrypt)
-      include_tasks: install.yml
+      ansible.builtin.include_tasks: install.yml
       when: ssl_installed is undefined
-
 
     # ENABLE / DISABLE
     - name: Enable or disable certificate auto-renewal
-      include_tasks: enable-or-disable.yml
-
-
-    # RECORD SSL AS INSTALLED
+      ansible.builtin.include_tasks: enable-or-disable.yml
     - name: Record (initial) disk space used
-      shell: df -B1 --output=used / | tail -1
+      ansible.builtin.shell: df -B1 --output=used / | tail -1
       register: df1
       changed_when: false
 
     - name: Record (final) disk space used
-      shell: df -B1 --output=used / | tail -1
+      ansible.builtin.shell: df -B1 --output=used / | tail -1
       register: df2
       changed_when: false
 
     - name: Add 'ssl_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-      ini_file:
-        path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      community.general.ini_file:
+        path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
         section: ssl
         option: ssl_disk_usage
         value: "{{ df2.stdout | int - df1.stdout | int }}"
 
     - name: Add 'ssl' variable values to {{ iiab_ini_file }}
-      ini_file:
+      community.general.ini_file:
         path: "{{ iiab_ini_file }}"
         section: ssl
         option: "{{ item.option }}"
@@ -89,17 +84,17 @@
           value: "{{ iiab_ssl_domain }}"
 
     - name: "Set 'ssl_installed: True'"
-      set_fact:
-        ssl_installed: True
+      ansible.builtin.set_fact:
+        ssl_installed: true
 
     - name: "Add 'ssl_installed: True' to {{ iiab_state_file }}"
-      lineinfile:
-        path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
-        regexp: '^ssl_installed'
-        line: 'ssl_installed: True'
+      ansible.builtin.lineinfile:
+        path: "{{ iiab_state_file }}" # /etc/iiab/iiab_state.yml
+        regexp: "^ssl_installed"
+        line: "ssl_installed: True"
 
   rescue:
-    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
-      fail:
+    - name: "SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})"
+      ansible.builtin.fail:
         msg: ""
       when: not skip_role_on_error

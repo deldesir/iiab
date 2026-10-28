@@ -1,6 +1,6 @@
 ---
 - name: Record (initial) disk space used
-  shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: df -B1 --output=used / | tail -1
   register: df1
   changed_when: false
 
@@ -9,25 +9,25 @@
     name: safe.directory
     scope: global
     value: "{{ mempalace_dir }}"
-  become: yes
+  become: true
 
 - name: Clone / update MemPalace repository
-  git:
+  ansible.builtin.git:
     repo: "{{ mempalace_repo }}"
     dest: "{{ mempalace_dir }}"
     version: "{{ mempalace_version }}"
-    force: yes
-    update: yes
-  become: yes
+    force: true
+    update: true
+  become: true
 
 - name: Set ownership of MemPalace directory
-  file:
+  ansible.builtin.file:
     path: "{{ mempalace_dir }}"
     state: directory
     owner: "{{ mempalace_user }}"
     group: "{{ mempalace_user }}"
-    recurse: yes
-  become: yes
+    recurse: true
+  become: true
 
 # MemPalace is NOT installed here via `uv pip install`.
 # Instead, it is declared in ai-gateway's pyproject.toml as a
@@ -42,20 +42,20 @@
 # Config priority: env var > config file (~/.mempalace/config.json) > default.
 # We override via systemd Environment= to keep data inside the gateway's data/ dir.
 - name: Initialize MemPalace palace directory
-  file:
+  ansible.builtin.file:
     path: "{{ mempalace_palace_path }}"
     state: directory
     owner: "{{ mempalace_user }}"
     group: "{{ mempalace_user }}"
-    mode: '0755'
-  become: yes
+    mode: "0755"
+  become: true
 
 # Ensure sqlite3 CLI is available for the monthly VACUUM cron job
 - name: Ensure sqlite3 CLI is available
-  apt:
+  ansible.builtin.apt:
     name: sqlite3
     state: present
-  become: yes
+  become: true
 
 # Deploy monthly VACUUM cron for ChromaDB's internal SQLite database.
 # ChromaDB uses SQLite for metadata storage (chroma.sqlite3 per backends/chroma.py);
@@ -63,7 +63,7 @@
 # VACUUM reclaims this space.
 # Runs at 03:00 AM on the 1st of each month when free disk > 3x DB size.
 - name: Deploy ChromaDB VACUUM cron
-  cron:
+  ansible.builtin.cron:
     name: "mempalace-vacuum"
     minute: "0"
     hour: "3"
@@ -74,28 +74,28 @@
       FREE_SPACE=$(df -k "$(dirname "$DB")" | awk 'NR==2 {print $4 * 1024}');
       [ "$FREE_SPACE" -gt $((DB_SIZE * 3)) ] && sqlite3 "$DB" "VACUUM;" || echo "VACUUM skipped: insufficient space" | logger -t mempalace
     user: "{{ mempalace_user }}"
-  become: yes
+  become: true
 
 # RECORD MEMPALACE AS INSTALLED
 
 - name: Record (final) disk space used
-  shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: df -B1 --output=used / | tail -1
   register: df2
   changed_when: false
 
 - name: Add 'mempalace_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
-  ini_file:
+  community.general.ini_file:
     path: "{{ iiab_ini_file }}"
     section: mempalace
     option: mempalace_disk_usage
     value: "{{ df2.stdout | int - df1.stdout | int }}"
 
 - name: "Set 'mempalace_installed: True'"
-  set_fact:
-    mempalace_installed: True
+  ansible.builtin.set_fact:
+    mempalace_installed: true
 
 - name: "Add 'mempalace_installed: True' to {{ iiab_state_file }}"
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: "{{ iiab_state_file }}"
-    regexp: '^mempalace_installed'
-    line: 'mempalace_installed: True'
+    regexp: "^mempalace_installed"
+    line: "mempalace_installed: True"

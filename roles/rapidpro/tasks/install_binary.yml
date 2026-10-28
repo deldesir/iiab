@@ -4,9 +4,9 @@
 # Download via the shared helper: prefer the gzipped asset, verify against
 # SHA256SUMS, fall back to raw. Same code path as the ai-update role.
 - name: Install Mailroom Binary from Release (gz-preferred, checksum-verified)
-  command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "https://github.com/deldesir/mailroom/releases/latest/download/mailroom-linux-{{ rapidpro_go_arch }}" /usr/local/bin/mailroom
-  become: yes
+  ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "https://github.com/deldesir/mailroom/releases/latest/download/mailroom-linux-{{ rapidpro_go_arch }}" /usr/local/bin/mailroom
+  become: true
 
 - name: Install Courier Binary from Release (gz-preferred, checksum-verified)
-  command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "https://github.com/deldesir/courier/releases/latest/download/courier-linux-{{ rapidpro_go_arch }}" /usr/local/bin/courier
-  become: yes
+  ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "https://github.com/deldesir/courier/releases/latest/download/courier-linux-{{ rapidpro_go_arch }}" /usr/local/bin/courier
+  become: true

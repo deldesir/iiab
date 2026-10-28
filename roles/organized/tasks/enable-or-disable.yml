@@ -1,70 +1,70 @@
 ---
 - name: Enable & Restart 'organized' systemd service
-  systemd:
+  ansible.builtin.systemd:
     name: organized
-    daemon_reload: yes
-    enabled: yes
+    daemon_reload: true
+    enabled: true
     state: restarted
-  become: yes
+  become: true
   when: organized_enabled
 
 - name: Disable & Stop 'organized' systemd service
-  systemd:
+  ansible.builtin.systemd:
     name: organized
-    enabled: no
+    enabled: false
     state: stopped
-  become: yes
+  become: true
   when: not organized_enabled
 
 - name: Enable & Restart 'organized-celery' systemd service
-  systemd:
+  ansible.builtin.systemd:
     name: organized-celery
-    daemon_reload: yes
-    enabled: yes
+    daemon_reload: true
+    enabled: true
     state: restarted
-  become: yes
+  become: true
   when: organized_enabled
 
 - name: Disable & Stop 'organized-celery' systemd service
-  systemd:
+  ansible.builtin.systemd:
     name: organized-celery
-    enabled: no
+    enabled: false
     state: stopped
-  become: yes
+  become: true
   when: not organized_enabled
 
 - name: Enable & start 'organized-sources' mirror timer
-  systemd:
+  ansible.builtin.systemd:
     name: organized-sources.timer
-    daemon_reload: yes
-    enabled: yes
+    daemon_reload: true
+    enabled: true
     state: started
-  become: yes
+  become: true
   when: organized_enabled
 
 - name: Generate the source-materials mirror now (best effort)
-  systemd:
+  ansible.builtin.systemd:
     name: organized-sources.service
     state: started
-  become: yes
+  become: true
   when: organized_enabled
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Disable & stop 'organized-sources' mirror timer
-  systemd:
+  ansible.builtin.systemd:
     name: organized-sources.timer
-    enabled: no
+    enabled: false
     state: stopped
-  become: yes
+  become: true
   when: not organized_enabled
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Provision the initial admin account (idempotent) when configured in local_vars
   # The local build cannot self-register the first account. When the admin
   # vars are set, create/keep a working admin login. Password is passed via the
   # environment (ORGANIZED_ADMIN_PASSWORD), never on the command line, and
   # no_log hides it from Ansible output.
-  command: >
+  ansible.builtin.command: >
     {{ organized_dir }}/.venv/bin/python manage.py bootstrap_admin
     --email {{ organized_admin_email | quote }}
     --cong-name {{ organized_admin_cong_name | quote }}
@@ -76,7 +76,7 @@
     {{ '--superuser' if organized_admin_superuser | default(False) | bool else '' }}
   args:
     chdir: "{{ organized_dir }}"
-  become: yes
+  become: true
   become_user: "{{ organized_user }}"
   environment:
     DJANGO_SECRET_KEY: "{{ organized_secret_key | default('bootstrap-only-key') }}"
@@ -94,17 +94,17 @@
     - organized_admin_cong_name is defined
 
 - name: Install Nginx config, if enabled
-  template:
+  ansible.builtin.template:
     src: organized.conf.j2
     dest: /etc/nginx/conf.d/organized.conf
-  become: yes
+  become: true
   when: organized_enabled
   notify: reload nginx
 
 - name: Remove Nginx config, if disabled
-  file:
+  ansible.builtin.file:
     path: /etc/nginx/conf.d/organized.conf
     state: absent
-  become: yes
+  become: true
   when: not organized_enabled
   notify: reload nginx

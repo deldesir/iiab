@@ -1,80 +1,81 @@
+---
 # SSL install tasks — certbot + Let's Encrypt certificate provisioning
 
 - name: Install certbot package
-  package:
+  ansible.builtin.package:
     name: certbot
     state: present
 
 - name: Create ACME webroot challenge directory
-  file:
+  ansible.builtin.file:
     path: "{{ doc_root }}/.well-known/acme-challenge"
     state: directory
     owner: "{{ apache_user }}"
     group: "{{ apache_user }}"
-    mode: '0755'
+    mode: "0755"
 
 - name: Install ACME challenge nginx location snippet from template
-  template:
+  ansible.builtin.template:
     src: acme-challenge.conf.j2
     dest: "{{ nginx_conf_dir }}/acme-challenge.conf"
   register: acme_conf
 
 - name: Reload nginx to pick up ACME challenge location
-  systemd:
+  ansible.builtin.systemd:
     name: nginx
     state: reloaded
   when: acme_conf.changed and not is_proot
 
 - name: Create /etc/nginx/ssl directory
-  file:
+  ansible.builtin.file:
     path: /etc/nginx/ssl
     state: directory
     owner: root
     group: root
-    mode: '0700'
+    mode: "0700"
 
 # Backup any existing manually-placed cert files (migration from manual setup)
 - name: Check for existing cert file
-  stat:
+  ansible.builtin.stat:
     path: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.cert.pem"
   register: existing_cert
 
 - name: Backup existing cert file if it is a regular file (not a symlink)
-  copy:
+  ansible.builtin.copy:
     src: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.cert.pem"
     dest: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.cert.pem.bak-manual"
-    remote_src: yes
+    remote_src: true
   when: existing_cert.stat.exists and not existing_cert.stat.islnk
 
 - name: Check for existing key file
-  stat:
+  ansible.builtin.stat:
     path: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.key.pem"
   register: existing_key
 
 - name: Backup existing key file if it is a regular file (not a symlink)
-  copy:
+  ansible.builtin.copy:
     src: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.key.pem"
     dest: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.key.pem.bak-manual"
-    remote_src: yes
-    mode: '0600'
+    remote_src: true
+    mode: "0600"
   when: existing_key.stat.exists and not existing_key.stat.islnk
 
 # Remove old regular files so symlinks can be created
 - name: Remove existing cert file if it is a regular file
-  file:
+  ansible.builtin.file:
     path: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.cert.pem"
     state: absent
   when: existing_cert.stat.exists and not existing_cert.stat.islnk
 
 - name: Remove existing key file if it is a regular file
-  file:
+  ansible.builtin.file:
     path: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.key.pem"
     state: absent
   when: existing_key.stat.exists and not existing_key.stat.islnk
 
 # Check if www subdomain resolves to the same host/IP interface (DNS pre-flight check)
 - name: Check DNS resolution for root and www subdomain
-  shell: |
+  ansible.builtin.shell: |
     python3 -c "
     import socket
     import sys
@@ -103,12 +104,12 @@
   failed_when: false
 
 - name: Set fact for www subdomain resolution
-  set_fact:
+  ansible.builtin.set_fact:
     iiab_ssl_www_resolved: "{{ www_dns_check.stdout | trim == 'RESOLVED' }}"
 
 # Obtain certificate from Let's Encrypt
 - name: "Obtain Let's Encrypt certificate for {{ iiab_ssl_domain }}"
-  command: >
+  ansible.builtin.command: >
     certbot certonly --webroot
     -w {{ doc_root }}
     -d {{ iiab_ssl_domain }}
@@ -122,68 +123,68 @@
   register: certbot_result
 
 - name: Show certbot output
-  debug:
+  ansible.builtin.debug:
     var: certbot_result.stdout_lines
 
 # Symlink Let's Encrypt certs to IIAB's expected paths
 - name: "Symlink fullchain.pem → /etc/nginx/ssl/{{ iiab_ssl_domain }}.cert.pem"
-  file:
+  ansible.builtin.file:
     src: "/etc/letsencrypt/live/{{ iiab_ssl_domain }}/fullchain.pem"
     dest: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.cert.pem"
     state: link
-    force: yes
+    force: true
 
 - name: "Symlink privkey.pem → /etc/nginx/ssl/{{ iiab_ssl_domain }}.key.pem"
-  file:
+  ansible.builtin.file:
     src: "/etc/letsencrypt/live/{{ iiab_ssl_domain }}/privkey.pem"
     dest: "/etc/nginx/ssl/{{ iiab_ssl_domain }}.key.pem"
     state: link
-    force: yes
+    force: true
 
 # Ensure Let's Encrypt private key has correct permissions
 - name: Set restrictive permissions on Let's Encrypt private key
-  file:
+  ansible.builtin.file:
     path: "/etc/letsencrypt/live/{{ iiab_ssl_domain }}/privkey.pem"
-    mode: '0600'
+    mode: "0600"
   # privkey.pem is a symlink into archive/, but 'follow: yes' is default
 
 - name: Set restrictive permissions on Let's Encrypt archive directory
-  file:
+  ansible.builtin.file:
     path: "/etc/letsencrypt/archive/{{ iiab_ssl_domain }}"
-    mode: '0700'
+    mode: "0700"
 
 # Post-renewal hook to reload nginx
 - name: Create certbot renewal hooks directory
-  file:
+  ansible.builtin.file:
     path: /etc/letsencrypt/renewal-hooks/post
     state: directory
-    mode: '0755'
+    mode: "0755"
 
 - name: Install post-renewal hook to reload nginx
-  template:
+  ansible.builtin.template:
     src: nginx-reload.sh.j2
     dest: /etc/letsencrypt/renewal-hooks/post/nginx-reload.sh
-    mode: '0755'
+    mode: "0755"
 
 # Verify the certificate works
 - name: Test certbot renewal (dry-run)
-  command: certbot renew --dry-run --no-random-sleep-on-renew
+  ansible.builtin.command: certbot renew --dry-run --no-random-sleep-on-renew
   register: renewal_test
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Show renewal test result
-  debug:
+  ansible.builtin.debug:
     var: renewal_test.stdout_lines
   when: renewal_test is defined
 
 - name: "Add 'iiab_ssl_www_resolved' to {{ iiab_state_file }}"
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: "{{ iiab_state_file }}"
-    regexp: '^iiab_ssl_www_resolved:'
+    regexp: "^iiab_ssl_www_resolved:"
     line: "iiab_ssl_www_resolved: {{ iiab_ssl_www_resolved }}"
 
 - name: Add 'ssl_domain_www' variable value to {{ iiab_ini_file }}
-  ini_file:
+  community.general.ini_file:
     path: "{{ iiab_ini_file }}"
     section: ssl
     option: ssl_domain_www
@@ -191,14 +192,14 @@
 
 # Now that certs exist, re-template server.conf so SSL directives are emitted
 - name: Re-template server.conf now that SSL certs exist
-  template:
+  ansible.builtin.template:
     src: "{{ iiab_dir }}/roles/nginx/templates/server.conf.j2"
     dest: /etc/nginx/server.conf
   vars:
     iiab_ssl_certs_exist: true
 
 - name: Restart nginx to activate SSL
-  systemd:
+  ansible.builtin.systemd:
     name: nginx
     state: restarted
   when: not is_proot

@@ -1,44 +1,43 @@
+---
 - name: Assert that "erpnext_install is sameas true" (boolean not string etc)
-  assert:
+  ansible.builtin.assert:
     that: erpnext_install is sameas true
     fail_msg: "PLEASE SET 'erpnext_install: True' e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
+    quiet: true
   when: erpnext_install | bool
 
 - name: Assert that "erpnext_enabled | type_debug == 'bool'" (boolean not string etc)
-  assert:
+  ansible.builtin.assert:
     that: erpnext_enabled | type_debug == 'bool'
     fail_msg: "PLEASE GIVE VARIABLE 'erpnext_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
-    quiet: yes
+    quiet: true
   when: erpnext_install | bool
 
-
 - block:
-
-    - name: Install ERPNext if 'erpnext_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
-      include_tasks: install.yml
+    - name: Install ERPNext if 'erpnext_installed' not defined, e.g. in {{ iiab_state_file }} # /etc/iiab/iiab_state.yml
+      ansible.builtin.include_tasks: install.yml
       when:
         - erpnext_install | bool
         - erpnext_installed is undefined
 
     - name: Keep the Frappe scheduler part of the bench's boot
-      include_tasks: scheduler.yml
+      ansible.builtin.include_tasks: scheduler.yml
       when:
         - erpnext_enabled | bool
 
     - name: Sync Storefront if erpnext is enabled
-      include_tasks: storefront-sync.yml
+      ansible.builtin.include_tasks: storefront-sync.yml
       when:
         - erpnext_enabled | bool
 
     - name: Run IIAB database fixtures
-      include_tasks: db-fixtures.yml
+      ansible.builtin.include_tasks: db-fixtures.yml
       when:
         - erpnext_enabled | bool
 
     - name: Add 'erpnext' variable values to {{ iiab_ini_file }}
-      ini_file:
-        path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+      community.general.ini_file:
+        path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
         section: erpnext
         option: "{{ item.option }}"
         value: "{{ item.value | string }}"
@@ -52,9 +51,8 @@
       when: erpnext_install | bool
 
   rescue:
-
-    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
-      fail:
+    - name: "SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})"
+      ansible.builtin.fail:
         msg: ""
       when:
         - erpnext_install | bool
