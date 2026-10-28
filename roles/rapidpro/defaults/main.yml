@@ -7,6 +7,7 @@ rapidpro_db_user: "temba"
 rapidpro_db_pass: ""   # no default: set it in /etc/iiab/local_vars.yml; the role refuses to run while it is empty
 nodejs_version: "24"
 rapidpro_dir: "/opt/iiab/rapidpro"
+rapidpro_uv_bin: /usr/local/bin/uv   # the pinned uv (roles/uv); the role's own name for it, as every service role has
 rapidpro_install: True
 rapidpro_enabled: True
 

@@ -1,0 +1,109 @@
+---
+# The systemd units of the services, the flow export, and the restarts after a code or settings change.
+
+- name: Create gunicorn run directory
+  ansible.builtin.file:
+    path: "{{ rapidpro_dir }}/run"
+    state: directory
+    owner: "{{ iiab_admin_user }}"
+    group: "www-data"
+    mode: "0770"
+  become: true
+
+- name: Check for valkey-server service
+  ansible.builtin.stat:
+    path: /lib/systemd/system/valkey-server.service
+  register: valkey_service
+  tags: [centrifugo] # the mailroom unit template needs valkey_service_name
+
+- name: Set valkey service name
+  ansible.builtin.set_fact:
+    valkey_service_name: "{{ 'valkey-server.service' if valkey_service.stat.exists else 'redis-server.service' }}"
+  tags: [centrifugo]
+
+- name: Create Gunicorn systemd service
+  ansible.builtin.template:
+    mode: "0644"
+    src: rapidpro-gunicorn.service.j2
+    dest: /etc/systemd/system/rapidpro-gunicorn.service
+  become: true
+
+# Mailroom and courier embed the DB URL (with password) in Environment=
+# lines — systemd only needs root to read unit files, so keep these two
+# out of reach of other local accounts.
+- name: Create Mailroom systemd service
+  ansible.builtin.template:
+    src: rapidpro-mailroom.service.j2
+    dest: /etc/systemd/system/rapidpro-mailroom.service
+    mode: "0600"
+  become: true
+  register: rapidpro_mailroom_unit # centrifugo.yml restarts mailroom on change in a tag-filtered run
+  tags: [centrifugo]
+
+- name: Create Courier systemd service
+  ansible.builtin.template:
+    src: rapidpro-courier.service.j2
+    dest: /etc/systemd/system/rapidpro-courier.service
+    mode: "0600"
+  become: true
+
+- name: Create Celery systemd service
+  ansible.builtin.template:
+    mode: "0644"
+    src: rapidpro-celery.service.j2
+    dest: /etc/systemd/system/rapidpro-celery.service
+  become: true
+
+- name: Install flow-export script (flows live only in Postgres otherwise)
+  ansible.builtin.copy:
+    src: rapidpro-flows-export
+    dest: /usr/local/sbin/rapidpro-flows-export
+    mode: "0755"
+  become: true
+
+- name: Create flow-export systemd units
+  ansible.builtin.template:
+    mode: "0644"
+    src: "rapidpro-flows-export.{{ item }}.j2"
+    dest: "/etc/systemd/system/rapidpro-flows-export.{{ item }}"
+  loop: [service, timer]
+  become: true
+
+- name: Enable nightly flow export
+  ansible.builtin.systemd:
+    name: rapidpro-flows-export.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true
+  when: not is_proot
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+  when: not is_proot
+
+# collectstatic ran, so the code or the settings changed: the app and its workers pick both up on restart
+- name: Restart RapidPro Gunicorn and Celery if code or settings changed
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: restarted
+  loop:
+    - rapidpro-gunicorn
+    - rapidpro-celery
+  become: true
+  when: rapidpro_collectstatic is changed and not is_proot
+
+- name: Restart RapidPro Gunicorn if code or settings changed (Android)
+  ansible.builtin.command: /usr/local/bin/pdsm restart rapidpro-server
+  become: true
+  when: rapidpro_collectstatic is changed and is_proot
+  changed_when: true   # gated on the static build above: a restart is the change
+
+- name: Start RapidPro Watchdog (Android) ensures services stay running
+  ansible.builtin.command: /usr/local/bin/pdsm start rapidpro-watchdog
+  become: true
+  when: is_proot
+  register: rapidpro_watchdog_start
+  changed_when: "'already running' not in rapidpro_watchdog_start.stdout"   # the wrapper's own message

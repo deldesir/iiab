@@ -1,0 +1,38 @@
+---
+# The first admin user.
+
+# the first admin, created with Django's own command; without a password in local_vars.yml no user is created,
+# rather than one with a guessable password
+- name: Check whether the admin user exists
+  ansible.builtin.shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    uv run python manage.py shell -c "from temba.users.models import User; print('EXISTS' if User.objects.filter(email__iexact='{{ admin_email }}').exists() else 'MISSING')"
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  become: true
+  become_user: "{{ iiab_admin_user }}"
+  register: superuser_check
+  changed_when: false
+
+- name: Refuse to create the admin user without rapidpro_admin_password
+  ansible.builtin.assert:
+    that:
+      - rapidpro_admin_password | default('') | length > 0
+    fail_msg: "rapidpro_admin_password is empty - set it in /etc/iiab/local_vars.yml before the admin user can be created"
+    quiet: true
+  when: "'MISSING' in superuser_check.stdout"
+
+- name: Create the admin user
+  ansible.builtin.shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    uv run python manage.py createsuperuser --noinput
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  environment:
+    DJANGO_SUPERUSER_EMAIL: "{{ admin_email }}"
+    DJANGO_SUPERUSER_PASSWORD: "{{ rapidpro_admin_password }}"
+  become: true
+  become_user: "{{ iiab_admin_user }}"
+  when: "'MISSING' in superuser_check.stdout"
+  no_log: true
+  changed_when: true   # runs only when the superuser is missing
