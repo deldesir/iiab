@@ -16,6 +16,19 @@ import time
 import urllib.request
 from pathlib import Path
 
+from .config import STATE
+
+
+def ssh_options() -> list[str]:
+    """The options of every ssh, scp and rsync session to a box: no prompts, a short connect
+    timeout, and one multiplexed connection per box kept open for a minute, so the four to six
+    sessions a check opens on a box share one TCP connection and one key exchange instead of
+    paying for each (the control sockets live under the state directory, root only)."""
+    sockets = STATE / "ssh"
+    sockets.mkdir(parents=True, exist_ok=True, mode=0o700)
+    return ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
+            "-o", "ControlMaster=auto", "-o", f"ControlPath={sockets}/%C", "-o", "ControlPersist=60"]
+
 
 class Real:
     """What the hub does for real."""
@@ -29,7 +42,7 @@ class Real:
         if box.get("local"):
             argv = ["bash", "-c", cmd]
         else:
-            argv = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", f"{box['ssh_user']}@{box['reach']['ssh']}", cmd]
+            argv = ["ssh", *ssh_options(), f"{box['ssh_user']}@{box['reach']['ssh']}", cmd]
         for attempt in (1, 2):
             try:
                 p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
@@ -47,13 +60,13 @@ class Real:
         if box.get("local"):
             subprocess.run(["install", "-m", mode, str(src), dest], check=True)
         else:
-            subprocess.run(["scp", "-q", "-o", "BatchMode=yes", str(src), f"{box['ssh_user']}@{box['reach']['ssh']}:{dest}"], check=True)
+            subprocess.run(["scp", "-q", *ssh_options(), str(src), f"{box['ssh_user']}@{box['reach']['ssh']}:{dest}"], check=True)
             self.run_on(box, f"chmod {mode} {shlex.quote(dest)}")
 
     def rsync(self, src: str, dest: str, delete: bool = False) -> tuple[int, str]:
         """rsync over ssh (or locally); (rc, stderr)."""
         self._guard(f"rsync from {src}")
-        argv = ["rsync", "-a"] + (["--delete"] if delete else []) + ["-e", "ssh -o BatchMode=yes", src, dest]
+        argv = ["rsync", "-a"] + (["--delete"] if delete else []) + ["-e", shlex.join(["ssh", *ssh_options()]), src, dest]
         r = subprocess.run(argv, capture_output=True, text=True)
         return r.returncode, r.stderr.strip()
 

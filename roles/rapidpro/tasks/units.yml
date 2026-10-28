@@ -99,8 +99,11 @@
   ansible.builtin.command: /usr/local/bin/pdsm restart rapidpro-server
   become: true
   when: rapidpro_collectstatic is changed and is_proot
+  changed_when: true   # gated on the static build above: a restart is the change
 
 - name: Start RapidPro Watchdog (Android) ensures services stay running
   ansible.builtin.command: /usr/local/bin/pdsm start rapidpro-watchdog
   become: true
   when: is_proot
+  register: rapidpro_watchdog_start
+  changed_when: "'already running' not in rapidpro_watchdog_start.stdout"   # the wrapper's own message

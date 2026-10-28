@@ -17,32 +17,9 @@
   changed_when: true
 
 - name: Fix RapidPro ownership after git pull
-  ansible.builtin.command: "chown -R {{ ai_update_gateway_user }}:{{ ai_update_gateway_user }} {{ ai_update_rapidpro_dir }}"
+  ansible.builtin.command: "chown -R {{ ai_update_gateway_user }}:{{ ai_update_gateway_user }} {{ rapidpro_dir }}"
   become: true
   changed_when: false
-
-# The pgvector/bun tasks need the rapidpro role's defaults, but include_vars
-# OUTRANKS local_vars.yml: loading the defaults file would blank every operator
-# value whose default is "".
-# So: remember every value that is already defined, load the defaults (lazily,
-# they reference each other), then put the remembered values back with
-# set_fact, which outranks include_vars.
-- name: Remember rapidpro variables that are already defined (local_vars, default_vars)
-  ansible.builtin.set_fact:
-    _rapidpro_defined_vars: "{{ _rapidpro_defined_vars | default({}) | combine({item: lookup('vars', item)}) }}"
-  loop: "{{ (lookup('file', '/opt/iiab/iiab/roles/rapidpro/defaults/main.yml') | from_yaml).keys() | list }}"
-  when: lookup('vars', item, default='__undefined__') != '__undefined__'
-  no_log: true
-
-- name: Load rapidpro role defaults (pgvector + bun vars)
-  ansible.builtin.include_vars: /opt/iiab/iiab/roles/rapidpro/defaults/main.yml
-- name: Put the already-defined values back on top of the role defaults
-  ansible.builtin.set_fact:
-    "{{ item.key }}": "{{ item.value }}"
-  loop: "{{ _rapidpro_defined_vars | default({}) | dict2items }}"
-  loop_control:
-    label: "{{ item.key }}"
-  no_log: true
 
 - name: Ensure pgvector for the knowledge app
   ansible.builtin.include_tasks: /opt/iiab/iiab/roles/rapidpro/tasks/pgvector.yml
@@ -50,7 +27,7 @@
   ansible.builtin.include_tasks: /opt/iiab/iiab/roles/rapidpro/tasks/bun.yml
 - name: Strip legacy Django email settings superseded by MAILERS from settings.py
   ansible.builtin.lineinfile:
-    path: "{{ ai_update_rapidpro_dir }}/temba/settings.py"
+    path: "{{ rapidpro_dir }}/temba/settings.py"
     regexp: "^\\s*EMAIL_(BACKEND|HOST|PORT|HOST_USER|HOST_PASSWORD|USE_TLS|USE_SSL|TIMEOUT|SSL_KEYFILE|SSL_CERTFILE)\\s*="
     state: absent
   become: true
@@ -60,7 +37,7 @@
     export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
     uv sync
   args:
-    chdir: "{{ ai_update_rapidpro_dir }}"
+    chdir: "{{ rapidpro_dir }}"
   become: true
   become_user: "{{ ai_update_gateway_user }}"
   register: rapidpro_sync
@@ -71,7 +48,7 @@
     export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
     uv run python manage.py migrate
   args:
-    chdir: "{{ ai_update_rapidpro_dir }}"
+    chdir: "{{ rapidpro_dir }}"
   become: true
   become_user: "{{ ai_update_gateway_user }}"
   register: rapidpro_migrate
@@ -82,7 +59,7 @@
     export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
     uv run python manage.py nanorp_indexes
   args:
-    chdir: "{{ ai_update_rapidpro_dir }}"
+    chdir: "{{ rapidpro_dir }}"
   become: true
   become_user: "{{ ai_update_gateway_user }}"
   when: not (rapidpro_aws_enabled | default(false))
@@ -93,7 +70,7 @@
     export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
     uv run python manage.py collectstatic --noinput
   args:
-    chdir: "{{ ai_update_rapidpro_dir }}"
+    chdir: "{{ rapidpro_dir }}"
   become: true
   become_user: "{{ ai_update_gateway_user }}"
   register: rapidpro_collectstatic
@@ -107,9 +84,9 @@
 
 - name: Purge Django cache
   ansible.builtin.shell: |
-    {{ ai_update_rapidpro_dir }}/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
+    {{ rapidpro_dir }}/.venv/bin/python manage.py shell -c "from django.core.cache import cache; cache.clear()"
   args:
-    chdir: "{{ ai_update_rapidpro_dir }}"
+    chdir: "{{ rapidpro_dir }}"
   become: true
   failed_when: false   # best effort: a cache that cannot be reached is rebuilt on the next request
   changed_when: true   # always purges
@@ -119,9 +96,9 @@
 # freshly rendered settings (idempotent; internal redbeat:: keys untouched).
 - name: Prune RedBeat schedule entries no longer in CELERY_BEAT_SCHEDULE
   ansible.builtin.shell: |
-    {{ ai_update_rapidpro_dir }}/.venv/bin/python manage.py shell -c "$(cat /opt/iiab/iiab/roles/ai-update/files/prune_redbeat_entries.py)"
+    {{ rapidpro_dir }}/.venv/bin/python manage.py shell -c "$(cat /opt/iiab/iiab/roles/ai-update/files/prune_redbeat_entries.py)"
   args:
-    chdir: "{{ ai_update_rapidpro_dir }}"
+    chdir: "{{ rapidpro_dir }}"
   become: true
   ignore_errors: true
   register: redbeat_prune
@@ -129,8 +106,8 @@
 
 - name: Fix Nginx permissions on static assets and socket directory
   ansible.builtin.shell: |
-    chmod -Rc a+rX {{ ai_update_rapidpro_dir }}/sitestatic {{ ai_update_rapidpro_dir }}/media
-    chmod -c 755 {{ ai_update_rapidpro_dir }}/run
+    chmod -Rc a+rX {{ rapidpro_dir }}/sitestatic {{ rapidpro_dir }}/media
+    chmod -c 755 {{ rapidpro_dir }}/run
   become: true
   ignore_errors: true
   register: rapidpro_static_perms

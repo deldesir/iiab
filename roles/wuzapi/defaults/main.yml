@@ -20,3 +20,10 @@ wuzapi_arch_dict:
   aarch64: arm64
 
 wuzapi_go_arch: "{{ wuzapi_arch_dict.get(ansible_facts.machine, 'unsupported') }}"
+
+# The source checkout (static assets come from it) and the release binary, pinned to a tag that a
+# sync round bumps; install-release-binary.sh verifies the asset against the tag's SHA256SUMS.
+wuzapi_repo: "https://github.com/deldesir/wuzapi.git"
+wuzapi_src_dir: /opt/iiab/wuzapi-src
+wuzapi_release: v1.0.18
+wuzapi_binary_url: "https://github.com/deldesir/wuzapi/releases/download/{{ wuzapi_release }}/wuzapi-linux-{{ wuzapi_go_arch }}"

@@ -74,6 +74,26 @@ rapidpro_arch_dict:
 
 rapidpro_go_arch: "{{ rapidpro_arch_dict.get(ansible_facts.machine, 'unsupported') }}"
 
+# The sources. The web application is cloned by this role; the courier and mailroom checkouts
+# are kept by the updater (roles/ai-update) for its fallback build and for the goflow docs.
+rapidpro_repo: "https://github.com/deldesir/rapidpro.git"
+rapidpro_version: main
+rapidpro_courier_src_dir: /opt/iiab/courier
+rapidpro_courier_repo: "https://github.com/deldesir/courier.git"
+rapidpro_courier_version: main
+rapidpro_mailroom_repo: "https://github.com/deldesir/mailroom.git"
+rapidpro_mailroom_version: main
+
+# The Go services' release binaries, each pinned to a tag: the install and the update path both
+# read these, and install-release-binary.sh verifies the asset against the tag's SHA256SUMS.
+# A sync round bumps the tags here (one change, reviewed) instead of following "latest".
+rapidpro_mailroom_release: v26.3.102
+rapidpro_courier_release: v26.3.64
+rapidpro_mailroom_binary_url: "https://github.com/deldesir/mailroom/releases/download/{{ rapidpro_mailroom_release }}/mailroom-linux-{{ rapidpro_go_arch }}"
+rapidpro_courier_binary_url: "https://github.com/deldesir/courier/releases/download/{{ rapidpro_courier_release }}/courier-linux-{{ rapidpro_go_arch }}"
+rapidpro_mailroom_bin: /usr/local/bin/mailroom
+rapidpro_courier_bin: /usr/local/bin/courier
+
 # --- Realtime sockets (Centrifugo) ------------------------------------------
 # temba's live UI — ticket inbox, contact chat, typing indicators, in-app
 # notifications, flow-editor activity and the webchat widget — talks to a

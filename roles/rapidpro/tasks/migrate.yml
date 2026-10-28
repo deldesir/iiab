@@ -28,6 +28,7 @@
   become: true
   become_user: postgres
   when: is_proot and (db_table_count.stdout | default('0') | trim | int == 0)
+  changed_when: true   # runs only against an empty database (the count above), so a run is a change
 
 - name: Run database migrations
   ansible.builtin.shell: |

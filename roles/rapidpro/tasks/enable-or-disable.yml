@@ -32,6 +32,8 @@
   block:
     - name: "Android (pdsm): enable all RapidPro services"
       ansible.builtin.command: /usr/local/bin/pdsm enable {{ item }}
+      args:
+        creates: /usr/local/pdsm/services-enabled/{{ item }}   # pdsm enable = this symlink; it prints "enabled" either way
       loop:
         - rapidpro-gunicorn
         - rapidpro-mailroom
@@ -71,4 +73,6 @@
         - rapidpro-mailroom
         - rapidpro-courier
         - rapidpro-celery
+      register: pdsm_disable
+      changed_when: "'is not enabled' not in pdsm_disable.stdout"   # pdsm's message for an already disabled service
       failed_when: false
