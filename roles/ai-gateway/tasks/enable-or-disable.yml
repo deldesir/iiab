@@ -6,7 +6,7 @@
   community.postgresql.postgresql_query:
     db: "{{ rapidpro_db_name | default('temba') }}"
     login_user: "postgres"
-    login_host: "localhost"
+    login_unix_socket: /var/run/postgresql
     query: |
       CREATE TABLE IF NOT EXISTS konex_personas (
           id VARCHAR PRIMARY KEY,
@@ -38,6 +38,8 @@
       GRANT ALL PRIVILEGES ON TABLE konex_knowledge_items TO {{ rapidpro_db_user | default('temba') }};
   when: ai_gateway_enabled and ai_gateway_postgres_uri | default('') | length > 0
   ignore_errors: true
+  become: true
+  become_user: postgres
 
 - name: Enable & Restart 'ai-gateway' systemd service, if ai_gateway_enabled
   ansible.builtin.systemd:
@@ -68,11 +70,13 @@
 - name: Point RapidPro LLM at AI Gateway
   community.postgresql.postgresql_query:
     db: "{{ rapidpro_db_name | default('temba') }}"
-    login_user: "{{ rapidpro_db_user | default('temba') }}"
-    login_host: "localhost"
+    login_user: postgres
+    login_unix_socket: /var/run/postgresql
     query: >
       UPDATE ai_llm
       SET config = jsonb_set(config::jsonb, '{endpoint}', '"http://localhost:{{ ai_gateway_port }}"')::json
       WHERE config->>'endpoint' != 'http://localhost:{{ ai_gateway_port }}'
   when: ai_gateway_enabled
   ignore_errors: true # Non-fatal: RapidPro may not be installed
+  become: true
+  become_user: postgres
