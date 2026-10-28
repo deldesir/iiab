@@ -1,0 +1,181 @@
+---
+# The front-end build, when one is due (install, --reinstall, erpnext_force_rebuild, or no
+# assets.json yet): services stopped to free RAM, caches flushed, a temporary swapfile for the
+# Vite build, the IIAB asset patches, then the services restarted with fresh workers.
+
+# ── NOTE: IIAB subpath patches are now baked into deldesir/* forks ──────────────
+# frappe JS patches  → deldesir/frappe   (version-16 branch)
+# ERPNext POS patches → deldesir/erpnext (version-16 branch)
+# HRMS roster patch   → deldesir/hrms    (version-16 branch)
+# CRM demo + router   → deldesir/crm     (main branch)
+# Builder patches     → deldesir/builder (develop branch)
+# Historical patch files are archived in files/archive/
+
+# ── Determine whether a full build is needed ──────────────────────────────────
+# On a repeat runrole (no --reinstall), skip the expensive build+restart cycle
+# if assets are already built.  This avoids 15-45 min of downtime + session
+# destruction for a "just enforce enabled" re-run.
+- name: Check if JS assets are already built
+  ansible.builtin.stat:
+    path: /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/assets.json
+  register: _assets_json
+  when: erpnext_enabled | bool
+
+- name: Set _needs_build flag
+  ansible.builtin.set_fact:
+    _needs_build: "{{ reinstall | default(False) | bool or erpnext_force_rebuild | default(False) | bool or not (_assets_json.stat.exists | default(false)) or erpnext_installed is undefined }}"
+
+# ── Stop ALL services before build ─────────────────────────────────────────────
+# 1) Frees ~900 MB of RAM held by gunicorn workers + background jobs, which is
+#    critical for CRM's heavy Vite/Rollup build on low-RAM deployments.
+# 2) gunicorn --preload forks workers from a master that loads all Python modules
+#    at startup.  Workers that preloaded before patches/installs will serve stale
+#    code and crash on missing modules (e.g. hrms, crm).  Killing every process
+#    guarantees a clean slate when we restart after the build.
+# NOTE: We stop individual services explicitly because systemd targets with
+# Wants= do NOT propagate stop/start to already-running member services.
+- name: Stop Frappe services before build (kill stale gunicorn workers + free RAM) # noqa: command-instead-of-module (worker instances by glob)
+  ansible.builtin.shell: |
+    systemctl stop frappe-bench-frappe-web.service \
+                   frappe-bench-node-socketio.service \
+                   frappe-bench-frappe-schedule.service \
+                   'frappe-bench-frappe-default-worker@*.service' \
+                   'frappe-bench-frappe-short-worker@*.service' \
+                   'frappe-bench-frappe-long-worker@*.service' \
+                   frappe-bench.target 2>/dev/null || true
+  when: erpnext_enabled | bool and _needs_build | bool
+  changed_when: true   # runs only when a build follows
+
+- name: Flush Redis caches before build (clear stale boot data and asset references)
+  ansible.builtin.command: redis-cli -p {{ item }} FLUSHDB
+  loop:
+    - 13000
+    - 11000
+  failed_when: false   # same best effort
+  when: erpnext_enabled | bool and _needs_build | bool
+  changed_when: true   # same
+
+# ── Build JS bundles with temporary swap ───────────────────────────────────────
+# CRM's Vite/Rollup build needs 4-6 GB during its "rendering chunks" phase.
+# On systems where other services consume 5+ GB, the build is OOM-killed (exit
+# 137) even with Frappe services stopped.  A temporary 4 GB swapfile on /var/tmp
+# (never tmpfs, guaranteed on-disk) provides overflow headroom.
+# The block/always structure guarantees the swapfile is cleaned up even if the
+# build fails.
+- name: Build the front-end bundles when a build is due
+  when: erpnext_enabled | bool and _needs_build | bool
+
+  # ── Start services with clean workers ──────────────────────────────────────────
+  # Restart (not just start) every service explicitly to guarantee gunicorn
+  # preloads the freshly-built code.  A simple 'start frappe-bench.target'
+  # would skip services that systemd considers "already active" from before
+  # the stop, leaving stale workers that crash on missing modules (hrms, crm).
+  block:
+    - name: Create temporary 4 GB swapfile for Vite build
+      ansible.builtin.shell: |
+        SWAPFILE=/var/tmp/.erpnext_build_swap
+        if [ ! -f "$SWAPFILE" ]; then
+          fallocate -l 4G "$SWAPFILE" 2>/dev/null || \
+            dd if=/dev/zero of="$SWAPFILE" bs=1M count=4096 status=none
+          chmod 600 "$SWAPFILE"
+          mkswap "$SWAPFILE" >/dev/null
+          swapon "$SWAPFILE"
+          echo "SWAP CREATED"
+        fi
+      register: erpnext_build_swap
+      changed_when: "'SWAP CREATED' in erpnext_build_swap.stdout"
+    - name: Rebuild all JS bundles (unified assets.json)
+      ansible.builtin.shell: |
+        /home/{{ erpnext_user_name }}/.local/bin/bench build
+      args:
+        chdir: "/home/{{ erpnext_user_name }}/frappe-bench"
+      become: true
+      become_user: "{{ erpnext_user_name }}"
+      environment:
+        PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      changed_when: true   # the block runs only when a build is due
+
+    - name: Rebuild Builder Frontend (Vite — separate from bench build)
+      ansible.builtin.shell: |
+        yarn install
+        yarn build
+      args:
+        chdir: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/frontend"
+      become: true
+      become_user: "{{ erpnext_user_name }}"
+      when: erpnext_enabled | bool and 'builder' in (erpnext_extra_apps | map(attribute='app_name') | list)
+      changed_when: true   # same
+
+    - name: Deploy IIAB asset patching script
+      ansible.builtin.template:
+        src: patch_erpnext_assets.py.j2
+        dest: /home/{{ erpnext_user_name }}/frappe-bench/patch_erpnext_assets.py
+        owner: "{{ erpnext_user_name }}"
+        group: "{{ erpnext_user_name }}"
+        mode: "0755"
+      when: erpnext_enabled | bool
+
+    - name: Run IIAB asset patching script (idempotent subpath fix for compiled artifacts)
+      ansible.builtin.command: python3 /home/{{ erpnext_user_name }}/frappe-bench/patch_erpnext_assets.py
+      args:
+        chdir: /home/{{ erpnext_user_name }}/frappe-bench
+      become: true
+      become_user: "{{ erpnext_user_name }}"
+      when: erpnext_enabled | bool
+      register: erpnext_assets_patch
+      changed_when: "'Patching /' in erpnext_assets_patch.stdout"
+
+    - name: Deploy IIAB About page translation and custom styling script
+      ansible.builtin.template:
+        src: update_about_page.py.j2
+        dest: /home/{{ erpnext_user_name }}/frappe-bench/update_about_page.py
+        owner: "{{ erpnext_user_name }}"
+        group: "{{ erpnext_user_name }}"
+        mode: "0755"
+      when: erpnext_enabled | bool
+
+    - name: Run IIAB About page translation and custom styling script
+      become: true
+      become_user: "{{ erpnext_user_name }}"
+      ansible.builtin.shell: |
+        ~/.local/bin/bench --site {{ erpnext_site_name }} execute "exec('import sys; sys.path.insert(0, \"/home/{{ erpnext_user_name }}/frappe-bench\"); import update_about_page; update_about_page.run()')"
+      args:
+        chdir: /home/{{ erpnext_user_name }}/frappe-bench
+      environment:
+        PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      when: erpnext_enabled | bool
+      changed_when: true   # rewrites the settings on every build
+
+  always:
+    - name: Remove temporary swapfile after build
+      ansible.builtin.shell: |
+        SWAPFILE=/var/tmp/.erpnext_build_swap
+        if [ -f "$SWAPFILE" ]; then
+          swapoff "$SWAPFILE" 2>/dev/null || true
+          rm -f "$SWAPFILE"
+          echo "SWAP REMOVED"
+        fi
+      register: erpnext_build_swap_removed
+      changed_when: "'SWAP REMOVED' in erpnext_build_swap_removed.stdout"
+- name: Start Frappe services with fresh workers (all apps loaded cleanly) # noqa: command-instead-of-module (worker instances by glob)
+  ansible.builtin.shell: |
+    systemctl restart frappe-bench.target \
+                      frappe-bench-frappe-web.service \
+                      frappe-bench-node-socketio.service \
+                      frappe-bench-frappe-schedule.service
+    systemctl restart 'frappe-bench-frappe-default-worker@*.service' \
+                      'frappe-bench-frappe-short-worker@*.service' \
+                      'frappe-bench-frappe-long-worker@*.service' 2>/dev/null || true
+  when: erpnext_enabled | bool and _needs_build | bool
+  changed_when: true   # runs only after a build
+
+- name: Ensure Frappe services are running (no-build re-run)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+  loop:
+    - frappe-bench.target
+    - frappe-bench-frappe-web.service
+    - frappe-bench-node-socketio.service
+    - frappe-bench-frappe-schedule.service
+  when: erpnext_enabled | bool and not (_needs_build | bool)

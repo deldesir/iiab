@@ -1,0 +1,92 @@
+---
+# The apps in the site: installed when missing, the site migrated, the scheduler enabled, the
+# web and workers targets enabled.
+
+# Check which apps are already installed in the site to avoid
+# "App already installed" errors on crash-and-resume re-runs.
+- name: Get list of apps already installed in site
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.shell: set -o pipefail && ~/.local/bin/bench --site {{ erpnext_site_name }} list-apps 2>/dev/null | grep -v '^$' || true
+  args:
+    executable: /bin/bash
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  register: _installed_apps
+  changed_when: false
+  when: erpnext_enabled | bool
+
+- name: Install ERPNext App in Site
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.command: >-
+    ~/.local/bin/bench --site {{ erpnext_site_name }} install-app erpnext
+    {{ '--force' if (erpnext_force_drop_db | default(False) | bool) else '' }}
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when:
+    - erpnext_enabled | bool
+    - "'erpnext' not in (_installed_apps.stdout | default(''))"
+  changed_when: true   # runs only when the app is not in the site
+
+- name: Install extra apps in site (HR, CRM, etc.)
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.command: >-
+    ~/.local/bin/bench --site {{ erpnext_site_name }} install-app {{ item.app_name }}
+    {{ '--force' if (erpnext_force_drop_db | default(False) | bool) else '' }}
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  loop: "{{ erpnext_extra_apps }}"
+  when:
+    - erpnext_enabled | bool
+    - "item.app_name not in (_installed_apps.stdout | default(''))"
+  changed_when: true   # same
+
+- name: Run migrate + clear-cache after all apps installed
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.shell: |
+    ~/.local/bin/bench --site {{ erpnext_site_name }} migrate
+    ~/.local/bin/bench --site {{ erpnext_site_name }} clear-cache
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+  changed_when: true   # runs on every update; bench does not report whether a patch ran
+
+# NOTE: Do NOT set home_page to 'shop' at install time.
+# On a fresh site the setup wizard hasn't run yet, so the shop page will
+# crash with a 500 (no Company, no Item Groups). Frappe's built-in logic
+# auto-redirects to the setup wizard when the default home page is used.
+# Set home_page to 'shop' only AFTER the setup wizard has been completed,
+# either manually or via a post-setup hook.
+
+- name: Enable scheduler for the site
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.shell: set -o pipefail && ~/.local/bin/bench --site {{ erpnext_site_name }} scheduler status | grep -q 'is enabled' || { ~/.local/bin/bench --site {{ erpnext_site_name }} scheduler enable && echo ENABLED; }
+  args:
+    executable: /bin/bash
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+  register: erpnext_scheduler
+  changed_when: "'ENABLED' in erpnext_scheduler.stdout"
+
+- name: Enable ERPNext Systemd Targets (web + workers)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - frappe-bench.target
+    - frappe-bench-workers.target
+  when: erpnext_enabled | bool

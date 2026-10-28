@@ -1,0 +1,128 @@
+---
+# The site: the database and its user, the site itself (created once), its configuration kept in
+# step with local_vars (database password, host name). The drop of the database and the site
+# directory happens only on erpnext_force_drop_db or when the site directory is already gone.
+
+- name: Check if site config exists
+  ansible.builtin.stat:
+    path: /home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}/site_config.json
+  register: site_config
+
+# DB drop is destructive — only triggered by explicit erpnext_force_drop_db flag,
+# OR if the database is orphaned (when site_config.json is completely missing after a folder purge).
+- name: Drop ERPNext DB (ONLY when erpnext_force_drop_db is set or database is orphaned)
+  ansible.mysql.mysql_db:
+    name: "{{ erpnext_db_name }}"
+    state: absent
+    login_unix_socket: /run/mysqld/mysqld.sock
+  when: >
+    erpnext_enabled | bool and (
+    (erpnext_force_drop_db | default(False) | bool) or
+    (not site_config.stat.exists)
+    )
+
+- name: Drop ERPNext Site Directory (ONLY when erpnext_force_drop_db is set or site config is missing)
+  ansible.builtin.file:
+    path: /home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}
+    state: absent
+  when: >
+    erpnext_enabled | bool and (
+    (erpnext_force_drop_db | default(False) | bool) or
+    (not site_config.stat.exists)
+    )
+
+- name: Flush Redis cache + queue (eliminates stale assets_json, doctype_meta, boot data)
+  ansible.builtin.command: redis-cli -p {{ item }} FLUSHDB
+  loop:
+    - 13000
+    - 11000
+  failed_when: false   # best effort: redis may not be up at this point; a cache not flushed is rebuilt by the build
+  when: erpnext_enabled | bool
+  changed_when: true   # always flushes
+
+- name: Create ERPNext database
+  ansible.mysql.mysql_db:
+    name: "{{ erpnext_db_name }}"
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock
+  when: erpnext_enabled | bool
+
+- name: Create ERPNext database user
+  ansible.mysql.mysql_user:
+    name: "{{ erpnext_db_user }}"
+    password: "{{ erpnext_db_password }}"
+    priv: "{{ erpnext_db_name }}.*:ALL"
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock
+  when: erpnext_enabled | bool
+
+- name: Create ERPNext Site
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  no_log: true # the command line carries the admin and database passwords
+  ansible.builtin.command: ~/.local/bin/bench new-site {{ erpnext_site_name }} --admin-password {{ erpnext_admin_password }} --db-name {{ erpnext_db_name }} --db-password {{ erpnext_db_password }} --no-setup-db --force
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+    creates: /home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}/site_config.json
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+
+- name: Ensure site_config.json has the correct database password (prevents Access Denied if password changed in local_vars.yml)
+  no_log: true # the result would echo the password
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.shell: |
+    python3 - <<'PY'
+    import json, os
+    path = '/home/{{ erpnext_user_name }}/frappe-bench/sites/{{ erpnext_site_name }}/site_config.json'
+    want = os.environ['ERPNEXT_DB_PASSWORD']
+    try:
+        with open(path, 'r') as f:
+            data = json.load(f)
+        if data.get('db_password') != want:
+            data['db_password'] = want
+            with open(path, 'w') as f:
+                json.dump(data, f, indent=1)
+            print('UPDATED PASSWORD')
+    except Exception as e:
+        print(f'ERROR: {e}')
+    PY
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    ERPNEXT_DB_PASSWORD: "{{ erpnext_db_password }}"   # through the environment, not the script text or the command line
+  when: erpnext_enabled | bool
+  register: erpnext_site_db_password
+  changed_when: "'UPDATED PASSWORD' in erpnext_site_db_password.stdout"
+  failed_when: "'ERROR' in erpnext_site_db_password.stdout"
+
+- name: Ensure currentsite.txt exists (Frappe needs this to resolve the active site)
+  ansible.builtin.copy:
+    content: "{{ erpnext_site_name }}\n"
+    dest: /home/{{ erpnext_user_name }}/frappe-bench/sites/currentsite.txt
+    owner: "{{ erpnext_user_name }}"
+    group: "{{ erpnext_user_name }}"
+    mode: "0644"
+    force: false
+  when: erpnext_enabled | bool
+
+- name: Set site host_name for IIAB subpath
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.shell: |
+    python3 - <<'PY'
+    import json, subprocess
+    path = 'sites/{{ erpnext_site_name }}/site_config.json'
+    want = '{{ erpnext_host_name }}'
+    if json.load(open(path)).get('host_name') != want:
+        subprocess.run(['/home/{{ erpnext_user_name }}/.local/bin/bench', '--site', '{{ erpnext_site_name }}', 'set-config', 'host_name', want], check=True)
+        print('UPDATED host_name')
+    PY
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+  register: erpnext_host_name_cfg
+  changed_when: "'UPDATED' in erpnext_host_name_cfg.stdout"
