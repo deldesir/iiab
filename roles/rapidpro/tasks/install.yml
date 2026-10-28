@@ -149,7 +149,7 @@
 
 - name: Install required Python version via uv
   ansible.builtin.shell: |
-    {{ uv_bin }} python install
+    {{ rapidpro_uv_bin }} python install
   args:
     chdir: "{{ rapidpro_dir }}"
   become: true
@@ -157,7 +157,7 @@
   changed_when: false
 
 - name: Create uv virtual environment (only when missing; a routine run never clears it)
-  ansible.builtin.command: "{{ uv_bin }} venv"
+  ansible.builtin.command: "{{ rapidpro_uv_bin }} venv"
   args:
     chdir: "{{ rapidpro_dir }}"
     creates: "{{ rapidpro_dir }}/.venv/bin/python"
@@ -168,7 +168,7 @@
 # dependency on each run and once brought in a database driver change that took the gateway
 # down). A dependency change is a commit to the fork.
 - name: Sync dependencies from the lock file (uv sync --frozen)
-  ansible.builtin.command: "{{ uv_bin }} sync --frozen"
+  ansible.builtin.command: "{{ rapidpro_uv_bin }} sync --frozen"
   args:
     chdir: "{{ rapidpro_dir }}"
   register: rapidpro_sync

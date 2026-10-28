@@ -1,0 +1,26 @@
+---
+# The deployment-specific settings file and the log directory.
+
+# settings_common.py is tracked in the fork and comes with the code; everything deployment-specific - the secret
+# key, the DB password, tokens, hosts, the sub-path - is rendered here into the ignored settings.py, readable by
+# the service user only. Tagged so it can be re-rendered alone after a local_vars.yml change.
+- name: Configure RapidPro settings
+  ansible.builtin.template:
+    src: settings.py.j2
+    dest: "{{ rapidpro_dir }}/temba/settings.py"
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+    mode: "0600"
+  become: true
+  register: rapidpro_settings
+  tags: [settings]
+
+- name: Ensure RapidPro log directory permissions (Hardening)
+  ansible.builtin.file:
+    path: /var/log/rapidpro
+    state: directory
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
+    mode: "0755"
+    recurse: true
+  become: true
