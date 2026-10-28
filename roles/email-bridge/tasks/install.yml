@@ -41,9 +41,11 @@
   notify: restart email-bridge
 
 - name: Add email-bridge directory to git safe directories (uv quirk)
-  ansible.builtin.command: git config --global --add safe.directory {{ email_bridge_home }}
-  changed_when: false
-  ignore_errors: true
+  ansible.builtin.shell: set -o pipefail && git config --global --get-all safe.directory | grep -qxF "{{ email_bridge_home }}" || { git config --global --add safe.directory "{{ email_bridge_home }}" && echo added; }
+  args:
+    executable: /bin/bash
+  register: email_bridge_safe_dir
+  changed_when: "'added' in email_bridge_safe_dir.stdout"
   become: true
 
 - name: Sync email-bridge Python dependencies (uv sync)
@@ -114,12 +116,17 @@
   become: true
   notify: restart email-bridge
 
+- name: Check for the auto-generated send-auth token file
+  ansible.builtin.stat:
+    path: "{{ iiab_etc_path }}/email_bridge_send_auth.token"
+  register: email_bridge_token_file
+
 - name: Secure the auto-generated send-auth token file (0600)
   ansible.builtin.file:
     path: "{{ iiab_etc_path }}/email_bridge_send_auth.token"
     mode: "0600"
   become: true
-  ignore_errors: true
+  when: email_bridge_token_file.stat.exists   # the service writes it on first start
 
 - name: Install email-bridge systemd service
   ansible.builtin.template:

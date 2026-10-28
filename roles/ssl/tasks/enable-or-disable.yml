@@ -20,4 +20,4 @@
   when:
     - not ssl_enabled | bool or not iiab_ssl_certbot_auto_renew | default(True) | bool
     - not is_proot
-  ignore_errors: true
+  failed_when: false   # certbot may not be installed on a box that never enabled TLS

@@ -6,11 +6,11 @@
   args:
     executable: /bin/bash
 
-- name: Stop 'anki' systemd service for safety (RED ERROR CAN BE IGNORED!)
+- name: Stop 'anki' systemd service for safety before the files are replaced
   ansible.builtin.systemd:
     name: anki
     state: stopped
-  ignore_errors: true
+  when: anki_installed is defined   # the unit exists only once installed
 
 - name: "Install package: python3-venv"
   ansible.builtin.package:
