@@ -100,7 +100,7 @@
     dest: /etc/nginx/conf.d/organized.conf
   become: true
   when: organized_enabled
-  notify: reload nginx
+  notify: Reload nginx
 
 - name: Remove Nginx config, if disabled
   ansible.builtin.file:
@@ -108,4 +108,4 @@
     state: absent
   become: true
   when: not organized_enabled
-  notify: reload nginx
+  notify: Reload nginx

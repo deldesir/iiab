@@ -335,12 +335,12 @@
   when: rapidpro_collectstatic is changed and not is_proot
 
 - name: Restart RapidPro Gunicorn if code or settings changed (Android)
-  ansible.builtin.shell: /usr/local/bin/pdsm restart rapidpro-server
+  ansible.builtin.command: /usr/local/bin/pdsm restart rapidpro-server
   become: true
   when: rapidpro_collectstatic is changed and is_proot
 
 - name: Start RapidPro Watchdog (Android) ensures services stay running
-  ansible.builtin.shell: /usr/local/bin/pdsm start rapidpro-watchdog
+  ansible.builtin.command: /usr/local/bin/pdsm start rapidpro-watchdog
   become: true
   when: is_proot
 

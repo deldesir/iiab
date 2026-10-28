@@ -46,17 +46,21 @@
 # chain: talksync, talkprep tools, S-34 imports). They must exist BEFORE
 # `uv sync` or the editable sources fail to resolve. Clone-if-absent only —
 # never reset an existing tree, which may carry local work.
-- name: Clone TalkMaster library (if absent)
-  ansible.builtin.shell: git clone --branch "{{ ai_gateway_talkmaster_version }}" --origin origin "{{ ai_gateway_talkmaster_repo }}" "{{ ai_gateway_talkmaster_dir }}"
-  args:
-    creates: "{{ ai_gateway_talkmaster_dir }}/.git"
+- name: Clone TalkMaster library (if absent; an existing tree is never touched)
+  ansible.builtin.git:
+    repo: "{{ ai_gateway_talkmaster_repo }}"
+    dest: "{{ ai_gateway_talkmaster_dir }}"
+    version: "{{ ai_gateway_talkmaster_version }}"
+    update: false
   become: true
   become_user: "{{ ai_gateway_user }}"
 
-- name: Clone JWLinker library (if absent)
-  ansible.builtin.shell: git clone --branch "{{ ai_gateway_jwlinker_version }}" --origin origin "{{ ai_gateway_jwlinker_repo }}" "{{ ai_gateway_jwlinker_dir }}"
-  args:
-    creates: "{{ ai_gateway_jwlinker_dir }}/.git"
+- name: Clone JWLinker library (if absent; an existing tree is never touched)
+  ansible.builtin.git:
+    repo: "{{ ai_gateway_jwlinker_repo }}"
+    dest: "{{ ai_gateway_jwlinker_dir }}"
+    version: "{{ ai_gateway_jwlinker_version }}"
+    update: false
   become: true
   become_user: "{{ ai_gateway_user }}"
 
@@ -74,7 +78,7 @@
   become: true
   become_user: "{{ ai_gateway_user }}"
   register: ai_gateway_git
-  notify: restart ai-gateway
+  notify: Restart ai-gateway
 
 - name: Set ownership of AI Gateway directory
   ansible.builtin.file:
@@ -138,7 +142,7 @@
     group: "{{ ai_gateway_user }}"
     mode: "0600"
   become: true
-  notify: restart ai-gateway
+  notify: Restart ai-gateway
 
 # .env is regenerated on every run, so any secret that lives only there is
 # one provisioning away from being lost. .env.local is the machine-local
@@ -200,7 +204,7 @@
     dest: /etc/systemd/system/ai-gateway.service
     mode: "0644"
   become: true
-  notify: restart ai-gateway
+  notify: Restart ai-gateway
 
 - name: Install MemPalace compaction systemd service
   ansible.builtin.template:

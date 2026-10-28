@@ -37,7 +37,7 @@
     dest: /etc/nginx/conf.d/wuzapi.conf
   become: true
   when: wuzapi_enabled
-  notify: reload nginx
+  notify: Reload nginx
 
 - name: Remove Nginx config for Wuzapi, if not wuzapi_enabled
   ansible.builtin.file:
@@ -45,4 +45,4 @@
     state: absent
   become: true
   when: not wuzapi_enabled
-  notify: reload nginx
+  notify: Reload nginx

@@ -14,4 +14,4 @@
     dest: "{{ nginx_conf_dir | default('/etc/nginx/conf.d') }}/ai-gateway.conf"
     mode: "0644"
   become: true
-  notify: restart nginx
+  notify: Restart nginx

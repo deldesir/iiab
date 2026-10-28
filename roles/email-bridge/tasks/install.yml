@@ -38,14 +38,14 @@
     - pyproject.toml
     - create_email_channel.py
   become: true
-  notify: restart email-bridge
+  notify: Restart email-bridge
 
 - name: Add email-bridge directory to git safe directories (uv quirk)
-  ansible.builtin.shell: set -o pipefail && git config --global --get-all safe.directory | grep -qxF "{{ email_bridge_home }}" || { git config --global --add safe.directory "{{ email_bridge_home }}" && echo added; }
-  args:
-    executable: /bin/bash
-  register: email_bridge_safe_dir
-  changed_when: "'added' in email_bridge_safe_dir.stdout"
+  community.general.git_config:
+    scope: global
+    name: safe.directory
+    value: "{{ email_bridge_home }}"
+    add_mode: add
   become: true
 
 - name: Sync email-bridge Python dependencies (uv sync)
@@ -114,7 +114,7 @@
     group: "{{ email_bridge_user }}"
     mode: "0600"
   become: true
-  notify: restart email-bridge
+  notify: Restart email-bridge
 
 - name: Check for the auto-generated send-auth token file
   ansible.builtin.stat:
@@ -134,7 +134,7 @@
     dest: /etc/systemd/system/email-bridge.service
     mode: "0644"
   become: true
-  notify: restart email-bridge
+  notify: Restart email-bridge
 
 # Failure alerting: any unit carrying `OnFailure=notify-failure@%n.service`
 # emails the operator through this bridge when it enters failed state.

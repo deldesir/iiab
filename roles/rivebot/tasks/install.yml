@@ -27,17 +27,13 @@
     mode: "0755"
   become: true
 
-- name: Check if rivebot directory is already safe
-  ansible.builtin.command: git config --global --get-all safe.directory
-  register: git_safe_dirs
-  changed_when: false
-  ignore_errors: true
-
 - name: Add rivebot directory to git safe directories
-  ansible.builtin.command: git config --global --add safe.directory {{ rivebot_home }}
+  community.general.git_config:
+    scope: global
+    name: safe.directory
+    value: "{{ rivebot_home }}"
+    add_mode: add
   become: true
-  when: rivebot_home not in (git_safe_dirs.stdout_lines | default([]))
-  changed_when: true   # runs only when the entry is absent
 
 - name: Clone / update RiveBot repository
   ansible.builtin.git:
@@ -47,7 +43,7 @@
     force: true
     update: true
   become: true
-  notify: restart rivebot
+  notify: Restart rivebot
 
 - name: Set ownership of RiveBot directory
   ansible.builtin.file:
@@ -110,7 +106,7 @@
     group: "{{ rivebot_user }}"
     mode: "0600"
   become: true
-  notify: restart rivebot
+  notify: Restart rivebot
 
 - name: Install RiveBot systemd service
   ansible.builtin.template:
@@ -118,7 +114,7 @@
     dest: /etc/systemd/system/rivebot.service
     mode: "0644"
   become: true
-  notify: restart rivebot
+  notify: Restart rivebot
 
 # RECORD RiveBot AS INSTALLED
 

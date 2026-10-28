@@ -1,15 +1,15 @@
 ---
-- name: restart wuzapi
-  systemd:
+- name: Restart wuzapi
+  ansible.builtin.systemd:
     name: wuzapi
     state: restarted
-    daemon_reload: yes
-  become: yes
+    daemon_reload: true
+  become: true
   when: not is_proot
 
-- name: reload nginx
-  systemd:
+- name: Reload nginx
+  ansible.builtin.systemd:
     name: nginx
     state: reloaded
-  become: yes
+  become: true
   when: not is_proot

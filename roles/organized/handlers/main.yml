@@ -1,18 +1,18 @@
 ---
-- name: reload nginx
-  systemd:
+- name: Reload nginx
+  ansible.builtin.systemd:
     name: nginx
     state: reloaded
-  become: yes
+  become: true
 
-- name: restart organized
-  systemd:
+- name: Restart organized
+  ansible.builtin.systemd:
     name: organized
     state: restarted
-  become: yes
+  become: true
 
-- name: restart organized-celery
-  systemd:
+- name: Restart organized-celery
+  ansible.builtin.systemd:
     name: organized-celery
     state: restarted
-  become: yes
+  become: true

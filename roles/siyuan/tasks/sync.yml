@@ -57,4 +57,4 @@
     src: siyuan-sync.conf.j2
     dest: /etc/nginx/sites-enabled/siyuan-sync.conf
   become: true
-  notify: reload nginx
+  notify: Reload nginx

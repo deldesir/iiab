@@ -1,8 +1,8 @@
 ---
-- name: restart email-bridge
-  systemd:
+- name: Restart email-bridge
+  ansible.builtin.systemd:
     name: email-bridge
     state: restarted
-    daemon_reload: yes
-  become: yes
+    daemon_reload: true
+  become: true
   when: email_bridge_enabled | default(true)
