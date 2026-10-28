@@ -1,0 +1,70 @@
+---
+# The systemd units bench generates, with the fixes they need, linked into /etc/systemd/system;
+# the bench's Redis services started (install-app and migrate need them).
+
+- name: Generate Systemd Services (replaces Supervisor)
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.shell: |
+    set -o pipefail
+    before=$(cat config/systemd/* 2>/dev/null | sha256sum)
+    yes | ~/.local/bin/bench setup systemd
+    [ "$before" = "$(cat config/systemd/* | sha256sum)" ] || echo "UNITS CHANGED"
+  args:
+    executable: /bin/bash
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+  register: erpnext_systemd_units
+  changed_when: "'UNITS CHANGED' in erpnext_systemd_units.stdout"
+
+- name: Increase gunicorn worker timeout to 300s (setup_wizard.setup_complete needs >120s)
+  ansible.builtin.replace:
+    path: /home/{{ erpnext_user_name }}/frappe-bench/config/systemd/frappe-bench-frappe-web.service
+    regexp: "-t \\d+"
+    replace: "-t 300"
+  when: erpnext_enabled | bool
+
+- name: Set gunicorn workers to (2 * CPU cores) + 1 for optimal concurrency
+  ansible.builtin.replace:
+    path: /home/{{ erpnext_user_name }}/frappe-bench/config/systemd/frappe-bench-frappe-web.service
+    regexp: "-w \\d+"
+    replace: "-w {{ (2 * (ansible_processor_vcpus | default(2) | int)) + 1 }}"
+  when: erpnext_enabled | bool
+
+- name: Fix bench setup systemd bug (ExecStart=None in worker/scheduler services)
+  ansible.builtin.replace:
+    path: "/home/{{ erpnext_user_name }}/frappe-bench/config/systemd/{{ item }}"
+    regexp: "ExecStart=None "
+    replace: "ExecStart=/home/{{ erpnext_user_name }}/.local/bin/bench "
+  loop:
+    - frappe-bench-frappe-schedule.service
+    - frappe-bench-frappe-default-worker@.service
+    - frappe-bench-frappe-short-worker@.service
+    - frappe-bench-frappe-long-worker@.service
+  when: erpnext_enabled | bool
+
+- name: Setup Systemd Symlinks
+  ansible.builtin.shell: |
+    set -o pipefail
+    links() { find /etc/systemd/system -maxdepth 1 -name 'frappe-bench*' -printf '%p %l\n' | sort | sha256sum; }
+    before=$(links)
+    ln -sf /home/{{ erpnext_user_name }}/frappe-bench/config/systemd/* /etc/systemd/system/
+    systemctl daemon-reload
+    [ "$before" = "$(links)" ] || echo "RELINKED"
+  when: erpnext_enabled | bool
+  register: erpnext_systemd_links
+  changed_when: "'RELINKED' in erpnext_systemd_links.stdout"
+  args:
+    executable: /bin/bash
+
+- name: Start Bench Redis Services (required for install-app and migrate)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - frappe-bench-redis-cache.service
+    - frappe-bench-redis-queue.service
+  when: erpnext_enabled | bool

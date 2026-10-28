@@ -1,0 +1,26 @@
+---
+# nginx in front of the site: the static assets readable, the scheme map for a TLS-terminating
+# proxy, the IIAB sub-path proxy.
+
+- name: Grant Nginx access to Frappe static assets
+  ansible.builtin.shell: chmod -c a+x /home/{{ erpnext_user_name }} /home/{{ erpnext_user_name }}/frappe-bench && chmod -Rc a+rX /home/{{ erpnext_user_name }}/frappe-bench/sites
+  when: erpnext_enabled | bool
+  register: erpnext_static_perms
+  changed_when: erpnext_static_perms.stdout | length > 0
+
+- name: Ensure Nginx knows the client's scheme behind a TLS-terminating proxy ($fwd_proto map in the http context; boxes whose nginx.conf predates it)
+  ansible.builtin.lineinfile:
+    path: /etc/nginx/nginx.conf
+    regexp: "^\\s*map \\$http_x_forwarded_proto \\$fwd_proto"
+    line: "    map $http_x_forwarded_proto $fwd_proto { default $scheme; https https; }"
+    insertafter: "^http \\{"
+  when: erpnext_enabled | bool
+
+- name: Configure IIAB Nginx Sub-Path Proxy for ERPNext
+  ansible.builtin.template:
+    mode: "0644"
+    src: erpnext-nginx.conf.j2
+    dest: /etc/nginx/conf.d/erpnext-nginx.conf
+  notify:
+    - Restart nginx
+  when: erpnext_enabled | bool

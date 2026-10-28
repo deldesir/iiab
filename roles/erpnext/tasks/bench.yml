@@ -1,0 +1,156 @@
+---
+# The bench: initialised once, its apps fetched once, then every app moved to its fork's branch,
+# the requirements reinstalled and the compiled bundles wiped so the build starts clean.
+
+# Clean up partial bench directory from a previously failed init.
+# Without this, the 'creates:' guard skips re-init and the install
+# is stuck with a broken bench forever.
+- name: Check if frappe-bench exists but is incomplete (missing frappe app or venv)
+  ansible.builtin.shell: |
+    test -d /home/{{ erpnext_user_name }}/frappe-bench || exit 0
+    test -f /home/{{ erpnext_user_name }}/frappe-bench/apps/frappe/pyproject.toml && \
+    test -f /home/{{ erpnext_user_name }}/frappe-bench/env/bin/python && \
+    echo "COMPLETE" || echo "INCOMPLETE"
+  register: bench_completeness
+  changed_when: false
+  when: erpnext_enabled | bool
+
+- name: Remove incomplete frappe-bench directory from a previous failed init
+  ansible.builtin.file:
+    path: /home/{{ erpnext_user_name }}/frappe-bench
+    state: absent
+  when:
+    - erpnext_enabled | bool
+    - bench_completeness.stdout is defined
+    - bench_completeness.stdout == "INCOMPLETE"
+
+- name: Init frappe bench
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.command: ~/.local/bin/bench init frappe-bench --frappe-path https://github.com/deldesir/frappe.git --frappe-branch {{ erpnext_version }} {% if erpnext_version == 'develop' %}--python 3.14{% endif %}
+  args:
+    chdir: /home/{{ erpnext_user_name }}
+    creates: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+
+# The get-app tasks below use `creates:` guards, so a FAILED get-app (e.g. a
+# yarn network timeout) leaves a partial apps/<name> dir that skips forever.
+# An app is only truly installed once bench records it in sites/apps.txt.
+- name: Remove partially-installed bench apps (on disk but absent from apps.txt)
+  ansible.builtin.shell: |
+    [ -f /home/{{ erpnext_user_name }}/frappe-bench/sites/apps.txt ] || exit 0
+    for d in /home/{{ erpnext_user_name }}/frappe-bench/apps/*/; do
+      app=$(basename "$d")
+      grep -qx "$app" /home/{{ erpnext_user_name }}/frappe-bench/sites/apps.txt || rm -rf "$d"
+    done
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: erpnext_enabled | bool
+
+- name: Install ERPNext app in bench
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.command: ~/.local/bin/bench get-app https://github.com/deldesir/erpnext.git --branch {{ erpnext_version }}
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+    creates: /home/{{ erpnext_user_name }}/frappe-bench/apps/erpnext
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when: erpnext_enabled | bool
+
+- name: Install extra Frappe apps in bench (HR, CRM, etc.)
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.command: ~/.local/bin/bench get-app {{ item.name }} --branch {{ item.branch }}
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+    creates: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item.app_name }}
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  loop: "{{ erpnext_extra_apps }}"
+  when: erpnext_enabled | bool
+
+- name: Ensure correct ownership of Frappe apps directory (prevents permission errors on code pull)
+  ansible.builtin.command: chown -Rc {{ erpnext_user_name }}:{{ erpnext_user_name }} /home/{{ erpnext_user_name }}/frappe-bench/apps
+  when: erpnext_enabled | bool
+  register: erpnext_apps_chown
+  changed_when: erpnext_apps_chown.stdout | length > 0
+
+- name: Pull latest code from fork for frappe/erpnext
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.shell: |
+    if git remote | grep -q "^origin$"; then
+        REMOTE="origin"
+    else
+        REMOTE=$(git config branch.$(git rev-parse --abbrev-ref HEAD).remote || echo "")
+        if [ -z "$REMOTE" ] || ! git remote | grep -q "^$REMOTE$"; then
+            REMOTE=$(git remote | head -n 1)
+        fi
+    fi
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    OLD=$(git rev-parse HEAD)
+    if [ -n "$REMOTE" ] && [ -n "$BRANCH" ]; then
+        [ -f .git/shallow ] && git fetch --unshallow $REMOTE $BRANCH 2>/dev/null || git fetch $REMOTE $BRANCH
+        git reset --hard $REMOTE/$BRANCH
+    fi
+    [ "$OLD" = "$(git rev-parse HEAD)" ] || echo "UPDATED to $(git rev-parse --short HEAD)"
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item }}
+  loop:
+    - frappe
+    - erpnext
+  when: erpnext_enabled | bool
+  ignore_errors: true
+  register: erpnext_core_pull
+  changed_when: "'UPDATED' in erpnext_core_pull.stdout"
+
+- name: Pull latest code from fork for extra apps
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.shell: |
+    if git remote | grep -q "^origin$"; then
+        REMOTE="origin"
+    else
+        REMOTE=$(git config branch.$(git rev-parse --abbrev-ref HEAD).remote || echo "")
+        if [ -z "$REMOTE" ] || ! git remote | grep -q "^$REMOTE$"; then
+            REMOTE=$(git remote | head -n 1)
+        fi
+    fi
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    OLD=$(git rev-parse HEAD)
+    if [ -n "$REMOTE" ] && [ -n "$BRANCH" ]; then
+        [ -f .git/shallow ] && git fetch --unshallow $REMOTE $BRANCH 2>/dev/null || git fetch $REMOTE $BRANCH
+        git reset --hard $REMOTE/$BRANCH
+    fi
+    [ "$OLD" = "$(git rev-parse HEAD)" ] || echo "UPDATED to $(git rev-parse --short HEAD)"
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item.app_name }}
+  loop: "{{ erpnext_extra_apps }}"
+  when: erpnext_enabled | bool
+  ignore_errors: true
+  register: erpnext_extra_pull
+  changed_when: "'UPDATED' in erpnext_extra_pull.stdout"
+
+- name: Update Python/Node dependencies after code pull (prevents ImportError on new packages)
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.command: /home/{{ erpnext_user_name }}/.local/bin/bench setup requirements
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    CYPRESS_INSTALL_BINARY: "0"
+  when: erpnext_enabled | bool
+  changed_when: true   # reinstalls the Python and Node requirements on every run
+
+- name: Wipe compiled JS/CSS bundles (forces clean bench build, avoids stale hashes)
+  ansible.builtin.shell: |
+    rm -rf /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/*/dist
+    rm -f  /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/assets.json
+    rm -f  /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/assets-rtl.json
+  when: erpnext_enabled | bool
+  changed_when: true   # always wipes; install.yml runs at install or --reinstall only, and within it the build is unconditional (the flag checks the file this removes)

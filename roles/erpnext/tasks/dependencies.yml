@@ -1,0 +1,246 @@
+---
+# The ground the bench stands on: MariaDB and Node (their roles), the OS packages, wkhtmltopdf,
+# the git hooks, yarn, the kernel setting Redis wants, the bench user with its tools and its
+# limited sudo rule.
+
+- name: "Set 'mysql_install: True' and 'mysql_enabled: True'"
+  ansible.builtin.set_fact:
+    mysql_install: true
+    mysql_enabled: true
+
+- name: MYSQL - run 'mysql' role (attempt to install & enable MySQL / MariaDB)
+  ansible.builtin.include_role:
+    name: mysql
+
+- name: FAIL (STOP THE INSTALL) IF 'mysql_installed is undefined'
+  ansible.builtin.fail:
+    msg: "ERPNext install cannot proceed, as MySQL / MariaDB is not installed."
+  when: mysql_installed is undefined
+
+- name: "Set 'nodejs_install: True' and 'nodejs_enabled: True'"
+  ansible.builtin.set_fact:
+    nodejs_install: true
+    nodejs_enabled: true
+
+- name: NODEJS - run 'nodejs' role (attempt to install & enable Node.js)
+  ansible.builtin.include_role:
+    name: nodejs
+
+- name: FAIL (STOP THE INSTALL) IF 'nodejs_installed is undefined'
+  ansible.builtin.fail:
+    msg: "ERPNext install cannot proceed, as Node.js is not installed."
+  when: nodejs_installed is undefined
+
+- name: Record (initial) disk space used
+  ansible.builtin.shell: set -o pipefail && df -B1 --output=used / | tail -1
+  register: df1
+  changed_when: false
+  args:
+    executable: /bin/bash
+
+- name: Install ERPNext system dependencies
+  ansible.builtin.apt:
+    name:
+      - redis-server
+      - python3-pip
+      - python3-venv
+      - libmysqlclient-dev
+      - python3-dev
+      - pkg-config
+      - pipx
+      - curl
+      - git
+    state: present
+  when: erpnext_enabled | bool
+
+# wkhtmltopdf renders PDFs (invoices, POS receipts). Ubuntu 24.10+ and Debian 13 dropped the
+# package, so the OS repository is tried first and the upstream wkhtmltox build for jammy
+# second (it installs cleanly on 26.04: its libssl3 dependency is provided by libssl3t64).
+# Without either, the install goes on and PDF printing stays unavailable until one is added.
+- name: Does the OS repository offer wkhtmltopdf?
+  ansible.builtin.shell: "set -o pipefail && apt-cache policy wkhtmltopdf | grep -q 'Candidate: [0-9]'"
+  register: wkhtmltopdf_apt
+  failed_when: false
+  changed_when: false
+  when: erpnext_enabled | bool
+  args:
+    executable: /bin/bash
+
+- name: Install wkhtmltopdf from the OS repository
+  ansible.builtin.apt:
+    name: wkhtmltopdf
+    state: present
+  when: erpnext_enabled | bool and wkhtmltopdf_apt.rc == 0
+
+- name: Install wkhtmltopdf from the upstream wkhtmltox release (no OS package)
+  when: erpnext_enabled | bool and wkhtmltopdf_apt.rc != 0
+
+  block:
+    - name: Read the package architecture (bare ansible_* facts are undefined in role runs)
+      ansible.builtin.command: dpkg --print-architecture
+      register: wkhtmltox_arch
+      changed_when: false
+
+    - name: Download the wkhtmltox release for this architecture, version {{ wkhtmltox_version }}
+      ansible.builtin.get_url:
+        url: "https://github.com/wkhtmltopdf/packaging/releases/download/{{ wkhtmltox_version }}/wkhtmltox_{{ wkhtmltox_version }}.jammy_{{ wkhtmltox_arch.stdout }}.deb"
+        dest: /tmp/wkhtmltox.deb
+        mode: "0644"
+        timeout: 120
+
+    - name: Install the wkhtmltox package (apt resolves its dependencies)
+      ansible.builtin.apt:
+        deb: /tmp/wkhtmltox.deb
+  rescue:
+    - name: "Stop: wkhtmltopdf could not be installed on this OS"
+      ansible.builtin.debug:
+        msg: "wkhtmltopdf is unavailable here: PDF printing (invoices, receipts) will not work until it is installed by hand. The ERPNext install continues."
+- name: Ensure git-hooks directory exists in /etc
+  ansible.builtin.file:
+    path: /etc/git-hooks
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: erpnext_enabled | bool
+
+- name: Deploy system-wide secure git hooks (PAT leak prevention)
+  ansible.builtin.copy:
+    src: "git-hooks/{{ item }}"
+    dest: "/etc/git-hooks/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - pre-commit
+    - post-commit
+    - pre-push
+    - README.md
+  when: erpnext_enabled | bool
+
+- name: Configure system-wide core.hooksPath
+  ansible.builtin.shell: '[ "$(git config --system --get core.hooksPath)" = /etc/git-hooks ] || { git config --system core.hooksPath /etc/git-hooks && echo set; }'
+  when: erpnext_enabled | bool
+  register: erpnext_hookspath
+  changed_when: "'set' in erpnext_hookspath.stdout"
+
+- name: Install yarn globally via npm
+  community.general.npm:
+    name: yarn
+    global: true
+    state: present
+  when: erpnext_enabled | bool
+
+- name: Ensure vm.overcommit_memory=1 persists across reboots (Redis requirement)
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-iiab-erpnext-redis.conf
+    content: "vm.overcommit_memory=1\n"
+    mode: "0644"
+  become: true
+  when: erpnext_enabled | bool
+
+- name: Apply vm.overcommit_memory=1 immediately (no module, no deprecation)
+  ansible.builtin.command: sysctl -w vm.overcommit_memory=1
+  become: true
+  changed_when: false
+  when: erpnext_enabled | bool
+
+- name: Configure MariaDB for ERPNext
+  ansible.builtin.template:
+    mode: "0644"
+    src: erpnext-mysqld.cnf.j2
+    dest: /etc/mysql/mariadb.conf.d/99-erpnext.cnf
+  notify: Restart mariadb
+  when: erpnext_enabled | bool
+
+- name: Create frappe user
+  ansible.builtin.user:
+    name: "{{ erpnext_user_name }}"
+    shell: /bin/bash
+    home: /home/{{ erpnext_user_name }}
+    groups: www-data
+    append: true
+  when: erpnext_enabled | bool
+
+- name: Ensure pipx is installed and in path for frappe user
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.command: pipx ensurepath
+  args:
+    creates: /home/{{ erpnext_user_name }}/.local/bin
+  when: erpnext_enabled | bool
+
+- name: Install frappe-bench globally for frappe user
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.command: pipx install frappe-bench
+  args:
+    creates: /home/{{ erpnext_user_name }}/.local/bin/bench
+  when: erpnext_enabled | bool
+
+- name: Install uv via pipx for frappe user (required by modern bench init)
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.command: pipx install uv
+  args:
+    creates: /home/{{ erpnext_user_name }}/.local/bin/uv
+  when: erpnext_enabled | bool
+
+# frappe-bench unconditionally calls `sudo supervisorctl status` during
+# bench init / get-app.  Without supervisor + passwordless sudo, the
+# entire ERPNext installation crashes.
+- name: Install supervisor (required by frappe-bench tool)
+  ansible.builtin.apt:
+    name: supervisor
+    state: present
+  when: erpnext_enabled | bool
+
+- name: Ensure supervisor is running
+  ansible.builtin.systemd:
+    name: supervisor
+    state: started
+    enabled: true
+  when: erpnext_enabled | bool
+
+- name: Make yarn resilient to slow registries (bench app installs pull hundreds of tarballs)
+  ansible.builtin.copy:
+    dest: "/home/{{ erpnext_user_name }}/.yarnrc"
+    content: |
+      network-timeout 600000
+      network-concurrency 4
+    owner: "{{ erpnext_user_name }}"
+    group: "{{ erpnext_user_name }}"
+    mode: "0644"
+  when: erpnext_enabled | bool
+
+# systemctl is limited to the bench's own targets, each spelled out: an unrestricted systemctl is
+# root, and sudo-rs (the default sudo since Ubuntu 26.04) refuses wildcards in command arguments.
+- name: Grant frappe user passwordless sudo for bench tooling
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/frappe
+    content: |
+      {% set cmds = ['/usr/bin/systemctl daemon-reload'] %}
+      {% for unit in ['frappe-bench.target', 'frappe-bench-web.target', 'frappe-bench-workers.target', 'frappe-bench-redis.target'] %}
+      {% for verb in ['start', 'stop', 'restart', 'reload', 'status'] %}
+      {% set _ = cmds.append('/usr/bin/systemctl ' ~ verb ~ ' ' ~ unit) %}
+      {% endfor %}
+      {% endfor %}
+      Cmnd_Alias BENCH_UNITS = {{ cmds | join(', ') }}
+      {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl
+      {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: /usr/sbin/nginx
+      {{ erpnext_user_name }} ALL=(ALL) NOPASSWD: BENCH_UNITS
+    mode: "0440"
+    validate: "visudo -cf %s"
+  when: erpnext_enabled | bool
+
+- name: Instruct uv to fetch specific Python version if needed
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.command: ~/.local/bin/uv python install 3.14
+  args:
+    creates: /home/{{ erpnext_user_name }}/.local/share/uv/python
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when:
+    - erpnext_enabled | bool
+    - erpnext_version == 'develop'
