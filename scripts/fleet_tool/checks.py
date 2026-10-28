@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .config import CATALOG, HUB_BACKUPS, INVENTORY, LEVELS, STATE, TARGETS, label, load_catalog, paint, parse_conf, select_boxes, state
+from .config import CATALOG, HUB_BACKUPS, INVENTORY, LEVELS, SCRIPTS, STATE, TARGETS, label, load_catalog, paint, parse_conf, select_boxes, state
 from .releases import heads_of, manifest_apps, read_manifest
 from .site import kuma_heartbeats, latest_report, load_push_conf, push, site_get
 from .state import latest_checks, write_check
@@ -332,6 +332,34 @@ def check_box(box: dict, inv: dict, catalog: dict) -> dict:
     return evaluate(box, collect_pull(box, catalog), inv, catalog)
 
 
+INSTALLED_BIN = Path("/usr/local/sbin")
+INSTALLED_LIB = Path("/usr/local/lib")
+
+
+def copy_drift(repo: Path, installed_bin: Path, installed_lib: Path) -> list[str]:
+    """The files of the fleet tool whose installed copy differs from the repository's, is missing,
+    or is left over (a module the repository no longer has): empty when the copies agree.
+    `install-fleet.sh` writes the copies; a pull that touched the tool without that script
+    afterwards is what this finds."""
+    pairs = [("fleet", repo / "fleet", installed_bin / "fleet")]
+    if (repo / "fleet-kuma-seed").exists():
+        pairs.append(("fleet-kuma-seed", repo / "fleet-kuma-seed", installed_bin / "fleet-kuma-seed"))
+    names = {p.name for p in (repo / "fleet_tool").glob("*.py")} | {p.name for p in (installed_lib / "fleet_tool").glob("*.py")}
+    for n in sorted(names):
+        pairs.append((f"fleet_tool/{n}", repo / "fleet_tool" / n, installed_lib / "fleet_tool" / n))
+    return [name for name, a, b in pairs if not (a.exists() and b.exists() and a.read_bytes() == b.read_bytes())]
+
+
+def installed_copy_drift() -> list[str]:
+    """copy_drift for the hub: the installed copies against the repository at SCRIPTS. Nothing
+    to report when the tool runs from the repository itself (a worktree, the tests) or when
+    there is no repository beside the copies to compare with."""
+    running = Path(__file__).resolve().parent.parent
+    if running == SCRIPTS.resolve() or not (SCRIPTS / "fleet_tool" / "cli.py").exists():
+        return []
+    return copy_drift(SCRIPTS, INSTALLED_BIN, INSTALLED_LIB)
+
+
 def fmt_days(v) -> str:
     return "?" if v is None else f"{v}d"
 
@@ -343,12 +371,15 @@ def fmt_age(h) -> str:
     return f"{h:.0f}h" if h < 48 else f"{h / 24:.1f}d"
 
 
-def build_digest(inv: dict, checks: dict[str, dict]) -> str:
+def build_digest(inv: dict, checks: dict[str, dict], hub_notes: list[str] | None = None) -> str:
+    """The digest text: the counts, the release, one line per box with its findings. hub_notes
+    are lines about the hub itself (the tool's copies drifted), printed before the boxes."""
     tz = ZoneInfo(inv["defaults"].get("timezone") or "UTC")
     now = dt.datetime.now(tz).strftime("%a %d %b %H:%M")
     counts = {s: sum(1 for c in checks.values() if c.get("status") == s) for s in ("OK", "WARN", "STALE", "CRIT")}
     lines = [f"Fleet {now}: " + ", ".join(f"{v} {k.lower()}" for k, v in counts.items() if v) + f" of {len(inv['boxes'])}",
              f"Release: {inv.get('current_release') or 'none'}"]
+    lines += [f"    · WARN: {n}" for n in (hub_notes or [])]
     for b in sorted(inv["boxes"], key=lambda b: (b["canary_rank"], b["id"])):
         c = checks.get(b["id"])
         if not c:
@@ -415,8 +446,14 @@ def cmd_check(a, inv):
               f" domain {fmt_days(r.get('domain_days_left'))} ({r.get('domain_registrar') or '?'})")
         for x in r.get("findings", []):
             print(f"   {state(x['level'], 5)} {x['message']}")
+    hub_notes = []
+    drift = installed_copy_drift()
+    if drift:
+        hub_notes.append("hub: the installed fleet tool differs from the repository (" + ", ".join(drift[:4])
+                         + (", …" if len(drift) > 4 else "") + "): run scripts/fleet-install/install-fleet.sh")
+        print(f"   {state('WARN', 5)} {hub_notes[-1]}")
     all_checks = latest_checks(inv)
-    (STATE / "latest-digest.txt").write_text(build_digest(inv, all_checks) + "\n")
+    (STATE / "latest-digest.txt").write_text(build_digest(inv, all_checks, hub_notes) + "\n")
     os.chmod(STATE / "latest-digest.txt", 0o644)
     if not a.no_push:
         push(inv, quiet=True)

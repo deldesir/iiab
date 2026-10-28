@@ -189,7 +189,8 @@ has the runbook). The list below is what those scripts install, for a first buil
 - `bash scripts/fleet-install/install-fleet.sh`: the entry point to `/usr/local/sbin/fleet`, the
   package to `/usr/local/lib/fleet_tool`, `fleet-kuma-seed` beside the entry point (copies, not
   symlinks, so the running hub never depends on which branch the repo is on; re-run after a pull
-  that touches them; `fleet upgrade` reads `bench-upgrade.sh` from the repo, or `FLEET_UPGRADE_SCRIPT`)
+  that touches them: the nightly check compares the copies with the repository and the digest
+  says so when they drifted; `fleet upgrade` reads `bench-upgrade.sh` from the repo, or `FLEET_UPGRADE_SCRIPT`)
   (it runs on a small venv: `uv venv /var/lib/fleet/venv && uv pip install --python
   /var/lib/fleet/venv/bin/python "python-socketio[client]" requests pyyaml websocket-client`).
 - Units (`scripts/fleet-units/`): `fleet-check.timer` → `fleet-check.service` → `fleet-digest.service`
