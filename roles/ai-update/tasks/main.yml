@@ -14,6 +14,12 @@
     # Repos are owned by iiab-admin but Ansible runs as root.
     # The git module fails on dubious ownership before we can pull.
 
+    - name: The flow engine's and the bridge's variables, from their roles' defaults (one source for sources, versions and releases)
+      ansible.builtin.include_tasks: load-role-defaults.yml
+      loop: [rapidpro, wuzapi]
+      loop_control:
+        loop_var: role_defaults_of
+
     - name: "Add missing dirs to git safe.directory"
       community.general.git_config:
         scope: global
@@ -24,8 +30,8 @@
         HOME: "{{ lookup('env', 'HOME') | default('/root', true) }}" # timers and transient units have no HOME
       become: true
       loop:
-        - "{{ ai_update_rapidpro_dir }}"
-        - "{{ ai_update_wuzapi_src_dir }}"
+        - "{{ rapidpro_dir }}"
+        - "{{ wuzapi_src_dir }}"
 
     # ═══════════════════════════════════════════════════════════════
     # STAGE 1: The uv services, through their own update entries
@@ -53,9 +59,9 @@
     # 1c. RapidPro
     - name: "Pull RapidPro"
       ansible.builtin.git:
-        repo: "{{ ai_update_rapidpro_repo }}"
-        dest: "{{ ai_update_rapidpro_dir }}"
-        version: "{{ ai_update_rapidpro_version }}"
+        repo: "{{ rapidpro_repo }}"
+        dest: "{{ rapidpro_dir }}"
+        version: "{{ rapidpro_version }}"
         force: true
         update: true
       become: true
@@ -65,8 +71,8 @@
     # 1d. WuzAPI source (static assets)
     - name: "Pull WuzAPI source (static assets)"
       ansible.builtin.git:
-        repo: "{{ ai_update_wuzapi_src_repo }}"
-        dest: "{{ ai_update_wuzapi_src_dir }}"
+        repo: "{{ wuzapi_repo }}"
+        dest: "{{ wuzapi_src_dir }}"
         version: main
         force: true
         update: true
@@ -77,9 +83,9 @@
     # 1e. Courier (Go source for local build)
     - name: "Pull Courier source"
       ansible.builtin.git:
-        repo: "{{ ai_update_courier_repo }}"
-        dest: "{{ ai_update_courier_dir }}"
-        version: "{{ ai_update_courier_version }}"
+        repo: "{{ rapidpro_courier_repo }}"
+        dest: "{{ rapidpro_courier_src_dir }}"
+        version: "{{ rapidpro_courier_version }}"
         force: true
         update: true
       become: true
@@ -89,9 +95,9 @@
     # 1f. Mailroom (Go source for local build)
     - name: "Pull Mailroom source"
       ansible.builtin.git:
-        repo: "{{ ai_update_mailroom_repo }}"
-        dest: "{{ ai_update_mailroom_dir }}"
-        version: "{{ ai_update_mailroom_version }}"
+        repo: "{{ rapidpro_mailroom_repo }}"
+        dest: "{{ rapidpro_mailroom_src_dir }}"
+        version: "{{ rapidpro_mailroom_version }}"
         force: true
         update: true
       become: true
@@ -109,7 +115,7 @@
     # Prefer the gzipped release asset (much smaller download); fall back to the
     # raw binary if no .gz exists, then to a local source build if both fail.
     - name: "Install courier binary (gz-preferred, checksum-verified)"
-      ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ ai_update_go_courier_url }}" "{{ ai_update_go_courier_dest }}"
+      ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ rapidpro_courier_binary_url }}" "{{ rapidpro_courier_bin }}"
       become: true
       when:
         - "'courier' not in ai_update_skip"
@@ -121,14 +127,14 @@
     - name: "Build courier from source (fallback)"
       ansible.builtin.shell: >
         {{ ai_update_go_bin }} build -ldflags="-s -w"
-        -o {{ ai_update_go_courier_dest }}
+        -o {{ rapidpro_courier_bin }}
         ./cmd/courier
       args:
-        chdir: "{{ ai_update_courier_dir }}"
+        chdir: "{{ rapidpro_courier_src_dir }}"
       environment:
         CGO_ENABLED: "0"
         GOOS: linux
-        GOARCH: "{{ ai_update_go_arch }}"
+        GOARCH: "{{ rapidpro_go_arch }}"
       become: true
       when:
         - "'courier' not in ai_update_skip"
@@ -145,7 +151,7 @@
 
     # ── 2b. Mailroom (gzip-preferred download, raw fallback, source build last) ──
     - name: "Install mailroom binary (gz-preferred, checksum-verified)"
-      ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ ai_update_go_mailroom_url }}" "{{ ai_update_go_mailroom_dest }}"
+      ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ rapidpro_mailroom_binary_url }}" "{{ rapidpro_mailroom_bin }}"
       become: true
       when:
         - "'mailroom' not in ai_update_skip"
@@ -157,14 +163,14 @@
     - name: "Build mailroom from source (fallback)"
       ansible.builtin.shell: >
         {{ ai_update_go_bin }} build -ldflags="-s -w"
-        -o {{ ai_update_go_mailroom_dest }}
+        -o {{ rapidpro_mailroom_bin }}
         ./cmd/mailroom
       args:
-        chdir: "{{ ai_update_mailroom_dir }}"
+        chdir: "{{ rapidpro_mailroom_src_dir }}"
       environment:
         CGO_ENABLED: "0"
         GOOS: linux
-        GOARCH: "{{ ai_update_go_arch }}"
+        GOARCH: "{{ rapidpro_go_arch }}"
       become: true
       when:
         - "'mailroom' not in ai_update_skip"
@@ -181,7 +187,7 @@
 
     # ── 2c. WuzAPI (gzip-preferred download, raw fallback) ───────
     - name: "Install WuzAPI binary (gz-preferred, checksum-verified)"
-      ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ ai_update_go_wuzapi_url }}" /opt/iiab/wuzapi/wuzapi
+      ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ wuzapi_binary_url }}" "{{ wuzapi_dir }}/wuzapi"
       become: true
       when: "'wuzapi' not in ai_update_skip"
       register: wuzapi_binary_result
@@ -204,8 +210,8 @@
     - name: Copy updated WuzAPI static assets
       ansible.builtin.copy:
         mode: preserve
-        src: "{{ ai_update_wuzapi_src_dir }}/static"
-        dest: "{{ ai_update_wuzapi_dir }}/"
+        src: "{{ wuzapi_src_dir }}/static"
+        dest: "{{ wuzapi_dir }}/"
         remote_src: true
         owner: "{{ ai_update_gateway_user }}"
         group: "{{ ai_update_gateway_user }}"
@@ -221,14 +227,14 @@
 
     - name: "Fix RapidPro permissions for nginx"
       ansible.builtin.shell: |
-        chmod -R a+rX {{ ai_update_rapidpro_dir }}/sitestatic {{ ai_update_rapidpro_dir }}/media 2>/dev/null || true
-        chmod 755 {{ ai_update_rapidpro_dir }}/run 2>/dev/null || true
+        chmod -R a+rX {{ rapidpro_dir }}/sitestatic {{ rapidpro_dir }}/media 2>/dev/null || true
+        chmod 755 {{ rapidpro_dir }}/run 2>/dev/null || true
       become: true
       changed_when: false
       when: "'rapidpro' not in ai_update_skip"
 
     - name: "Clean stale DynamoDB/ES spool files (local-first mode)"
-      ansible.builtin.shell: rm -f {{ ai_update_rapidpro_dir }}/spool/*/dynamo/*.jsonl {{ ai_update_rapidpro_dir }}/spool/*/elastic/*.jsonl
+      ansible.builtin.shell: rm -f {{ rapidpro_dir }}/spool/*/dynamo/*.jsonl {{ rapidpro_dir }}/spool/*/elastic/*.jsonl
       become: true
       changed_when: false
       when:

@@ -26,17 +26,18 @@
     group: "{{ iiab_admin_user }}"
   become: true
 
-# Download via the shared helper: prefer gzipped asset, verify SHA256SUMS, raw fallback.
+# Download via the shared helper: the pinned release's asset (wuzapi_release in the defaults),
+# gzipped when the release has one, verified against the release's SHA256SUMS.
 - name: Install Wuzapi Binary from Release (gz-preferred, checksum-verified)
-  ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "https://github.com/deldesir/wuzapi/releases/latest/download/wuzapi-linux-{{ wuzapi_go_arch }}" "{{ wuzapi_dir }}/wuzapi"
+  ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ wuzapi_binary_url }}" "{{ wuzapi_dir }}/wuzapi"
   become: true
   register: wuzapi_binary
   changed_when: "'installed' in wuzapi_binary.stdout"
 
 - name: Clone Wuzapi repository (for static assets)
   ansible.builtin.git:
-    repo: "https://github.com/deldesir/wuzapi.git"
-    dest: "/opt/iiab/wuzapi-src"
+    repo: "{{ wuzapi_repo }}"
+    dest: "{{ wuzapi_src_dir }}"
     version: "main"
     update: true
   become: true
@@ -44,7 +45,7 @@
 - name: Copy static assets to install directory
   ansible.builtin.copy:
     mode: preserve
-    src: "/opt/iiab/wuzapi-src/static"
+    src: "{{ wuzapi_src_dir }}/static"
     dest: "{{ wuzapi_dir }}/"
     remote_src: true
     owner: "{{ iiab_admin_user }}"

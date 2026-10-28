@@ -116,12 +116,10 @@
 
 - name: Clone/update RapidPro repository
   ansible.builtin.git:
-    repo: "https://github.com/deldesir/rapidpro.git"
+    repo: "{{ rapidpro_repo }}"
     dest: "{{ rapidpro_dir }}"
     force: true
-    # OPTIONAL STATIC TAG (Option B): Uncomment below and comment 'main' above to use auto-manipulator script.
-    # version: v26.1.87
-    version: main
+    version: "{{ rapidpro_version }}"
   become: true
   register: rapidpro_git_clone
 
