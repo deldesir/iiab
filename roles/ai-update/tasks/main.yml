@@ -37,6 +37,7 @@
         - "{{ ai_update_rapidpro_dir }}"
         - "{{ ai_update_wuzapi_src_dir }}"
       when: item not in (_safe_dirs.stdout_lines | default([]))
+      changed_when: true   # runs only for an entry that is absent
 
     # ═══════════════════════════════════════════════════════════════
     # STAGE 1: Pull all git repos
@@ -135,7 +136,7 @@
         - courier_git_result.changed | default(false)
       register: courier_download_result
       failed_when: false
-      changed_when: courier_download_result.rc == 0
+      changed_when: "'installed' in courier_download_result.stdout"
 
     - name: "Build courier from source (fallback)"
       ansible.builtin.shell: >
@@ -154,6 +155,7 @@
         - courier_git_result.changed | default(false)
         - courier_download_result.rc | default(1) != 0
       register: courier_build_result
+      changed_when: true   # runs only after a code change when the release download failed
 
     - name: "⚙️  courier: {{ 'downloaded release' if (courier_download_result.rc | default(1) == 0) else 'built from source' }}"
       ansible.builtin.debug:
@@ -170,7 +172,7 @@
         - mailroom_git_result.changed | default(false)
       register: mailroom_download_result
       failed_when: false
-      changed_when: mailroom_download_result.rc == 0
+      changed_when: "'installed' in mailroom_download_result.stdout"
 
     - name: "Build mailroom from source (fallback)"
       ansible.builtin.shell: >
@@ -189,6 +191,7 @@
         - mailroom_git_result.changed | default(false)
         - mailroom_download_result.rc | default(1) != 0
       register: mailroom_build_result
+      changed_when: true   # same
 
     - name: "⚙️  mailroom: {{ 'downloaded release' if (mailroom_download_result.rc | default(1) == 0) else 'built from source' }}"
       ansible.builtin.debug:
@@ -202,7 +205,7 @@
       become: true
       when: "'wuzapi' not in ai_update_skip"
       register: wuzapi_binary_result
-      changed_when: wuzapi_binary_result.rc == 0
+      changed_when: "'installed' in wuzapi_binary_result.stdout"
 
     # ═══════════════════════════════════════════════════════════════
     # STAGE 3: Apply patches + resolve dependencies
@@ -233,6 +236,8 @@
       environment:
         PATH: "/root/.local/bin:{{ ansible_env.PATH }}"
       when: gateway_git_results.changed
+      register: gateway_sync
+      changed_when: "'Installed' in gateway_sync.stderr or 'Uninstalled' in gateway_sync.stderr"
 
     # 3d. RiveBot uv sync (own venv)
     - name: "Sync RiveBot venv"
@@ -243,6 +248,8 @@
       environment:
         PATH: "/root/.local/bin:{{ ansible_env.PATH }}"
       when: rivebot_git_result.changed | default(false)
+      register: rivebot_sync
+      changed_when: "'Installed' in rivebot_sync.stderr or 'Uninstalled' in rivebot_sync.stderr"
 
     # 3e. RapidPro post-update (configure + migrate + collectstatic + patches)
     - name: RapidPro post-update
@@ -291,6 +298,7 @@
       register: gateway_verify
       failed_when: gateway_verify.rc != 0
       when: gateway_git_results.changed
+      changed_when: false
 
     # ═══════════════════════════════════════════════════════════════
     # STAGE 5: Harden permissions (ALWAYS runs)

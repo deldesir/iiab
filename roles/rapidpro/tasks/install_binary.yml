@@ -6,7 +6,11 @@
 - name: Install Mailroom Binary from Release (gz-preferred, checksum-verified)
   ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "https://github.com/deldesir/mailroom/releases/latest/download/mailroom-linux-{{ rapidpro_go_arch }}" /usr/local/bin/mailroom
   become: true
+  register: mailroom_binary
+  changed_when: "'installed' in mailroom_binary.stdout"
 
 - name: Install Courier Binary from Release (gz-preferred, checksum-verified)
   ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "https://github.com/deldesir/courier/releases/latest/download/courier-linux-{{ rapidpro_go_arch }}" /usr/local/bin/courier
   become: true
+  register: courier_binary
+  changed_when: "'installed' in courier_binary.stdout"

@@ -121,6 +121,7 @@
     --keep-until-expiring
     {{ '--staging' if iiab_ssl_certbot_staging | default(False) else '' }}
   register: certbot_result
+  changed_when: "'not yet due for renewal' not in certbot_result.stdout"
 
 - name: Show certbot output
   ansible.builtin.debug:
@@ -171,6 +172,7 @@
   ansible.builtin.command: certbot renew --dry-run --no-random-sleep-on-renew
   register: renewal_test
   ignore_errors: true
+  changed_when: false
 
 - name: Show renewal test result
   ansible.builtin.debug:

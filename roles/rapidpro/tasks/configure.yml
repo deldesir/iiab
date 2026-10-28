@@ -88,6 +88,8 @@
     chdir: "{{ rapidpro_dir }}"
   become: true
   become_user: "{{ iiab_admin_user }}"
+  register: rapidpro_migrate
+  changed_when: "'No migrations to apply' not in rapidpro_migrate.stdout"
 
 # the Postgres indexes contact and message search use without Elasticsearch; idempotent, kept out of the
 # migration graph so they never collide with upstream's numbering
@@ -100,6 +102,7 @@
   become: true
   become_user: "{{ iiab_admin_user }}"
   when: not rapidpro_aws_enabled
+  changed_when: true   # creates what is missing; the command does not report which
 
 - name: Run DynamoDB migrations (create tables)
   ansible.builtin.shell: |
@@ -110,11 +113,14 @@
   become: true
   become_user: "{{ iiab_admin_user }}"
   when: rapidpro_aws_enabled
+  changed_when: true   # creates the tables that are missing; the command does not report which
 
 - name: Purge legacy spool files from pre-nanorp era
-  ansible.builtin.shell: rm -f /opt/iiab/rapidpro/spool/*/dynamo/*.jsonl /opt/iiab/rapidpro/spool/*/elastic/*.jsonl
+  ansible.builtin.shell: find {{ rapidpro_dir }}/spool -path '*/dynamo/*.jsonl' -o -path '*/elastic/*.jsonl' | xargs -r rm -fv
   when: not rapidpro_aws_enabled
   ignore_errors: true
+  register: rapidpro_spool_purge
+  changed_when: rapidpro_spool_purge.stdout | length > 0
 
 - name: Collect static files
   ansible.builtin.shell: |
@@ -127,6 +133,7 @@
   register: rapidpro_collectstatic
   # the clone result only exists on a full run; a tagged run (settings) still rebuilds when the settings changed
   when: (rapidpro_git_clone | default({})).changed | default(false) or rapidpro_settings.changed
+  changed_when: "'0 static files copied' not in rapidpro_collectstatic.stdout"
 
 # the front-end resolves its own URLs against the sub-path (window.URLS.root, published by the app's frame), so
 # nothing rewrites the built bundles any more; a script from the days when it did is removed
@@ -183,9 +190,11 @@
   become: true
 
 - name: Enforce Nginx traverse/read permissions over dynamically compiled static assets
-  ansible.builtin.command: "chmod -R a+rX {{ rapidpro_dir }}/sitestatic {{ rapidpro_dir }}/media"
+  ansible.builtin.command: "chmod -Rc a+rX {{ rapidpro_dir }}/sitestatic {{ rapidpro_dir }}/media"
   become: true
   ignore_errors: true
+  register: rapidpro_static_perms
+  changed_when: rapidpro_static_perms.stdout | length > 0
 
 - name: Purge Django Valkey/Redis cache resolving Javascript memory desynchronizations
   ansible.builtin.shell: |
@@ -193,6 +202,7 @@
   args:
     chdir: "{{ rapidpro_dir }}"
   become: true
+  changed_when: true   # always purges
 
 # the first admin, created with Django's own command; without a password in local_vars.yml no user is created,
 # rather than one with a guessable password
@@ -228,6 +238,7 @@
   become_user: "{{ iiab_admin_user }}"
   when: "'MISSING' in superuser_check.stdout"
   no_log: true
+  changed_when: true   # runs only when the superuser is missing
 
 - name: Create gunicorn run directory
   ansible.builtin.file:

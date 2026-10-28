@@ -55,3 +55,4 @@
   ansible.builtin.shell: systemctl daemon-reload && systemctl reset-failed systemd-networkd-wait-online.service || true
   become: true
   when: wait_online_dropin.changed
+  changed_when: true   # runs only when the drop-in changed

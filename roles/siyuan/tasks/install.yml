@@ -23,6 +23,7 @@
   when:
     - old_workspace.stat.exists | default(false)
     - not (new_workspace.stat.exists | default(false))
+  changed_when: true   # runs only when the legacy workspace exists and the new one does not
 
 - name: Record (initial) disk space used
   ansible.builtin.shell: df -B1 --output=used / | tail -1
@@ -87,6 +88,7 @@
     -C "{{ siyuan_dir }}"
     "siyuan-{{ siyuan_version }}-{{ siyuan_arch }}/resources"
   become: true
+  changed_when: true   # install.yml runs only on a first install or a version drift
 
 - name: Make SiYuan kernel binary executable
   ansible.builtin.file:
@@ -150,13 +152,19 @@
     if os.path.exists(conf_path):
         with open(conf_path) as f:
             conf = json.load(f)
-    conf.setdefault('api', {})['token'] = '{{ siyuan_api_token }}'
-    with open(conf_path, 'w') as f:
-        json.dump(conf, f, indent=2)
+    if conf.get('api', {}).get('token') == '{{ siyuan_api_token }}':
+        print('unchanged')
+    else:
+        conf.setdefault('api', {})['token'] = '{{ siyuan_api_token }}'
+        with open(conf_path, 'w') as f:
+            json.dump(conf, f, indent=2)
+        print('changed')
     "
   become: true
   become_user: "{{ siyuan_user }}"
   when: siyuan_api_token | length > 0
+  register: siyuan_token_conf
+  changed_when: "'changed' in siyuan_token_conf.stdout"
 
 # RECORD SiYuan AS INSTALLED
 

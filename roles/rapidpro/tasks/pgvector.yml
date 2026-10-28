@@ -37,6 +37,7 @@
       ansible.builtin.shell: make clean && make && make install
       args:
         chdir: /opt/pgvector
+      changed_when: true   # the block runs only when the extension is not installed
 
 # The extension itself needs superuser; pre-creating it makes the knowledge
 # migration's VectorExtension operation a no-op for the unprivileged DB user.

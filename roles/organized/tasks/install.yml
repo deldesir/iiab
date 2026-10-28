@@ -5,8 +5,10 @@
   changed_when: false
 
 - name: Mark organized-backend directory as safe for git
-  ansible.builtin.command: git config --global --add safe.directory "{{ organized_dir }}"
+  ansible.builtin.shell: git config --global --get-all safe.directory | grep -qxF "{{ organized_dir }}" || { git config --global --add safe.directory "{{ organized_dir }}" && echo added; }
   ignore_errors: true
+  register: organized_safe_dir
+  changed_when: "'added' in organized_safe_dir.stdout"
 
 - name: Clone organized-backend repository
   ansible.builtin.git:
@@ -17,8 +19,10 @@
     force: true
 
 - name: Mark organized-app directory as safe for git
-  ansible.builtin.command: git config --global --add safe.directory "{{ organized_app_dir }}"
+  ansible.builtin.shell: git config --global --get-all safe.directory | grep -qxF "{{ organized_app_dir }}" || { git config --global --add safe.directory "{{ organized_app_dir }}" && echo added; }
   ignore_errors: true
+  register: organized_app_safe_dir
+  changed_when: "'added' in organized_app_safe_dir.stdout"
 
 - name: Clone organized-app repository
   ansible.builtin.git:
@@ -35,6 +39,7 @@
     chdir: "{{ organized_app_dir }}"
   environment:
     NODE_OPTIONS: "--max-old-space-size=2048"
+  changed_when: true   # npm ci always rebuilds node_modules
 
 - name: Inject offline build-time env for organized-app (Vite .env.production.local)
   ansible.builtin.template:
@@ -74,6 +79,8 @@
   environment:
     VIRTUAL_ENV: "{{ organized_dir }}/.venv"
   ignore_errors: true
+  register: organized_pip
+  changed_when: "'Installed' in organized_pip.stderr"
 
 - name: Install postgresql-client
   ansible.builtin.apt:
@@ -199,6 +206,8 @@
   environment:
     VIRTUAL_ENV: "{{ organized_dir }}/.venv"
     PATH: "{{ organized_dir }}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  register: organized_gunicorn
+  changed_when: "'Installed' in organized_gunicorn.stderr"
 
 # Migrations are committed in the backend repo (api/migrations/), so we only
 # apply them here. Running `makemigrations` at deploy time is intentionally
@@ -214,6 +223,8 @@
     DB_NAME: "{{ organized_db_name }}"
     DB_USER: "{{ organized_db_user }}"
     DB_PASSWORD: "{{ organized_db_pass }}"
+  register: organized_migrate
+  changed_when: "'No migrations to apply' not in organized_migrate.stdout"
 
 - name: Collect static files
   ansible.builtin.command: "{{ organized_dir }}/.venv/bin/python manage.py collectstatic --noinput"
@@ -223,6 +234,8 @@
   become_user: "{{ organized_user }}"
   environment:
     DJANGO_SECRET_KEY: "{{ django_secret_key.stdout | default(organized_secret_key | default('temp-key-for-migrations')) }}"
+  register: organized_collectstatic
+  changed_when: "'0 static files copied' not in organized_collectstatic.stdout"
 
 # --- Offline source-materials mirror ---
 

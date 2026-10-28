@@ -35,6 +35,7 @@
   ansible.builtin.command: git config --global --add safe.directory {{ rivebot_home }}
   become: true
   when: rivebot_home not in (git_safe_dirs.stdout_lines | default([]))
+  changed_when: true   # runs only when the entry is absent
 
 - name: Clone / update RiveBot repository
   ansible.builtin.git:

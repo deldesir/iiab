@@ -109,6 +109,7 @@
     chdir: "{{ ai_gateway_dir }}"
   become: true
   when: ai_gateway_venv_python.rc != 0 or ai_gateway_venv_python.stdout.strip() != ai_gateway_python
+  changed_when: true   # runs only when the venv is missing or on another Python
 
 - name: Install AI Gateway dependencies from the lock file (uv sync --frozen)
   ansible.builtin.command: "{{ ai_gateway_uv_bin }} sync --frozen"

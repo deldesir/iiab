@@ -26,6 +26,15 @@ verify() {
   printf '%s  %s\n' "$want" "$1" | sha256sum -c - >/dev/null || { echo "install-release-binary: checksum mismatch for $2" >&2; return 1; }
 }
 
+# Nothing to do when the installed binary already matches the release's checksum: the
+# roles key their "changed" state on the last line printed here ("installed" / "up to date").
+if [ -f "$dest" ]; then
+  want="$(printf '%s\n' "$sums" | awk -v a="$asset" '$2 == a { print $1 }')"
+  if [ -n "$want" ] && printf '%s  %s\n' "$want" "$dest" | sha256sum -c - >/dev/null 2>&1; then
+    echo "install-release-binary: $dest is up to date ($asset)"; exit 0
+  fi
+fi
+
 tmp="$(mktemp)"; trap 'rm -f "$tmp" "$tmp.gz" "$dest.new"' EXIT
 
 # Stage into "$dest.new" on the SAME filesystem, then atomically rename over
@@ -45,3 +54,4 @@ else
 fi
 chmod 0755 "$dest.new"
 mv -f "$dest.new" "$dest"
+echo "install-release-binary: installed $asset to $dest"
