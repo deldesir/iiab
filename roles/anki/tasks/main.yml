@@ -20,12 +20,14 @@
     fail_msg: "PLEASE SET 'anki_sync_users' TO A NON-EMPTY LIST OF username:password VALUES e.g. IN: /etc/iiab/local_vars.yml"
     quiet: true
 
-- block:
+- name: Install, then enable or disable Anki
+  block:
     - name: Install Anki sync server if 'anki_installed' not defined, e.g. in {{ iiab_state_file }} # /etc/iiab/iiab_state.yml
       ansible.builtin.include_tasks: install.yml
       when: anki_installed is undefined
 
-    - ansible.builtin.include_tasks: enable-or-disable.yml
+    - name: Enable or disable Anki
+      ansible.builtin.include_tasks: enable-or-disable.yml
     - name: Add 'anki' variable values to {{ iiab_ini_file }}
       community.general.ini_file:
         path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini

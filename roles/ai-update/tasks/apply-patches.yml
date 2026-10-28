@@ -8,7 +8,7 @@
 
 # Patch 1: Tenant-scoped memory isolation via contextvars
 # Reason: Multi-tenant WhatsApp deployments need per-user memory dirs
-- name: "hermes: tenant memory isolation"
+- name: "Hermes patch: tenant memory isolation"
   ansible.builtin.replace:
     path: /opt/iiab/hermes-agent/tools/memory_tool.py
     regexp: |
@@ -41,7 +41,7 @@
 
 # Patch 2: 4KB USER.md storage cap
 # Reason: Prevent token exhaustion from unbounded user memory growth
-- name: "hermes: 4KB USER.md storage cap"
+- name: "Hermes patch: 4KB USER.md storage cap"
   ansible.builtin.replace:
     # upstream moved MemoryStore (and its limit getter) out of memory_tool.py
     path: /opt/iiab/hermes-agent/tools/memory_tool_store.py
@@ -63,7 +63,7 @@
 # dies with "cannot create weak reference to '_SafeWriter' object" (seen as
 # create_revision canvas builds failing in the gateway). A slotted class is
 # only weakref-able if __slots__ includes __weakref__.
-- name: "hermes: _SafeWriter weakref slot (structlog compatibility)"
+- name: "Hermes patch: _SafeWriter weakref slot (structlog compatibility)"
   ansible.builtin.replace:
     path: /opt/iiab/hermes-agent/agent/process_bootstrap.py
     regexp: '__slots__ = \("_inner",\)'
@@ -81,7 +81,7 @@
 # `is failed` warnings above cannot catch an upstream refactor that moves an
 # anchor. Check the end state instead and stop the play: an agent restarted
 # without tenant isolation would share one memory file between every user.
-- name: "hermes: verify deploy patches are present (fails loudly on a silent miss)"
+- name: "Hermes patches: verify they are present (fails loudly on a silent miss)"
   ansible.builtin.shell: |
     set -e
     grep -q 'current_tenant_urn' /opt/iiab/hermes-agent/tools/memory_tool.py \
@@ -112,7 +112,7 @@
 # Reason: Upstream frequently bumps the minimum patch version (e.g. >=3.14.5).
 # We keep uv updated and install the required version, but --frozen may fail
 # if pyproject.toml has a narrow window our uv doesn't yet know about.
-- name: "rapidpro: widen Python version constraint"
+- name: "RapidPro patch: widen Python version constraint"
   ansible.builtin.replace:
     path: /opt/iiab/rapidpro/pyproject.toml
     regexp: 'requires-python = ">=3\.\d+(\.\d+)?,<3\.\d+"'

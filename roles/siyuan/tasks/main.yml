@@ -14,7 +14,8 @@
     fail_msg: "PLEASE GIVE VARIABLE 'siyuan_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
     quiet: true
 
-- block:
+- name: Install, then enable or disable SiYuan
+  block:
     # The install also runs on VERSION DRIFT: resolve the target version
     # first (cheap API call, retried), compare with the marker written by
     # the last install, and converge. A plain role run therefore upgrades
@@ -26,7 +27,8 @@
       ansible.builtin.include_tasks: install.yml
       when: siyuan_installed is undefined or siyuan_version_drift
 
-    - ansible.builtin.include_tasks: enable-or-disable.yml
+    - name: Enable or disable SiYuan
+      ansible.builtin.include_tasks: enable-or-disable.yml
     - name: Add 'siyuan' variable values to {{ iiab_ini_file }}
       community.general.ini_file:
         path: "{{ iiab_ini_file }}"

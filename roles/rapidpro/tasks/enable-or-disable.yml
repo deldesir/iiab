@@ -30,7 +30,7 @@
     - rapidpro_enabled
     - is_proot
   block:
-    - name: pdsm - Enable all RapidPro services
+    - name: "Android (pdsm): enable all RapidPro services"
       ansible.builtin.command: /usr/local/bin/pdsm enable {{ item }}
       loop:
         - rapidpro-gunicorn
@@ -38,7 +38,7 @@
         - rapidpro-courier
         - rapidpro-celery
 
-    - name: pdsm - Start all RapidPro services
+    - name: "Android (pdsm): start all RapidPro services"
       ansible.builtin.command: /usr/local/bin/pdsm start {{ item }}
       loop:
         - rapidpro-gunicorn
@@ -53,7 +53,7 @@
     - not rapidpro_enabled
     - is_proot
   block:
-    - name: pdsm - Stop all RapidPro services
+    - name: "Android (pdsm): stop all RapidPro services"
       ansible.builtin.command: /usr/local/bin/pdsm stop {{ item }}
       loop:
         - rapidpro-gunicorn
@@ -64,7 +64,7 @@
       changed_when: "'not running' not in pdsm_stop.stdout"
       failed_when: false
 
-    - name: pdsm - Disable all RapidPro services
+    - name: "Android (pdsm): disable all RapidPro services"
       ansible.builtin.command: /usr/local/bin/pdsm disable {{ item }}
       loop:
         - rapidpro-gunicorn

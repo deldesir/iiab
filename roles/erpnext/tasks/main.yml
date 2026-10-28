@@ -13,7 +13,8 @@
     quiet: true
   when: erpnext_install | bool
 
-- block:
+- name: Install, then enable or disable ERPNext
+  block:
     - name: Install ERPNext if 'erpnext_installed' not defined, e.g. in {{ iiab_state_file }} # /etc/iiab/iiab_state.yml
       ansible.builtin.include_tasks: install.yml
       when:

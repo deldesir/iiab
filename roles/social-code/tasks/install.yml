@@ -1,7 +1,7 @@
 ---
 # social-code/tasks/install.yml — Install Social Code training suite
 
-- name: uv, pinned and checked (roles/uv)
+- name: Install uv, pinned and checked (roles/uv)
   ansible.builtin.include_role:
     name: uv
 

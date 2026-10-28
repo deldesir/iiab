@@ -6,7 +6,8 @@
 #   ./runrole ai-update
 #   ./runrole ai-update -e '{"ai_update_skip": ["wuzapi"]}'
 
-- block:
+- name: Install, then enable or disable the AI stack update
+  block:
     # ═══════════════════════════════════════════════════════════════
     # STAGE 0: Ensure git safe.directory for all repos
     # ═══════════════════════════════════════════════════════════════

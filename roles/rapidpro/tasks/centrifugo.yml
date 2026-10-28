@@ -29,7 +29,7 @@
         create_home: false
         home: /nonexistent
 
-    - name: Download Centrifugo {{ rapidpro_centrifugo_version }} (verified against the release's checksums file)
+    - name: Download the Centrifugo release, verified against the release's checksums file, version {{ rapidpro_centrifugo_version }}
       ansible.builtin.get_url:
         url: "{{ rapidpro_centrifugo_download_url }}"
         dest: "{{ downloads_dir }}/centrifugo_{{ rapidpro_centrifugo_version }}_linux_{{ rapidpro_go_arch }}.tar.gz"
@@ -37,7 +37,7 @@
         mode: "0644"
         timeout: "{{ download_timeout }}"
 
-    - name: Create {{ downloads_dir }}/centrifugo-{{ rapidpro_centrifugo_version }}
+    - name: Create the Centrifugo download directory for version {{ rapidpro_centrifugo_version }}
       ansible.builtin.file:
         path: "{{ downloads_dir }}/centrifugo-{{ rapidpro_centrifugo_version }}"
         state: directory
