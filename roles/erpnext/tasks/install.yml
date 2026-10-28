@@ -136,8 +136,10 @@
   when: erpnext_enabled | bool
 
 - name: Configure system-wide core.hooksPath
-  ansible.builtin.command: git config --system core.hooksPath /etc/git-hooks
+  ansible.builtin.shell: '[ "$(git config --system --get core.hooksPath)" = /etc/git-hooks ] || { git config --system core.hooksPath /etc/git-hooks && echo set; }'
   when: erpnext_enabled | bool
+  register: erpnext_hookspath
+  changed_when: "'set' in erpnext_hookspath.stdout"
 
 - name: Install yarn globally via npm
   community.general.npm:
@@ -368,10 +370,13 @@
     - 11000
   ignore_errors: true
   when: erpnext_enabled | bool
+  changed_when: true   # always flushes
 
 - name: Ensure correct ownership of Frappe apps directory (prevents permission errors on code pull)
-  ansible.builtin.command: chown -R {{ erpnext_user_name }}:{{ erpnext_user_name }} /home/{{ erpnext_user_name }}/frappe-bench/apps
+  ansible.builtin.command: chown -Rc {{ erpnext_user_name }}:{{ erpnext_user_name }} /home/{{ erpnext_user_name }}/frappe-bench/apps
   when: erpnext_enabled | bool
+  register: erpnext_apps_chown
+  changed_when: erpnext_apps_chown.stdout | length > 0
 
 - name: Pull latest code from fork for frappe/erpnext
   become: true
@@ -386,10 +391,12 @@
         fi
     fi
     BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    OLD=$(git rev-parse HEAD)
     if [ -n "$REMOTE" ] && [ -n "$BRANCH" ]; then
         [ -f .git/shallow ] && git fetch --unshallow $REMOTE $BRANCH 2>/dev/null || git fetch $REMOTE $BRANCH
         git reset --hard $REMOTE/$BRANCH
     fi
+    [ "$OLD" = "$(git rev-parse HEAD)" ] || echo "UPDATED to $(git rev-parse --short HEAD)"
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item }}
   loop:
@@ -397,6 +404,8 @@
     - erpnext
   when: erpnext_enabled | bool
   ignore_errors: true
+  register: erpnext_core_pull
+  changed_when: "'UPDATED' in erpnext_core_pull.stdout"
 
 - name: Pull latest code from fork for extra apps
   become: true
@@ -411,15 +420,19 @@
         fi
     fi
     BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    OLD=$(git rev-parse HEAD)
     if [ -n "$REMOTE" ] && [ -n "$BRANCH" ]; then
         [ -f .git/shallow ] && git fetch --unshallow $REMOTE $BRANCH 2>/dev/null || git fetch $REMOTE $BRANCH
         git reset --hard $REMOTE/$BRANCH
     fi
+    [ "$OLD" = "$(git rev-parse HEAD)" ] || echo "UPDATED to $(git rev-parse --short HEAD)"
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench/apps/{{ item.app_name }}
   loop: "{{ erpnext_extra_apps }}"
   when: erpnext_enabled | bool
   ignore_errors: true
+  register: erpnext_extra_pull
+  changed_when: "'UPDATED' in erpnext_extra_pull.stdout"
 
 - name: Update Python/Node dependencies after code pull (prevents ImportError on new packages)
   become: true
@@ -432,6 +445,7 @@
     CYPRESS_INSTALL_BINARY: "0"
   when: erpnext_enabled | bool
   ignore_errors: true
+  changed_when: true   # reinstalls the Python and Node requirements on every run
 
 - name: Wipe compiled JS/CSS bundles (forces clean bench build, avoids stale hashes)
   ansible.builtin.shell: |
@@ -439,6 +453,7 @@
     rm -f  /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/assets.json
     rm -f  /home/{{ erpnext_user_name }}/frappe-bench/sites/assets/assets-rtl.json
   when: erpnext_enabled | bool
+  changed_when: true   # always wipes; install.yml runs at install or --reinstall only, and within it the build is unconditional (the flag checks the file this removes)
 
 - name: Create ERPNext database
   ansible.mysql.mysql_db:
@@ -490,6 +505,9 @@
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   when: erpnext_enabled | bool
+  register: erpnext_site_db_password
+  changed_when: "'UPDATED PASSWORD' in erpnext_site_db_password.stdout"
+  failed_when: "'ERROR' in erpnext_site_db_password.stdout"
 
 - name: Ensure currentsite.txt exists (Frappe needs this to resolve the active site)
   ansible.builtin.copy:
@@ -504,23 +522,37 @@
 - name: Set site host_name for IIAB subpath
   become: true
   become_user: "{{ erpnext_user_name }}"
-  ansible.builtin.command: ~/.local/bin/bench --site {{ erpnext_site_name }} set-config host_name "{{ erpnext_host_name }}"
+  ansible.builtin.shell: |
+    python3 - <<'PY'
+    import json, subprocess
+    path = 'sites/{{ erpnext_site_name }}/site_config.json'
+    want = '{{ erpnext_host_name }}'
+    if json.load(open(path)).get('host_name') != want:
+        subprocess.run(['/home/{{ erpnext_user_name }}/.local/bin/bench', '--site', '{{ erpnext_site_name }}', 'set-config', 'host_name', want], check=True)
+        print('UPDATED host_name')
+    PY
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   when: erpnext_enabled | bool
+  register: erpnext_host_name_cfg
+  changed_when: "'UPDATED' in erpnext_host_name_cfg.stdout"
 
 - name: Generate Systemd Services (replaces Supervisor)
   become: true
   become_user: "{{ erpnext_user_name }}"
   ansible.builtin.shell: |
+    before=$(cat config/systemd/* 2>/dev/null | sha256sum)
     yes | ~/.local/bin/bench setup systemd
+    [ "$before" = "$(cat config/systemd/* | sha256sum)" ] || echo "UNITS CHANGED"
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   when: erpnext_enabled | bool
+  register: erpnext_systemd_units
+  changed_when: "'UNITS CHANGED' in erpnext_systemd_units.stdout"
 
 - name: Increase gunicorn worker timeout to 300s (setup_wizard.setup_complete needs >120s)
   ansible.builtin.replace:
@@ -550,9 +582,14 @@
 
 - name: Setup Systemd Symlinks
   ansible.builtin.shell: |
+    links() { find /etc/systemd/system -maxdepth 1 -name 'frappe-bench*' -printf '%p %l\n' | sort | sha256sum; }
+    before=$(links)
     ln -sf /home/{{ erpnext_user_name }}/frappe-bench/config/systemd/* /etc/systemd/system/
     systemctl daemon-reload
+    [ "$before" = "$(links)" ] || echo "RELINKED"
   when: erpnext_enabled | bool
+  register: erpnext_systemd_links
+  changed_when: "'RELINKED' in erpnext_systemd_links.stdout"
 
 - name: Start Bench Redis Services (required for install-app and migrate)
   ansible.builtin.systemd:
@@ -591,6 +628,7 @@
   when:
     - erpnext_enabled | bool
     - "'erpnext' not in (_installed_apps.stdout | default(''))"
+  changed_when: true   # runs only when the app is not in the site
 
 - name: Install extra apps in site (HR, CRM, etc.)
   become: true
@@ -606,6 +644,7 @@
   when:
     - erpnext_enabled | bool
     - "item.app_name not in (_installed_apps.stdout | default(''))"
+  changed_when: true   # same
 
 - name: Run migrate + clear-cache after all apps installed
   become: true
@@ -618,6 +657,7 @@
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   when: erpnext_enabled | bool
+  changed_when: true   # runs on every update; bench does not report whether a patch ran
 
 # NOTE: Do NOT set home_page to 'shop' at install time.
 # On a fresh site the setup wizard hasn't run yet, so the shop page will
@@ -629,12 +669,14 @@
 - name: Enable scheduler for the site
   become: true
   become_user: "{{ erpnext_user_name }}"
-  ansible.builtin.command: ~/.local/bin/bench --site {{ erpnext_site_name }} scheduler enable
+  ansible.builtin.shell: ~/.local/bin/bench --site {{ erpnext_site_name }} scheduler status | grep -q 'is enabled' || { ~/.local/bin/bench --site {{ erpnext_site_name }} scheduler enable && echo ENABLED; }
   args:
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   when: erpnext_enabled | bool
+  register: erpnext_scheduler
+  changed_when: "'ENABLED' in erpnext_scheduler.stdout"
 
 - name: Enable ERPNext Systemd Targets (web + workers)
   ansible.builtin.systemd:
@@ -647,8 +689,10 @@
   when: erpnext_enabled | bool
 
 - name: Grant Nginx access to Frappe static assets
-  ansible.builtin.shell: chmod a+x /home/{{ erpnext_user_name }} /home/{{ erpnext_user_name }}/frappe-bench && chmod -R a+rX /home/{{ erpnext_user_name }}/frappe-bench/sites
+  ansible.builtin.shell: chmod -c a+x /home/{{ erpnext_user_name }} /home/{{ erpnext_user_name }}/frappe-bench && chmod -Rc a+rX /home/{{ erpnext_user_name }}/frappe-bench/sites
   when: erpnext_enabled | bool
+  register: erpnext_static_perms
+  changed_when: erpnext_static_perms.stdout | length > 0
 
 - name: Ensure Nginx knows the client's scheme behind a TLS-terminating proxy ($fwd_proto map in the http context; boxes whose nginx.conf predates it)
   ansible.builtin.lineinfile:
@@ -707,6 +751,7 @@
                    'frappe-bench-frappe-long-worker@*.service' \
                    frappe-bench.target 2>/dev/null || true
   when: erpnext_enabled | bool and _needs_build | bool
+  changed_when: true   # runs only when a build follows
 
 - name: Flush Redis caches before build (clear stale boot data and asset references)
   ansible.builtin.command: redis-cli -p {{ item }} FLUSHDB
@@ -715,6 +760,7 @@
     - 11000
   ignore_errors: true
   when: erpnext_enabled | bool and _needs_build | bool
+  changed_when: true   # same
 
 # ── Build JS bundles with temporary swap ───────────────────────────────────────
 # CRM's Vite/Rollup build needs 4-6 GB during its "rendering chunks" phase.
@@ -740,7 +786,10 @@
           chmod 600 "$SWAPFILE"
           mkswap "$SWAPFILE" >/dev/null
           swapon "$SWAPFILE"
+          echo "SWAP CREATED"
         fi
+      register: erpnext_build_swap
+      changed_when: "'SWAP CREATED' in erpnext_build_swap.stdout"
     - name: Rebuild all JS bundles (unified assets.json)
       ansible.builtin.shell: |
         /home/{{ erpnext_user_name }}/.local/bin/bench build
@@ -750,6 +799,7 @@
       become_user: "{{ erpnext_user_name }}"
       environment:
         PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      changed_when: true   # the block runs only when a build is due
 
     - name: Rebuild Builder Frontend (Vite — separate from bench build)
       ansible.builtin.shell: |
@@ -761,6 +811,7 @@
       become_user: "{{ erpnext_user_name }}"
       when: erpnext_enabled | bool
       ignore_errors: true
+      changed_when: true   # same
 
     - name: Deploy IIAB asset patching script
       ansible.builtin.template:
@@ -778,6 +829,8 @@
       become: true
       become_user: "{{ erpnext_user_name }}"
       when: erpnext_enabled | bool
+      register: erpnext_assets_patch
+      changed_when: "'Patching /' in erpnext_assets_patch.stdout"
 
     - name: Deploy IIAB About page translation and custom styling script
       ansible.builtin.template:
@@ -798,6 +851,7 @@
       environment:
         PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       when: erpnext_enabled | bool
+      changed_when: true   # rewrites the settings on every build
 
   always:
     - name: Remove temporary swapfile after build
@@ -806,7 +860,10 @@
         if [ -f "$SWAPFILE" ]; then
           swapoff "$SWAPFILE" 2>/dev/null || true
           rm -f "$SWAPFILE"
+          echo "SWAP REMOVED"
         fi
+      register: erpnext_build_swap_removed
+      changed_when: "'SWAP REMOVED' in erpnext_build_swap_removed.stdout"
 - name: Start Frappe services with fresh workers (all apps loaded cleanly)
   ansible.builtin.shell: |
     systemctl restart frappe-bench.target \
@@ -817,6 +874,7 @@
                       'frappe-bench-frappe-short-worker@*.service' \
                       'frappe-bench-frappe-long-worker@*.service' 2>/dev/null || true
   when: erpnext_enabled | bool and _needs_build | bool
+  changed_when: true   # runs only after a build
 
 - name: Ensure Frappe services are running (no-build re-run)
   ansible.builtin.systemd:

@@ -22,3 +22,4 @@
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   when: erpnext_enabled | bool
+  changed_when: true   # enforces the workspace fixtures on every run; the script does not report what it changed

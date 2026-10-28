@@ -25,10 +25,11 @@
       when:
         - erpnext_enabled | bool
 
-    - name: Sync Storefront if erpnext is enabled
+    - name: Sync the storefront when this box names one (storefront_repo in local_vars)
       ansible.builtin.include_tasks: storefront-sync.yml
       when:
         - erpnext_enabled | bool
+        - storefront_repo | default('') | length > 0
 
     - name: Run IIAB database fixtures
       ansible.builtin.include_tasks: db-fixtures.yml
