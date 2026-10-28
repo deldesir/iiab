@@ -19,6 +19,7 @@
 
     - name: Add 'email_bridge' variable values to {{ iiab_ini_file }}
       community.general.ini_file:
+        mode: "0644"
         path: "{{ iiab_ini_file }}"
         section: email-bridge
         option: "{{ item.option }}"

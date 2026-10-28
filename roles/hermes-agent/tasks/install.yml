@@ -62,6 +62,7 @@
 
 - name: Add hermes_agent_disk_usage to {{ iiab_ini_file }}
   community.general.ini_file:
+    mode: "0644"
     path: "{{ iiab_ini_file }}"
     section: hermes-agent
     option: hermes_agent_disk_usage

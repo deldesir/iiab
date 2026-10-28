@@ -65,6 +65,7 @@
 
     - name: Add ssl_disk_usage to {{ iiab_ini_file }}
       community.general.ini_file:
+        mode: "0644"
         path: "{{ iiab_ini_file }}" # /etc/iiab/iiab.ini
         section: ssl
         option: ssl_disk_usage
@@ -72,6 +73,7 @@
 
     - name: Add 'ssl' variable values to {{ iiab_ini_file }}
       community.general.ini_file:
+        mode: "0644"
         path: "{{ iiab_ini_file }}"
         section: ssl
         option: "{{ item.option }}"

@@ -260,6 +260,7 @@
     # 3f. WuzAPI static assets
     - name: Copy updated WuzAPI static assets
       ansible.builtin.copy:
+        mode: preserve
         src: "{{ ai_update_wuzapi_src_dir }}/static"
         dest: "{{ ai_update_wuzapi_dir }}/"
         remote_src: true
@@ -391,6 +392,7 @@
 
     - name: Add 'ai_update' variable values to {{ iiab_ini_file }}
       community.general.ini_file:
+        mode: "0644"
         path: "{{ iiab_ini_file }}"
         section: ai-update
         option: "{{ item.option }}"

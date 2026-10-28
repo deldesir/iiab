@@ -89,6 +89,7 @@
 
 - name: Add mempalace_disk_usage to {{ iiab_ini_file }}
   community.general.ini_file:
+    mode: "0644"
     path: "{{ iiab_ini_file }}"
     section: mempalace
     option: mempalace_disk_usage

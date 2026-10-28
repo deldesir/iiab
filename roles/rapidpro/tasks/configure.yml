@@ -262,6 +262,7 @@
 
 - name: Create Gunicorn systemd service
   ansible.builtin.template:
+    mode: "0644"
     src: rapidpro-gunicorn.service.j2
     dest: /etc/systemd/system/rapidpro-gunicorn.service
   become: true
@@ -287,6 +288,7 @@
 
 - name: Create Celery systemd service
   ansible.builtin.template:
+    mode: "0644"
     src: rapidpro-celery.service.j2
     dest: /etc/systemd/system/rapidpro-celery.service
   become: true
@@ -300,6 +302,7 @@
 
 - name: Create flow-export systemd units
   ansible.builtin.template:
+    mode: "0644"
     src: "rapidpro-flows-export.{{ item }}.j2"
     dest: "/etc/systemd/system/rapidpro-flows-export.{{ item }}"
   loop: [service, timer]
