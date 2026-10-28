@@ -5,49 +5,17 @@ ai_update_enabled: True
 # uv binary
 ai_update_uv_bin: /usr/local/bin/uv
 
-# ── The uv services (ai-gateway with its libraries, rivebot) ────────
-# Their sources, versions and venvs are defined ONCE, in their own roles
-# (roles/ai-gateway/defaults, roles/rivebot/defaults); this role runs each
-# role's update entry (tasks/update.yml), which moves the trees, re-syncs
-# and restarts when anything changed.
+# ── Where the services come from ───────────────────────────────────
+# Their sources, versions, directories and release tags are defined ONCE, in
+# their own roles' defaults: roles/ai-gateway and roles/rivebot (this role runs
+# their update entries), roles/rapidpro (rapidpro_repo, rapidpro_dir, the
+# courier and mailroom checkouts, rapidpro_*_release and *_binary_url) and
+# roles/wuzapi (wuzapi_repo, wuzapi_src_dir, wuzapi_release, wuzapi_binary_url).
+# main.yml loads the rapidpro and wuzapi defaults at its start (tasks/load-role-defaults.yml)
+# without outranking the operator's values.
 
-# ── RapidPro (Django — needs migrations + static + patches) ────────
-ai_update_rapidpro_dir: /opt/iiab/rapidpro
-ai_update_rapidpro_repo: "https://github.com/deldesir/rapidpro.git"
-ai_update_rapidpro_version: main
-
-# ── Courier + Mailroom (Go — built from fork source) ───────────────
-ai_update_courier_dir: /opt/iiab/courier
-ai_update_courier_repo: "https://github.com/deldesir/courier.git"
-ai_update_courier_version: main
-
-ai_update_mailroom_dir: /opt/iiab/mailroom
-ai_update_mailroom_repo: "https://github.com/deldesir/mailroom.git"
-ai_update_mailroom_version: main
-
-# ── Go services — download-first, build-from-source fallback ───────
+# ── Go toolchain for the fallback build (when a release download fails) ──
 ai_update_go_bin: /usr/local/go/bin/go
-
-ai_update_arch_dict:
-  x86_64: amd64
-  aarch64: arm64
-
-ai_update_go_arch: "{{ ai_update_arch_dict.get(ansible_facts.machine, 'unsupported') }}"
-
-# Pre-built release URLs (tried first — fast, seconds)
-ai_update_go_courier_url: "https://github.com/deldesir/courier/releases/latest/download/courier-linux-{{ ai_update_go_arch }}"
-ai_update_go_mailroom_url: "https://github.com/deldesir/mailroom/releases/latest/download/mailroom-linux-{{ ai_update_go_arch }}"
-ai_update_go_wuzapi_url: "https://github.com/deldesir/wuzapi/releases/latest/download/wuzapi-linux-{{ ai_update_go_arch }}"
-
-# Binary destinations
-ai_update_go_courier_dest: /usr/local/bin/courier
-ai_update_go_mailroom_dest: /usr/local/bin/mailroom
-
-
-# ── WuzAPI static assets ───────────────────────────────────────────
-ai_update_wuzapi_src_repo: "https://github.com/deldesir/wuzapi.git"
-ai_update_wuzapi_src_dir: /opt/iiab/wuzapi-src
-ai_update_wuzapi_dir: /opt/iiab/wuzapi
 
 # ── Skip list (set via -e to skip specific components) ─────────────
 # Usage: ./runrole ai-update -e '{"ai_update_skip": ["wuzapi", "rapidpro"]}'

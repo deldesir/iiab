@@ -1,16 +1,17 @@
 ---
 # Universal Binary Installation (VM & Android/Proot)
 
-# Download via the shared helper: prefer the gzipped asset, verify against
-# SHA256SUMS, fall back to raw. Same code path as the ai-update role.
+# Download via the shared helper: the pinned release's asset (rapidpro_*_release in the defaults),
+# gzipped when the release has one, verified against the release's SHA256SUMS. Same code path
+# as the ai-update role.
 - name: Install Mailroom Binary from Release (gz-preferred, checksum-verified)
-  ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "https://github.com/deldesir/mailroom/releases/latest/download/mailroom-linux-{{ rapidpro_go_arch }}" /usr/local/bin/mailroom
+  ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ rapidpro_mailroom_binary_url }}" "{{ rapidpro_mailroom_bin }}"
   become: true
   register: mailroom_binary
   changed_when: "'installed' in mailroom_binary.stdout"
 
 - name: Install Courier Binary from Release (gz-preferred, checksum-verified)
-  ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "https://github.com/deldesir/courier/releases/latest/download/courier-linux-{{ rapidpro_go_arch }}" /usr/local/bin/courier
+  ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "{{ rapidpro_courier_binary_url }}" "{{ rapidpro_courier_bin }}"
   become: true
   register: courier_binary
   changed_when: "'installed' in courier_binary.stdout"
