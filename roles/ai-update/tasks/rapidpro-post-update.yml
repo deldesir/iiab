@@ -111,7 +111,7 @@
   args:
     chdir: "{{ ai_update_rapidpro_dir }}"
   become: true
-  ignore_errors: true
+  failed_when: false   # best effort: a cache that cannot be reached is rebuilt on the next request
   changed_when: true   # always purges
 
 # RedBeat keeps beat entries in valkey after they leave CELERY_BEAT_SCHEDULE, so a

@@ -373,7 +373,7 @@
   loop:
     - 13000
     - 11000
-  ignore_errors: true
+  failed_when: false   # best effort: redis may not be up at this point; a cache not flushed is rebuilt by the build
   when: erpnext_enabled | bool
   changed_when: true   # always flushes
 
@@ -449,7 +449,6 @@
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     CYPRESS_INSTALL_BINARY: "0"
   when: erpnext_enabled | bool
-  ignore_errors: true
   changed_when: true   # reinstalls the Python and Node requirements on every run
 
 - name: Wipe compiled JS/CSS bundles (forces clean bench build, avoids stale hashes)
@@ -771,7 +770,7 @@
   loop:
     - 13000
     - 11000
-  ignore_errors: true
+  failed_when: false   # same best effort
   when: erpnext_enabled | bool and _needs_build | bool
   changed_when: true   # same
 
@@ -823,8 +822,7 @@
         chdir: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/frontend"
       become: true
       become_user: "{{ erpnext_user_name }}"
-      when: erpnext_enabled | bool
-      ignore_errors: true
+      when: erpnext_enabled | bool and 'builder' in (erpnext_extra_apps | map(attribute='app_name') | list)
       changed_when: true   # same
 
     - name: Deploy IIAB asset patching script

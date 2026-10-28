@@ -9,11 +9,10 @@
     state: started
     enabled: true
   loop:
-    - postgresql
+    - postgresql-iiab   # the IIAB cluster; the stock unit stays manual so it never squats the port
     - "{{ valkey_service_name }}"
   become: true
   when: not is_proot
-  ignore_errors: true
 
 - name: Systemd - Force Restart RapidPro Services (Fresh Start)
   ansible.builtin.service:

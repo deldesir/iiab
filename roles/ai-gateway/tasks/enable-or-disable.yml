@@ -37,7 +37,6 @@
       GRANT ALL PRIVILEGES ON TABLE konex_channel_configs TO {{ rapidpro_db_user | default('temba') }};
       GRANT ALL PRIVILEGES ON TABLE konex_knowledge_items TO {{ rapidpro_db_user | default('temba') }};
   when: ai_gateway_enabled and ai_gateway_postgres_uri | default('') | length > 0
-  ignore_errors: true
   become: true
   become_user: postgres
 
@@ -76,7 +75,6 @@
       UPDATE ai_llm
       SET config = jsonb_set(config::jsonb, '{endpoint}', '"http://localhost:{{ ai_gateway_port }}"')::json
       WHERE config->>'endpoint' != 'http://localhost:{{ ai_gateway_port }}'
-  when: ai_gateway_enabled
-  ignore_errors: true # Non-fatal: RapidPro may not be installed
+  when: ai_gateway_enabled and rapidpro_installed is defined   # the flow engine's table exists only once it is installed
   become: true
   become_user: postgres
