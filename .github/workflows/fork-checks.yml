@@ -7,7 +7,7 @@ on:
   pull_request:
 env:
   FORK_ROLES: ai-gateway ai-update anki email-bridge erpnext hardening organized rapidpro rivebot siyuan social-code ssl uv uv-service wuzapi
-  FORK_PY: scripts/fleet scripts/fleet-agent scripts/fleet-kuma-seed scripts/fleet-hub-watchdog scripts/fleet-install/demo-seed.py scripts/fleet-install/demo-hotel-seed.py scripts/fleet-install/semaphore-seed.py scripts/fleet-install/semaphore-run.py
+  FORK_PY: scripts/fleet scripts/fleet_tool scripts/tests scripts/fleet-agent scripts/fleet-kuma-seed scripts/fleet-hub-watchdog scripts/fleet-install/demo-seed.py scripts/fleet-install/demo-hotel-seed.py scripts/fleet-install/semaphore-seed.py scripts/fleet-install/semaphore-run.py
   FORK_SH: scripts/fleet-mirror scripts/install-release-binary.sh scripts/build-go-release.sh scripts/bench-upgrade.sh scripts/bench-rollback.sh scripts/bench-smoke.sh scripts/go-fork-tests.sh scripts/temba-fork-tests.sh scripts/maintain_patch.sh update_frappe_forks.sh
 jobs:
   checks:
@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -q ansible-lint yamllint ruff && sudo apt-get install -y -q shellcheck >/dev/null
+      - run: pip install -q ansible-lint yamllint ruff pytest pyyaml requests && sudo apt-get install -y -q shellcheck >/dev/null
       - name: yamllint on the fork roles
         run: yamllint -f parsable $(for r in $FORK_ROLES; do echo roles/$r; done)
       - name: every fork task file parses by import (not only by role)
@@ -30,6 +30,8 @@ jobs:
         run: ansible-lint --offline -c .ansible-lint-fork.yml $(for r in $FORK_ROLES; do ls roles/$r/tasks/*.yml; done)
       - name: ruff on the fleet tooling
         run: ruff check --config scripts/ruff.toml $FORK_PY
+      - name: the fleet tool's tests (a scratch inventory, a fake transport; no box is reached)
+        run: python3 -m pytest -q scripts/tests
       - name: shellcheck on the fork scripts
         run: shellcheck -S warning scripts/fleet-install/*.sh scripts/fleet-tasks/*.sh $FORK_SH
       - name: no address, hostname, business name or phone number in the fork's files
