@@ -50,12 +50,14 @@ write_files:
       done
       grep -q '^erpnext_installed: True' /etc/iiab/iiab_state.yml || { echo "DEMO-BOX-FAILED: ERPNext role did not finish (see /opt/iiab/iiab/iiab-install.log)"; exit 1; }
       echo "=== $(date -Is) demo-box: seed ($SEED)"
-      cp "scripts/fleet-install/$SEED" /tmp/demo-seed.py; chmod 644 /tmp/demo-seed.py
-      sudo -u frappe -H bash -lc "cd $B && bench --site $SITE execute \"exec(open('/tmp/demo-seed.py').read(), {})\"" | tail -3 | tee /tmp/demo-seed.out
-      grep -q "$READY" /tmp/demo-seed.out || { echo "DEMO-BOX-FAILED: the seed did not finish (see above)"; rm -f /tmp/demo-seed.py /tmp/demo-seed.out; exit 1; }
+      SD=$(mktemp -d /tmp/demo-seed.XXXXXX); chown root:frappe "$SD"; chmod 0750 "$SD"   # a private directory, as demo-rebuild.sh does
+      install -m 0640 -o root -g frappe "scripts/fleet-install/$SEED" "$SD/seed.py"
+      sudo -u frappe -H bash -lc "cd $B && bench --site $SITE set-config demo 1" >/dev/null   # the seed refuses a site without this mark
+      sudo -u frappe -H bash -lc "cd $B && bench --site $SITE execute \"exec(open('$SD/seed.py').read(), {})\"" | tail -3 | tee "$SD/seed.out"
+      grep -q "$READY" "$SD/seed.out" || { echo "DEMO-BOX-FAILED: the seed did not finish (see above)"; rm -rf "$SD"; exit 1; }
       ip=$(hostname -I | awk '{print $1}')
       sudo -u frappe -H bash -lc "cd $B && bench --site $SITE set-config host_name http://$ip/erp && bench --site $SITE clear-cache" >/dev/null
-      rm -f /tmp/demo-seed.py /tmp/demo-seed.out
+      rm -rf "$SD"
       {
         printf 'DEMO BOX READY (%s)\n  ERPNext    http://%s/erp        Administrator / demo1234\n' "$PROFILE" "$ip"
         [ "$PROFILE" = hotel ] && printf '  Hotel PMS  http://%s/erp/pms    staff: frontdesk@ housekeeping@ maintenance@ auditor@ manager@ bar@ example.com / demo1234\n' "$ip"
