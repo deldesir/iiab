@@ -3,7 +3,7 @@
   community.postgresql.postgresql_user:
     name: "{{ rapidpro_db_user }}"
     password: "{{ rapidpro_db_pass }}"
-    login_host: 127.0.0.1
+    login_unix_socket: /var/run/postgresql
   become: true
   become_user: postgres
 
@@ -11,7 +11,7 @@
   community.postgresql.postgresql_db:
     name: "{{ rapidpro_db_name }}"
     owner: "{{ rapidpro_db_user }}"
-    login_host: 127.0.0.1
+    login_unix_socket: /var/run/postgresql
   become: true
   become_user: postgres
 
@@ -19,7 +19,7 @@
   community.postgresql.postgresql_ext:
     name: "{{ item }}"
     login_db: "{{ rapidpro_db_name }}"
-    login_host: 127.0.0.1
+    login_unix_socket: /var/run/postgresql
   loop:
     - postgis
     - postgis_topology

@@ -44,6 +44,6 @@
   community.postgresql.postgresql_ext:
     name: vector
     login_db: "{{ rapidpro_db_name }}"
-    login_host: 127.0.0.1
+    login_unix_socket: /var/run/postgresql
   become: true
   become_user: postgres
