@@ -1,0 +1,73 @@
+---
+# Stage 1: the uv services through their own update entries, then the other repositories pulled.
+
+# ═══════════════════════════════════════════════════════════════
+# STAGE 1: The uv services, through their own update entries
+# ═══════════════════════════════════════════════════════════════
+# Each entry moves the tree (and the gateway's libraries) to the version
+# its role defines, re-syncs the venv, re-applies the role's patches and
+# restarts the service when anything changed.
+
+- name: Move the AI Gateway and its libraries to their wanted versions (roles/ai-gateway, update entry)
+  ansible.builtin.include_role:
+    name: ai-gateway
+    tasks_from: update
+  when: "'ai-gateway' not in ai_update_skip"
+
+- name: Move RiveBot to its wanted version (roles/rivebot, update entry)
+  ansible.builtin.include_role:
+    name: rivebot
+    tasks_from: update
+  when: "'rivebot' not in ai_update_skip"
+
+# ═══════════════════════════════════════════════════════════════
+# STAGE 1b: Pull the other git repos
+# ═══════════════════════════════════════════════════════════════
+
+# 1c. RapidPro
+- name: "Pull RapidPro"
+  ansible.builtin.git:
+    repo: "{{ rapidpro_repo }}"
+    dest: "{{ rapidpro_dir }}"
+    version: "{{ rapidpro_version }}"
+    force: true
+    update: true
+  become: true
+  when: "'rapidpro' not in ai_update_skip"
+  register: rapidpro_git_result
+
+# 1d. WuzAPI source (static assets)
+- name: "Pull WuzAPI source (static assets)"
+  ansible.builtin.git:
+    repo: "{{ wuzapi_repo }}"
+    dest: "{{ wuzapi_src_dir }}"
+    version: main
+    force: true
+    update: true
+  become: true
+  when: "'wuzapi' not in ai_update_skip"
+  register: wuzapi_src_result
+
+# 1e. Courier (Go source for local build)
+- name: "Pull Courier source"
+  ansible.builtin.git:
+    repo: "{{ rapidpro_courier_repo }}"
+    dest: "{{ rapidpro_courier_src_dir }}"
+    version: "{{ rapidpro_courier_version }}"
+    force: true
+    update: true
+  become: true
+  when: "'courier' not in ai_update_skip"
+  register: courier_git_result
+
+# 1f. Mailroom (Go source for local build)
+- name: "Pull Mailroom source"
+  ansible.builtin.git:
+    repo: "{{ rapidpro_mailroom_repo }}"
+    dest: "{{ rapidpro_mailroom_src_dir }}"
+    version: "{{ rapidpro_mailroom_version }}"
+    force: true
+    update: true
+  become: true
+  when: "'mailroom' not in ai_update_skip"
+  register: mailroom_git_result
