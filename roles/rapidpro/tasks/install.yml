@@ -114,6 +114,7 @@
   ansible.builtin.command: git config --global --add safe.directory {{ rapidpro_dir }}
   become: true
   when: rapidpro_dir not in (git_safe_dirs.stdout_lines | default([]))
+  changed_when: true   # runs only when the entry is absent
 
 - name: Clone/update RapidPro repository
   ansible.builtin.git:
@@ -209,9 +210,11 @@
   become: true
 
 - name: Restore RapidPro Directory Ownership (after root build steps)
-  ansible.builtin.command: "chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} {{ rapidpro_dir }}"
+  ansible.builtin.command: "chown -Rc {{ iiab_admin_user }}:{{ iiab_admin_user }} {{ rapidpro_dir }}"
   become: true
   when: rapidpro_git_clone.changed or rapidpro_bun_install.changed
+  register: rapidpro_chown
+  changed_when: rapidpro_chown.stdout | length > 0
 
 - name: Allow Nginx traversal of RapidPro directory (Professional Fix)
   ansible.builtin.file:

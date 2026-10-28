@@ -27,6 +27,8 @@
 - name: Install Wuzapi Binary from Release (gz-preferred, checksum-verified)
   ansible.builtin.command: bash /opt/iiab/iiab/scripts/install-release-binary.sh "https://github.com/deldesir/wuzapi/releases/latest/download/wuzapi-linux-{{ wuzapi_go_arch }}" "{{ wuzapi_dir }}/wuzapi"
   become: true
+  register: wuzapi_binary
+  changed_when: "'installed' in wuzapi_binary.stdout"
 
 - name: Clone Wuzapi repository (for static assets)
   ansible.builtin.git:

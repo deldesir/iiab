@@ -63,6 +63,8 @@
     chdir: "{{ ai_update_rapidpro_dir }}"
   become: true
   become_user: "{{ ai_update_gateway_user }}"
+  register: rapidpro_sync
+  changed_when: "'Installed' in rapidpro_sync.stderr or 'Uninstalled' in rapidpro_sync.stderr"
 
 - name: Run database migrations
   ansible.builtin.shell: |
@@ -72,6 +74,8 @@
     chdir: "{{ ai_update_rapidpro_dir }}"
   become: true
   become_user: "{{ ai_update_gateway_user }}"
+  register: rapidpro_migrate
+  changed_when: "'No migrations to apply' not in rapidpro_migrate.stdout"
 
 - name: Create the Postgres search indexes
   ansible.builtin.shell: |
@@ -82,6 +86,7 @@
   become: true
   become_user: "{{ ai_update_gateway_user }}"
   when: not (rapidpro_aws_enabled | default(false))
+  changed_when: true   # creates what is missing; the command does not report which
 
 - name: Collect static files
   ansible.builtin.shell: |
@@ -91,6 +96,8 @@
     chdir: "{{ ai_update_rapidpro_dir }}"
   become: true
   become_user: "{{ ai_update_gateway_user }}"
+  register: rapidpro_collectstatic
+  changed_when: "'0 static files copied' not in rapidpro_collectstatic.stdout"
 
 - name: Remove the retired front-end URL patch script
   ansible.builtin.file:
@@ -105,6 +112,7 @@
     chdir: "{{ ai_update_rapidpro_dir }}"
   become: true
   ignore_errors: true
+  changed_when: true   # always purges
 
 # RedBeat keeps beat entries in valkey after they leave CELERY_BEAT_SCHEDULE, so a
 # task upstream removed would keep firing as "unregistered". Prune against the
@@ -116,10 +124,14 @@
     chdir: "{{ ai_update_rapidpro_dir }}"
   become: true
   ignore_errors: true
+  register: redbeat_prune
+  changed_when: "'pruned 0 ' not in redbeat_prune.stdout"
 
 - name: Fix Nginx permissions on static assets and socket directory
   ansible.builtin.shell: |
-    chmod -R a+rX {{ ai_update_rapidpro_dir }}/sitestatic {{ ai_update_rapidpro_dir }}/media
-    chmod 755 {{ ai_update_rapidpro_dir }}/run
+    chmod -Rc a+rX {{ ai_update_rapidpro_dir }}/sitestatic {{ ai_update_rapidpro_dir }}/media
+    chmod -c 755 {{ ai_update_rapidpro_dir }}/run
   become: true
   ignore_errors: true
+  register: rapidpro_static_perms
+  changed_when: rapidpro_static_perms.stdout | length > 0
