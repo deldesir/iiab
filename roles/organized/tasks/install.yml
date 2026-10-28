@@ -1,8 +1,10 @@
 ---
 - name: Record (initial) disk space used
-  ansible.builtin.shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: set -o pipefail && df -B1 --output=used / | tail -1
   register: df1
   changed_when: false
+  args:
+    executable: /bin/bash
 
 - name: Mark organized-backend directory as safe for git
   ansible.builtin.shell: git config --global --get-all safe.directory | grep -qxF "{{ organized_dir }}" || { git config --global --add safe.directory "{{ organized_dir }}" && echo added; }
@@ -298,9 +300,11 @@
 # --- Bookkeeping ---
 
 - name: Record (final) disk space used
-  ansible.builtin.shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: set -o pipefail && df -B1 --output=used / | tail -1
   register: df2
   changed_when: false
+  args:
+    executable: /bin/bash
 
 - name: Add 'organized_disk_usage = ...' to {{ iiab_ini_file }}
   community.general.ini_file:

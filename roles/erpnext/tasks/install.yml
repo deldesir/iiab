@@ -53,9 +53,11 @@
   when: nodejs_installed is undefined
 
 - name: Record (initial) disk space used
-  ansible.builtin.shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: set -o pipefail && df -B1 --output=used / | tail -1
   register: df1
   changed_when: false
+  args:
+    executable: /bin/bash
 
 - name: Install ERPNext system dependencies
   ansible.builtin.apt:
@@ -77,11 +79,13 @@
 # second (it installs cleanly on 26.04: its libssl3 dependency is provided by libssl3t64).
 # Without either, the install goes on and PDF printing stays unavailable until one is added.
 - name: Does the OS repository offer wkhtmltopdf?
-  ansible.builtin.shell: "apt-cache policy wkhtmltopdf | grep -q 'Candidate: [0-9]'"
+  ansible.builtin.shell: "set -o pipefail && apt-cache policy wkhtmltopdf | grep -q 'Candidate: [0-9]'"
   register: wkhtmltopdf_apt
   failed_when: false
   changed_when: false
   when: erpnext_enabled | bool
+  args:
+    executable: /bin/bash
 
 - name: Install wkhtmltopdf from the OS repository
   ansible.builtin.apt:
@@ -543,10 +547,12 @@
   become: true
   become_user: "{{ erpnext_user_name }}"
   ansible.builtin.shell: |
+    set -o pipefail
     before=$(cat config/systemd/* 2>/dev/null | sha256sum)
     yes | ~/.local/bin/bench setup systemd
     [ "$before" = "$(cat config/systemd/* | sha256sum)" ] || echo "UNITS CHANGED"
   args:
+    executable: /bin/bash
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -582,6 +588,7 @@
 
 - name: Setup Systemd Symlinks
   ansible.builtin.shell: |
+    set -o pipefail
     links() { find /etc/systemd/system -maxdepth 1 -name 'frappe-bench*' -printf '%p %l\n' | sort | sha256sum; }
     before=$(links)
     ln -sf /home/{{ erpnext_user_name }}/frappe-bench/config/systemd/* /etc/systemd/system/
@@ -590,6 +597,8 @@
   when: erpnext_enabled | bool
   register: erpnext_systemd_links
   changed_when: "'RELINKED' in erpnext_systemd_links.stdout"
+  args:
+    executable: /bin/bash
 
 - name: Start Bench Redis Services (required for install-app and migrate)
   ansible.builtin.systemd:
@@ -606,8 +615,9 @@
 - name: Get list of apps already installed in site
   become: true
   become_user: "{{ erpnext_user_name }}"
-  ansible.builtin.shell: ~/.local/bin/bench --site {{ erpnext_site_name }} list-apps 2>/dev/null | grep -v '^$' || true
+  ansible.builtin.shell: set -o pipefail && ~/.local/bin/bench --site {{ erpnext_site_name }} list-apps 2>/dev/null | grep -v '^$' || true
   args:
+    executable: /bin/bash
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -669,8 +679,9 @@
 - name: Enable scheduler for the site
   become: true
   become_user: "{{ erpnext_user_name }}"
-  ansible.builtin.shell: ~/.local/bin/bench --site {{ erpnext_site_name }} scheduler status | grep -q 'is enabled' || { ~/.local/bin/bench --site {{ erpnext_site_name }} scheduler enable && echo ENABLED; }
+  ansible.builtin.shell: set -o pipefail && ~/.local/bin/bench --site {{ erpnext_site_name }} scheduler status | grep -q 'is enabled' || { ~/.local/bin/bench --site {{ erpnext_site_name }} scheduler enable && echo ENABLED; }
   args:
+    executable: /bin/bash
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -888,9 +899,11 @@
   when: erpnext_enabled | bool and not (_needs_build | bool)
 
 - name: Record (final) disk space used
-  ansible.builtin.shell: df -B1 --output=used / | tail -1
+  ansible.builtin.shell: set -o pipefail && df -B1 --output=used / | tail -1
   register: df2
   changed_when: false
+  args:
+    executable: /bin/bash
 
 - name: Add 'erpnext_disk_usage' delta to iiab.ini
   community.general.ini_file:
