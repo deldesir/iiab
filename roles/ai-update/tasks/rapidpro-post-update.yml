@@ -100,15 +100,25 @@
   args:
     chdir: "{{ rapidpro_dir }}"
   become: true
-  ignore_errors: true
   register: redbeat_prune
-  changed_when: "'pruned 0 ' not in redbeat_prune.stdout"
+  changed_when: "'pruned 0 ' not in redbeat_prune.stdout"   # a prune that fails stops the update: the schedule would keep firing removed tasks
 
-- name: Fix Nginx permissions on static assets and socket directory
-  ansible.builtin.shell: |
-    chmod -Rc a+rX {{ rapidpro_dir }}/sitestatic {{ rapidpro_dir }}/media
-    chmod -c 755 {{ rapidpro_dir }}/run
+# The run directory is not touched here: the flow engine role creates it 0770 with the web
+# server's group (units.yml), and a 755 after every update used to undo that.
+- name: Which of the static directories exist
+  ansible.builtin.stat:
+    path: "{{ rapidpro_dir }}/{{ item }}"
+  loop: [sitestatic, media]
+  register: rapidpro_static_dirs
+
+- name: Give nginx read and traverse rights on the static directories
+  ansible.builtin.file:
+    path: "{{ item.stat.path }}"
+    mode: a+rX
+    recurse: true
+    state: directory
+  loop: "{{ rapidpro_static_dirs.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stat.exists
   become: true
-  ignore_errors: true
-  register: rapidpro_static_perms
-  changed_when: rapidpro_static_perms.stdout | length > 0

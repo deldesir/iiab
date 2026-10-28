@@ -170,16 +170,21 @@
     mode: "0755"
 
 # Verify the certificate works
+# advisory: the certificate is installed either way; a failed rehearsal is printed, not fatal
 - name: Test certbot renewal (dry-run)
   ansible.builtin.command: certbot renew --dry-run --no-random-sleep-on-renew
   register: renewal_test
-  ignore_errors: true
+  failed_when: false
   changed_when: false
 
 - name: Show renewal test result
   ansible.builtin.debug:
     var: renewal_test.stdout_lines
-  when: renewal_test is defined
+
+- name: "⚠️  the renewal rehearsal failed: renewal will fail the same way unless this is fixed"
+  ansible.builtin.debug:
+    msg: "{{ renewal_test.stderr_lines | default([]) }}"
+  when: renewal_test.rc != 0
 
 - name: "Add 'iiab_ssl_www_resolved' to {{ iiab_state_file }}"
   ansible.builtin.lineinfile:

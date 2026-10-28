@@ -19,7 +19,7 @@
   register: db_table_count
   when: is_proot
   changed_when: false
-  ignore_errors: true
+  failed_when: false   # no database yet reads as an empty one: the restore below runs
 
 - name: Restore prebuilt database (Android)
   ansible.builtin.shell: |
