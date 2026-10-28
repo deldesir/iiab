@@ -10,7 +10,7 @@ and contacts live in the hub's private inventory, never in this repository.
 | Piece | Where | What |
 |---|---|---|
 | Inventory | `/etc/iiab/fleet.yml` (hub, 0640, private) | one record per box: id, host, business, role (hub / till / customer), owner, profile, plan, status, canary rank, maintenance window, contacts, hosting provider, extra units to watch |
-| `fleet` | `scripts/fleet`, installed as a copy at `/usr/local/sbin/fleet` | the command: list, status, check, digest, manifest, upgrade, suspend, resume, offboard, push |
+| `fleet` | `scripts/fleet` (the entry point) and `scripts/fleet_tool/` (the package), installed as copies by `scripts/fleet-install/install-fleet.sh` | the command: list, status, check, digest, manifest, upgrade, suspend, resume, offboard, push; `fleet --help` and `fleet COMMAND --help` |
 | Release manifests | `/etc/iiab/fleet-releases/<id>.manifest` | `app=commit` per app; what "release 2026.10-r8" means |
 | `bench-upgrade.sh` | `scripts/bench-upgrade.sh` | per-box upgrade; with `MANIFEST=` pins every app to the release |
 | Nightly check | `fleet-check.timer` → `fleet check --all` → `fleet digest --send` | writes `/var/lib/fleet/checks/<id>/`, the digest, feeds the monitor's push monitors, mirrors into the fleet site, sends the digest (through the gateway where one runs, else through the fleet site's outgoing Email Account) |
@@ -41,6 +41,17 @@ and contacts live in the hub's private inventory, never in this repository.
 - `bench-upgrade.sh` now handles every app in `sites/apps.txt`, follows each app's own
   branch, keeps apps absent from the manifest at their deployed commit, and tolerates a
   remote it cannot read when the manifest pins the deployed commit.
+
+## The package and its tests
+
+`scripts/fleet_tool/` holds the command: `config` (paths, inventory, catalog, lock, selection),
+`transport` (the one way the tool leaves the machine: ssh, scp, rsync, curl, TLS, RDAP, the tailnet
+client, local programs), `releases`, `state` (the check history), `site` (the fleet site and the
+monitor), `checks` (metrics, their evaluation, the digest, the read-only commands), `upgrade`,
+`lifecycle`, `deploy`, `identity`, `cli`. `scripts/tests/` runs the tool against a scratch
+inventory with a fake transport that answers from a script and raises on any host it was not
+given; the real transport refuses to run while `FLEET_NO_NETWORK` is set, so a test that forgot
+the fake cannot reach a box. `python3 -m pytest -q scripts/tests` (CI runs it on every push).
 
 ## Naming
 
@@ -175,9 +186,10 @@ To rebuild or move an existing control plane, use `scripts/fleet-install/export-
 on the old hub and `import-control-plane.sh` on the new one (the private operations manual
 has the runbook). The list below is what those scripts install, for a first build by hand.
 
-- `install -m 0755 scripts/fleet /usr/local/sbin/fleet`; same for `scripts/fleet-kuma-seed`
-  (copies, not symlinks, so the running hub never depends on which branch the repo is on;
-  `fleet upgrade` reads `bench-upgrade.sh` from the repo, or `FLEET_UPGRADE_SCRIPT`)
+- `bash scripts/fleet-install/install-fleet.sh`: the entry point to `/usr/local/sbin/fleet`, the
+  package to `/usr/local/lib/fleet_tool`, `fleet-kuma-seed` beside the entry point (copies, not
+  symlinks, so the running hub never depends on which branch the repo is on; re-run after a pull
+  that touches them; `fleet upgrade` reads `bench-upgrade.sh` from the repo, or `FLEET_UPGRADE_SCRIPT`)
   (it runs on a small venv: `uv venv /var/lib/fleet/venv && uv pip install --python
   /var/lib/fleet/venv/bin/python "python-socketio[client]" requests pyyaml websocket-client`).
 - Units (`scripts/fleet-units/`): `fleet-check.timer` → `fleet-check.service` → `fleet-digest.service`

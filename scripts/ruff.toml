@@ -3,3 +3,6 @@ line-length = 160
 [lint]
 select = ["F", "B", "S"]
 ignore = ["S603", "S607", "S310", "S105", "S608", "B905"]   # subprocess and urllib use are the tool's job; the demo password is documented
+
+[lint.per-file-ignores]
+"scripts/tests/*" = ["S101"]   # the tests assert
