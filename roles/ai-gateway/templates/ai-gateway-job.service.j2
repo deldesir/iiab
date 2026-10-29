@@ -1,0 +1,25 @@
+# {{ unit_job.name }}: one of the gateway's scheduled jobs. Rendered from ai-gateway-job.service.j2;
+# the job itself is described in roles/ai-gateway/defaults/main.yml (ai_gateway_jobs).
+[Unit]
+Description={{ unit_job.description }}
+OnFailure=notify-failure@%n.service
+Documentation={{ unit_job.documentation | default('https://github.com/deldesir/gateway') }}
+After={{ (['network.target'] + (unit_job.after | default([]))) | join(' ') }}
+{% if unit_job.wants | default([]) %}
+Wants={{ unit_job.wants | join(' ') }}
+{% endif %}
+
+[Service]
+Type=oneshot
+User={{ ai_gateway_user }}
+WorkingDirectory={{ ai_gateway_dir }}
+EnvironmentFile={{ ai_gateway_dir }}/.env
+# Machine-local overrides — never written by Ansible; loaded last, so it wins.
+EnvironmentFile=-{{ ai_gateway_dir }}/.env.local
+Environment="MEMPALACE_PALACE_PATH={{ ai_gateway_mempalace_palace_path }}"
+ExecStart={{ unit_job.exec | default(ai_gateway_dir ~ '/.venv/bin/python -m ' ~ unit_job.module | default('')) }}
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

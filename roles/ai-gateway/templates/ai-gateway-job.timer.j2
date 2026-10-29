@@ -1,0 +1,13 @@
+# {{ unit_job.name }}: the timer of one of the gateway's scheduled jobs. Rendered from
+# ai-gateway-job.timer.j2; the schedule is in roles/ai-gateway/defaults/main.yml (ai_gateway_jobs).
+[Unit]
+Description={{ unit_job.timer_description }}
+
+[Timer]
+{% for when in unit_job.on_calendar %}
+OnCalendar={{ when }}
+{% endfor %}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

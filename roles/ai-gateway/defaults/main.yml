@@ -185,46 +185,236 @@ ai_gateway_contact_sync_wuzapi_channel: ""
 talk_sync_language: "ht"
 talk_sync_pub: "s34"
 
-# The service as the shared uv-service role sees it (roles/uv-service/README.md). The
-# cognitive-pipeline jobs are oneshot units with a timer each (templates
-# ai-gateway-<job>.service.j2 and .timer.j2); the maintenance units are installed everywhere,
-# their timers enabled here except the emailed fleet backups, which only the hub enables
-# (tasks/install.yml).
+# The scheduled jobs of the gateway: one systemd service and timer each, rendered from the two
+# templates ai-gateway-job.service.j2 and ai-gateway-job.timer.j2 (one entry here = one pair of
+# units, ai-gateway-<name>.service and .timer). Fields: description, timer_description,
+# on_calendar (a list; several entries = several OnCalendar lines), module (run as
+# `python -m <module>` from the venv) or exec (the full ExecStart), and the optional
+# documentation (the gateway's repository by default), after and wants (units beyond network.target).
 ai_gateway_jobs:
-  - compact
-  - kgextract
-  - kgwiki
-  - nudge
-  - talksync
-  - radar
-  - personsync
-  - dailybrief
-  - synthesis
-  - weekly
-  - eveningwrap
-  - sitrep
-  - monthend
-  - reminders
-  - weekahead
-  - spiritual
-  - home
-  - shepherd
-  - siyuancapture
-  - persontouches
-  - ldctwp
-  - ldcpeople
-  - contactsync
+  compact:
+    description: Nightly MemPalace Compaction for AI Gateway
+    documentation: https://github.com/deldesir/mempalace
+    exec: |-
+      /bin/bash -c 'n=0; until {{ ai_gateway_dir }}/.venv/bin/mempalace compress; do n=$$((n+1)); [ $$n -ge 5 ] && echo "compact: palace still locked after $$n attempts" && exit 1; echo "compact: palace busy, retry $$n/5 in 60s"; sleep 60; done'
+    on_calendar:
+      - '*-*-* 03:00:00'
+    timer_description: Timer for Nightly MemPalace Compaction
+  kgextract:
+    description: Nightly drawer→KG fact extraction (MemPalace → knowledge graph)
+    module: app.jobs.kg_extract
+    on_calendar:
+      - '*-*-* 03:15:00'
+    timer_description: Timer for nightly drawer→KG extraction
+  kgwiki:
+    description: Nightly KG→Wiki render (MemPalace knowledge graph → SiYuan Wiki)
+    after:
+      - siyuan.service
+    wants:
+      - siyuan.service
+    module: app.jobs.kg_wiki_render
+    on_calendar:
+      - '*-*-* 03:30:00'
+    timer_description: Timer for nightly KG→Wiki render
+  nudge:
+    description: Morning talk-prep nudge (actionable items → admin, email-first)
+    after:
+      - siyuan.service
+    module: app.jobs.talk_nudge
+    on_calendar:
+      - '*-*-* 07:00:00 America/Port-au-Prince'
+    timer_description: Timer for morning talk-prep nudge
+  talksync:
+    description: Nightly Organized→talkmaster assignment sync (auto-create talk revisions)
+    after:
+      - organized.service
+      - siyuan.service
+    wants:
+      - organized.service
+    module: app.jobs.talk_sync
+    on_calendar:
+      - '*-*-* 03:45:00'
+    timer_description: Timer for nightly Organized→talkmaster assignment sync
+  radar:
+    description: Nightly cockpit radar (reality scan → SiYuan Radar + morning digest)
+    after:
+      - siyuan.service
+    wants:
+      - siyuan.service
+    module: app.jobs.cockpit_radar
+    on_calendar:
+      - '*-*-* 06:30:00 America/Port-au-Prince'
+    timer_description: Timer for the morning cockpit radar (reality scan → SiYuan + digest)
+  personsync:
+    description: Nightly person-hub sync (Organized roster → RapidPro contacts + SiYuan pages)
+    after:
+      - siyuan.service
+    wants:
+      - siyuan.service
+    module: app.jobs.person_sync
+    on_calendar:
+      - '*-*-* 04:00:00'
+    timer_description: Timer for nightly person-hub sync (Organized → RapidPro + SiYuan)
+  dailybrief:
+    description: Morning daily-note brief (near-horizon facts → machine block in today's daily note)
+    after:
+      - siyuan.service
+    wants:
+      - siyuan.service
+    module: app.jobs.daily_brief
+    on_calendar:
+      - '*-*-* 06:40:00 America/Port-au-Prince'
+    timer_description: Timer for the morning daily-note brief (after the 06:30 radar)
+  synthesis:
+    description: Morning Hermes synthesis (insights from yesterday → machine block in today's daily note)
+    after:
+      - siyuan.service
+    wants:
+      - siyuan.service
+    module: app.jobs.daily_synthesis
+    on_calendar:
+      - '*-*-* 06:50:00 America/Port-au-Prince'
+    timer_description: Timer for the morning Hermes synthesis (after the 06:40 brief)
+  weekly:
+    description: Sunday weekly review (scaffold + Hermes week synthesis → SiYuan Weekly Reviews)
+    after:
+      - siyuan.service
+    wants:
+      - siyuan.service
+    module: app.jobs.weekly_review
+    on_calendar:
+      - Sun *-*-* 18:00:00 America/Port-au-Prince
+    timer_description: Timer for the Sunday weekly review synthesis
+  eveningwrap:
+    description: Evening wrap (day's captures → tomorrow's priorities + hard-stop cue in today's daily note)
+    after:
+      - siyuan.service
+    wants:
+      - siyuan.service
+    module: app.jobs.evening_wrap
+    on_calendar:
+      - '*-*-* 20:30:00 America/Port-au-Prince'
+    timer_description: Timer for the evening wrap (~20:30, closes the day, seeds tomorrow)
+  sitrep:
+    description: Weekly sitrep draft (Friday — week's ticket/incident captures → draft in Work + nudge)
+    after:
+      - siyuan.service
+    wants:
+      - siyuan.service
+    module: app.jobs.weekly_sitrep
+    on_calendar:
+      - Fri *-*-* 16:00:00 America/Port-au-Prince
+    timer_description: Timer for the weekly sitrep draft (Friday 16:00)
+  monthend:
+    description: 'Month-end pack (prev month: work report draft + pioneer hours total + secretary reminder)'
+    after:
+      - siyuan.service
+    wants:
+      - siyuan.service
+    module: app.jobs.month_end
+    on_calendar:
+      - '*-*-01 08:00:00 America/Port-au-Prince'
+    timer_description: Timer for the month-end pack (1st of month, 08:00, summarizes the previous month)
+  reminders:
+    description: Fire due operator reminders (captures.jsonl kind=reminder → admin nudge)
+    module: app.jobs.reminders
+    on_calendar:
+      - '*:0/2:00'
+    timer_description: Timer for firing due operator reminders (every 2 min)
+  weekahead:
+    description: Week-ahead chief-of-staff brief (Sunday — reasons over the coming week → SiYuan + nudge)
+    after:
+      - siyuan.service
+    wants:
+      - siyuan.service
+    module: app.jobs.week_ahead
+    on_calendar:
+      - Sun *-*-* 19:00:00 America/Port-au-Prince
+    timer_description: Timer for the week-ahead chief-of-staff brief (Sunday 19:00)
+  spiritual:
+    description: Morning spiritual nudge (daily text + meeting prep + study rhythm → admin, WhatsApp)
+    module: app.jobs.spiritual_nudge
+    on_calendar:
+      - '*-*-* 06:50:00 America/Port-au-Prince'
+    timer_description: Timer for the morning spiritual nudge
+  home:
+    description: Cockpit Home — consolidate the cockpit into one always-rewritten SiYuan doc
+    after:
+      - siyuan.service
+    module: app.jobs.cockpit_home
+    on_calendar:
+      - '*-*-* 06:45:00 America/Port-au-Prince'
+      - '*-*-* 12:30:00 America/Port-au-Prince'
+      - '*-*-* 18:30:00 America/Port-au-Prince'
+    timer_description: Timer for the Cockpit Home refresh
+  shepherd:
+    description: 'Weekly shepherd nudge (field-group coverage: who you haven''t logged → admin, email)'
+    module: app.jobs.shepherd_nudge
+    on_calendar:
+      - Sat *-*-* 08:00:00 America/Port-au-Prince
+    timer_description: Timer for the weekly shepherd nudge (Saturday morning, before field service)
+  siyuancapture:
+    description: SiYuan inbound capture (poll ✍️ Inbox → captures.jsonl, loop-safe)
+    after:
+      - siyuan.service
+    wants:
+      - siyuan.service
+    module: app.jobs.siyuan_capture
+    on_calendar:
+      - '*-*-* *:0/10:00'
+    timer_description: Timer for SiYuan inbound capture (poll the ✍️ Inbox every 10 minutes)
+  persontouches:
+    description: Person touches (shepherd captures → 🕊️ Shepherd block on matched /people pages)
+    after:
+      - siyuan.service
+      - ai-gateway-personsync.service
+    wants:
+      - siyuan.service
+    module: app.jobs.person_touches
+    on_calendar:
+      - '*-*-* 04:30:00'
+    timer_description: Timer for person touches (daily, after the nightly person sync)
+  ldctwp:
+    description: LDC TWP notifier (email each brother his training assignment, days before → operator review by default)
+    module: app.jobs.ldc_twp_notify
+    on_calendar:
+      - '*-*-* 07:30:00 America/Port-au-Prince'
+    timer_description: Timer for the LDC TWP assignment notifier (daily morning check of the lead window)
+  ldcpeople:
+    description: 'LDC people sync (a /people page per TWP volunteer: role rotation + contact + next assignment)'
+    module: app.jobs.ldc_people_sync
+    on_calendar:
+      - '*-*-* 04:15:00'
+    timer_description: Timer for the LDC people sync (daily, just after person sync)
+  contactsync:
+    description: Team contact notifier (send each team member new/changed contact cards → operator review by default)
+    module: app.jobs.contact_sync_notify
+    on_calendar:
+      - '*-*-* 08:15:00 America/Port-au-Prince'
+    timer_description: Timer for the team contact notifier (daily check for directory changes)
 ai_gateway_maintenance_units:
   - pipeline-health-check
   - second-brain-backup
   - fleet-backup-mail
   - fleet-backup-mail-hub
+# The units as the shared uv-service role installs them (roles/uv-service/README.md): a file
+# name is a template rendered as itself; a mapping names the template, the unit and the job it
+# is rendered for. The maintenance units are installed everywhere, their timers enabled here
+# except the emailed fleet backups, which only the hub enables (tasks/install.yml).
+ai_gateway_job_units: >-
+  {%- set out = [] -%}
+  {%- for name, job in ai_gateway_jobs.items() -%}
+  {%- for kind in ['service', 'timer'] -%}
+  {%- set _ = out.append({'src': 'ai-gateway-job.' ~ kind ~ '.j2', 'name': 'ai-gateway-' ~ name ~ '.' ~ kind, 'job': job | combine({'name': name})}) -%}
+  {%- endfor -%}
+  {%- endfor -%}
+  {{ out }}
 ai_gateway_units: >-
   {{ ['ai-gateway.service.j2']
-     + (ai_gateway_jobs | map('regex_replace', '^', 'ai-gateway-') | product(['.service.j2', '.timer.j2']) | map('join') | list)
+     + ai_gateway_job_units
      + (ai_gateway_maintenance_units | product(['.service.j2', '.timer.j2']) | map('join') | list) }}
 ai_gateway_timers: >-
-  {{ (ai_gateway_jobs | map('regex_replace', '^', 'ai-gateway-') | map('regex_replace', '$', '.timer') | list)
+  {{ (ai_gateway_jobs | list | map('regex_replace', '^', 'ai-gateway-') | map('regex_replace', '$', '.timer') | list)
      + ['pipeline-health-check.timer', 'second-brain-backup.timer'] }}
 
 ai_gateway_service:
