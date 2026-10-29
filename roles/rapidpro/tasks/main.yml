@@ -2,9 +2,15 @@
 # Main Orchestrator for RapidPro Role
 # Note: is_proot is defined in default_vars.yml — no need to re-derive it here.
 
-- name: Run Installation Tasks
+# The install runs once, as in every other role: a box whose state file carries
+# 'rapidpro_installed' keeps its checkout, its venv and its binaries, and a role
+# run only re-applies the configuration below. Code updates are the ai-update
+# role's work; './runrole --reinstall rapidpro' clears the state line to install afresh.
+- name: Install RapidPro if 'rapidpro_installed' not defined, e.g. in {{ iiab_state_file }}
   ansible.builtin.include_tasks: install.yml
-  when: rapidpro_enabled
+  when:
+    - rapidpro_enabled
+    - rapidpro_installed is undefined
 
 # The `centrifugo` tag on these includes lets `--tags centrifugo` reach the
 # tasks inside them that carry it (the mailroom unit, the nginx files) —

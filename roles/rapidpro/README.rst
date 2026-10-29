@@ -52,3 +52,8 @@ To install and enable RapidPro, add the configuration above to your ``/etc/iiab/
 Then run the IIAB installer.
 
 After installation, RapidPro will be available at ``http://box.lan/rp``.
+
+The install runs once. A later ``./runrole rapidpro`` on an installed box re-applies the
+configuration (settings, units, nginx) and leaves the checkout, the virtual environment and
+the binaries alone; code updates are the ``ai-update`` role's work. To install afresh, run
+``./runrole --reinstall rapidpro``, which clears the ``rapidpro_installed`` state line first.
