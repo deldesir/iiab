@@ -14,7 +14,7 @@
                         the agent configuration (every box has a lease, not every box reports).
 
 Config: /etc/iiab/fleet-agent.conf (FLEET_BOX_ID, FLEET_HUB_URL, FLEET_AGENT_TOKEN, KUMA_PUSH_URL,
-SITE, BENCH, MAINTENANCE_WINDOW, TIMEZONE). Stdlib only. Runs as root. Never prints the token.
+SITE, BENCH, MAINTENANCE_WINDOW, FREEZE_WINDOWS, TIMEZONE). Stdlib only. Runs as root. Never prints the token.
 The metrics come from fleet-probe, installed beside this script: the same file the hub sends over
 ssh to the boxes it can reach, so a report and a pull check measure the same things the same way.
 """
@@ -138,6 +138,16 @@ def in_window(c: dict) -> bool:
     return start <= now <= end if start <= end else (now >= start or now <= end)
 
 
+def frozen(c: dict, today: dt.date | None = None) -> str | None:
+    """FREEZE_WINDOWS: `from..to` date pairs (inclusive, box-local) during which no upgrade runs."""
+    today = today or dt.datetime.now(ZoneInfo(c.get("TIMEZONE") or "UTC")).date()
+    for pair in (c.get("FREEZE_WINDOWS") or "").split():
+        start, _, end = pair.partition("..")
+        if dt.date.fromisoformat(start) <= today <= dt.date.fromisoformat(end):
+            return f"frozen until {end}"
+    return None
+
+
 def upgrade(c: dict) -> int:
     try:
         # POST: the token travels in the body, not in a query string the hub's web server logs
@@ -156,6 +166,9 @@ def upgrade(c: dict) -> int:
         return 0
     if not in_window(c):
         print(f"release {rid} pending; outside the maintenance window {c.get('MAINTENANCE_WINDOW')}")
+        return 0
+    if why := frozen(c):
+        print(f"release {rid} pending; this box is {why}")
         return 0
     Path("/root/bench-upgrade.manifest").write_text(text)
     if not Path("/root/bench-upgrade.sh").exists():
