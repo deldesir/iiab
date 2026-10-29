@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .config import CATALOG, HUB_BACKUPS, INVENTORY, LEVELS, SCRIPTS, STATE, TARGETS, label, load_catalog, paint, parse_conf, select_boxes, state
+from .config import CATALOG, HUB_BACKUPS, INVENTORY, LEVELS, SCRIPTS, STATE, TARGETS, frozen, label, load_catalog, paint, parse_conf, select_boxes, state
 from .releases import heads_of, manifest_apps, read_manifest
 from .site import kuma_heartbeats, latest_report, load_push_conf, push, site_get
 from .state import latest_checks, write_check
@@ -562,5 +562,6 @@ def cmd_tailnet(a, inv):
 def cmd_list(a, inv):
     print(f"{'rank':<4} {'id':<8} {'alias':<17} {'host':<22} {'business':<24} {'role':<9} {'owner':<9} {'conn':<8} {'plan':<10} {'status':<10} services")
     for b in sorted(inv["boxes"], key=lambda b: (b["canary_rank"], b["id"])):
-        print(f"{b['canary_rank']:<4} {b['id']:<8} {b['alias']:<17} {b['host']:<22} {b['business']:<24} {b['role']:<9} {b['owner']:<9} {b['connectivity']:<8} {b.get('plan', ''):<10} {b['status']:<10} {','.join(b['services'])}")
+        why = frozen(b)
+        print(f"{b['canary_rank']:<4} {b['id']:<8} {b['alias']:<17} {b['host']:<22} {b['business']:<24} {b['role']:<9} {b['owner']:<9} {b['connectivity']:<8} {b.get('plan', ''):<10} {b['status']:<10} {','.join(b['services'])}" + (f"  [{why}]" if why else ""))
     return 0

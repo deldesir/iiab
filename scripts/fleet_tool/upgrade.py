@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 from .checks import _BACKUP_BOX, _set_backup_box, check_box
-from .config import HUB_BACKUPS, ROLLBACK_SCRIPT, UPGRADE_SCRIPT, in_window, label, load_catalog, log_action, require_targets, select_boxes
+from .config import HUB_BACKUPS, ROLLBACK_SCRIPT, UPGRADE_SCRIPT, frozen, in_window, label, load_catalog, log_action, require_targets, select_boxes
 from .releases import manifest_path, read_manifest
 from .site import push
 from .state import write_check
@@ -76,12 +76,17 @@ def cmd_upgrade(a, inv):
     if rid:
         read_manifest(rid)
     print(f"upgrade {'(preflight) ' if a.preflight else ''}order: {', '.join(b['id'] for b in boxes)}; release: {rid or 'fork heads'}")
+    frozen_boxes = []
     for b in boxes:
         if b["mode"] == "push":
             print(f"== {b['id']}: offline box; fleet-agent applies release {rid or '(none)'} itself inside its window")
             continue
         if b["status"] in ("suspended", "offboarded") and not a.now:
             print(f"== {b['id']}: skipped ({b['status']})")
+            continue
+        if not a.preflight and not a.now and (why := frozen(b)):
+            print(f"== {b['id']}: skipped, {why}; the rollout goes on without it and it catches up after the freeze (or --now)")
+            frozen_boxes.append(b["id"])
             continue
         if not a.preflight and not a.now and not in_window(b):
             print(f"== {b['id']}: outside its maintenance window {b.get('maintenance_window')} ({b.get('timezone')}); use --now")
@@ -99,7 +104,7 @@ def cmd_upgrade(a, inv):
                 print(f"   post-upgrade check {r['status']}: {'; '.join(r['problems'])} — stopping the rollout")
                 return 1
             print(f"   post-upgrade check {r['status']}")
-    print("UPGRADE-OK" if not a.preflight else "PREFLIGHT-OK")
+    print(("UPGRADE-OK" if not a.preflight else "PREFLIGHT-OK") + (f" (frozen, to catch up: {', '.join(frozen_boxes)})" if frozen_boxes else ""))
     return 0
 
 
@@ -110,6 +115,8 @@ def cmd_rollback(a, inv):
         sys.exit("fleet: an offline box rolls back from its own console (bench-rollback.sh on the box)")
     if not (a.dry_run or a.now or in_window(box)):
         sys.exit(f"fleet: {label(box)} is outside its maintenance window {box.get('maintenance_window')} ({box.get('timezone')}); use --now")
+    if not a.now and (why := frozen(box)):
+        sys.exit(f"fleet: {label(box)} is {why}; use --now")
     if not ROLLBACK_SCRIPT.exists():
         sys.exit(f"fleet: {ROLLBACK_SCRIPT} missing")
     scp_to(box, ROLLBACK_SCRIPT, "/root/bench-rollback.sh")
@@ -194,6 +201,8 @@ def cmd_reboot(a, inv):
         sys.exit("fleet: offline box; reboot it on site")
     if not a.now and not in_window(box):
         sys.exit(f"fleet: outside the maintenance window {box.get('maintenance_window')} ({box.get('timezone')}); use --now")
+    if not a.now and (why := frozen(box)):
+        sys.exit(f"fleet: {label(box)} is {why}; use --now")
     print(f"== {box['id']}: rebooting")
     log_action(f"reboot {box['id']} now={a.now}")
     run_on(box, "systemd-run --on-active=2 --collect /bin/systemctl reboot", timeout=30)
