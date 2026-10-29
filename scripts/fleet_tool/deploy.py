@@ -12,13 +12,19 @@ from .site import agent_token_for, push, push_token_for
 from .transport import run_on, scp_to
 
 
+def freeze_windows_text(box: dict) -> str:
+    """The box's freeze windows as the agent reads them: `from..to` pairs joined by spaces."""
+    return " ".join(f"{w['from']}..{w['to']}" for w in box.get("freeze_windows") or [])
+
+
 def agent_conf_text(box: dict) -> str:
     conf = read_conf(PUSH_CONF)
     hub = conf.get("FLEET_PUBLIC_URL") or sys.exit("fleet: FLEET_PUBLIC_URL is not set in the fleet configuration")
     kuma = f"{conf['KUMA_URL'].rstrip('/')}/api/push/{push_token_for(box['id'], conf['KUMA_PUSH_TOKEN'])}" if conf.get("KUMA_URL") and conf.get("KUMA_PUSH_TOKEN") else ""
     return (f"# fleet-agent configuration for {box['id']} (0600). Reports go to the fleet site on the hub.\n"
             f"FLEET_BOX_ID={box['id']}\nFLEET_HUB_URL={hub}\nFLEET_AGENT_TOKEN={agent_token_for(box['id'])}\n"
-            f"KUMA_PUSH_URL={kuma}\nSITE={box['site']}\nBENCH={box['bench']}\nMAINTENANCE_WINDOW={box.get('maintenance_window', '')}\nTIMEZONE={box.get('timezone', 'UTC')}\n")
+            f"KUMA_PUSH_URL={kuma}\nSITE={box['site']}\nBENCH={box['bench']}\nMAINTENANCE_WINDOW={box.get('maintenance_window', '')}\nTIMEZONE={box.get('timezone', 'UTC')}\n"
+            f"FREEZE_WINDOWS={freeze_windows_text(box)}\n")
 
 
 def cmd_agent_token(a, inv):

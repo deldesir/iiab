@@ -230,6 +230,21 @@ def in_window(box: dict) -> bool:
     return start <= now <= end if start <= end else (now >= start or now <= end)
 
 
+def frozen(box: dict, today: dt.date | None = None) -> str | None:
+    """Why a box is frozen today, or None. A box's freeze_windows are the dates (inclusive, in
+    its own timezone) during which no rollout, reboot or rollback touches it: a hotel's full
+    week, a shop's month-end. `--now` overrides, as it does the maintenance window."""
+    today = today or dt.datetime.now(ZoneInfo(box.get("timezone") or "UTC")).date()
+    for w in box.get("freeze_windows") or []:
+        try:
+            start, end = dt.date.fromisoformat(str(w["from"])), dt.date.fromisoformat(str(w["to"]))
+        except (KeyError, TypeError, ValueError):
+            sys.exit(f"fleet: {box.get('id')}: freeze_windows entries look like {{from: 2026-12-20, to: 2027-01-05, reason: high season}}")
+        if start <= today <= end:
+            return f"frozen until {end} ({w.get('reason') or 'no reason recorded'})"
+    return None
+
+
 def log_action(text: str) -> None:
     STATE.mkdir(parents=True, exist_ok=True)
     with open(STATE / "actions.log", "a") as fh:

@@ -437,3 +437,40 @@ def test_suspend_refuses_our_own_box(scratch, fake, capsys):
 def test_environment_is_the_scratch_one():
     assert os.environ["FLEET_NO_NETWORK"] == "1"
     assert not str(config.INVENTORY).startswith("/etc/")
+
+
+def test_frozen_reads_the_windows_in_box_local_dates():
+    import datetime as dt
+    box = {"id": "box-009", "timezone": "UTC", "freeze_windows": [{"from": "2026-12-20", "to": "2027-01-05", "reason": "high season"}]}
+    assert config.frozen(box, dt.date(2026, 12, 25)) == "frozen until 2027-01-05 (high season)"
+    assert config.frozen(box, dt.date(2027, 1, 5)) and config.frozen(box, dt.date(2027, 1, 6)) is None
+    assert config.frozen({"id": "x"}, dt.date(2026, 12, 25)) is None
+    with pytest.raises(SystemExit):
+        config.frozen({"id": "x", "freeze_windows": [{"from": "tomorrow"}]}, dt.date(2026, 12, 25))
+
+
+def test_rollout_skips_a_frozen_box_and_reboot_refuses_it(scratch, fake, capsys, monkeypatch):
+    monkeypatch.setattr(upgrade, "in_window", lambda b: True)
+    inv = config.load_inventory()
+    _box(inv, "box-002")["freeze_windows"] = [{"from": "2000-01-01", "to": "2999-12-31", "reason": "month-end"}]
+    config.save_inventory(inv)
+    assert "freeze_windows" in config.INVENTORY.read_text()                     # a plain inventory key, kept on save
+    assert cli.main(["upgrade", "shop"]) == 0
+    out = capsys.readouterr().out
+    assert "skipped, frozen until 2999-12-31 (month-end)" in out and "UPGRADE-OK (frozen, to catch up: box-002)" in out
+    assert not [c for c in fake.calls if c[0] in ("run_on", "scp_to")]
+    assert cli.main(["list"]) == 0 and "[frozen until 2999-12-31 (month-end)]" in capsys.readouterr().out
+    with pytest.raises(SystemExit, match="frozen until 2999-12-31"):
+        cli.main(["reboot", "shop"])
+    assert not [c for c in fake.calls if c[0] == "run_on"]
+
+
+def test_the_agent_honours_its_freeze_windows():
+    import datetime as dt
+    agent = _agent()
+    c = {"TIMEZONE": "UTC", "FREEZE_WINDOWS": "2026-12-20..2027-01-05 2027-02-27..2027-03-02"}
+    assert agent.frozen(c, dt.date(2027, 3, 1)) == "frozen until 2027-03-02"
+    assert agent.frozen(c, dt.date(2027, 3, 3)) is None and agent.frozen({"FREEZE_WINDOWS": ""}, dt.date(2027, 3, 1)) is None
+    from fleet_tool import deploy
+    assert deploy.freeze_windows_text({"freeze_windows": [{"from": "2026-12-20", "to": "2027-01-05"}]}) == "2026-12-20..2027-01-05"
+    assert deploy.freeze_windows_text({}) == ""
