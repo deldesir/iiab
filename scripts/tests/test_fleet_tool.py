@@ -474,3 +474,138 @@ def test_the_agent_honours_its_freeze_windows():
     from fleet_tool import deploy
     assert deploy.freeze_windows_text({"freeze_windows": [{"from": "2026-12-20", "to": "2027-01-05"}]}) == "2026-12-20..2027-01-05"
     assert deploy.freeze_windows_text({}) == ""
+
+
+# ---- the lease (one lifecycle for every box) ------------------------------------------------
+
+@pytest.fixture
+def lease_key(scratch, monkeypatch):
+    """A scratch signing key for the hub side; the hub's own lease lands in a scratch etc."""
+    from fleet_tool import lease
+    monkeypatch.setattr(lease, "LEASE_KEY", scratch / "keys" / "fleet-lease.key")
+    monkeypatch.setattr(lease, "LOCAL_ETC", scratch / "etc")
+    assert cli.main(["lease", "keygen"]) == 0
+    assert oct(lease.LEASE_KEY.stat().st_mode)[-3:] == "600" and lease.pub_path().exists()
+    return lease
+
+
+def test_lease_state_ladder_agrees_between_hub_and_agent():
+    import datetime as dt
+    from fleet_tool import lease
+    agent = _agent()
+    le = {"expires": "2026-12-01", "grace_days": 15}
+    for day, want in (("2026-11-01", "valid"), ("2026-11-16", "valid"), ("2026-11-17", "notice"), ("2026-12-01", "notice"),
+                      ("2026-12-02", "restricted"), ("2026-12-16", "restricted"), ("2026-12-17", "readonly")):
+        today = dt.date.fromisoformat(day)
+        assert lease.lease_state(le, today)[0] == want == agent.lease_state(le, today)[0], day
+
+
+def test_lease_issue_signs_delivers_and_the_agent_verifies(lease_key, fake, capsys, scratch, monkeypatch):
+    lease = lease_key
+    with pytest.raises(SystemExit, match="exists"):
+        cli.main(["lease", "keygen"])                                    # a second keygen would orphan every lease
+    assert cli.main(["lease", "issue", "shop"]) == 0
+    out = capsys.readouterr().out
+    assert "ladder on" in out and "grace 14 d" in out                 # a customer's box: the ladder; grace from the inventory
+    sent = [c for c in fake.calls if c[0] == "scp_to" and c[1] == "box-002"]
+    assert [c[3] for c in sent] == ["/etc/iiab/fleet-lease.json", "/etc/iiab/fleet-lease.pub"]
+    assert any(c[0] == "run_on" and "fleet-agent lease" in c[2] for c in fake.calls)
+    doc = lease.stored("box-002")
+    assert doc["lease"]["box"] == "box-002" and doc["lease"]["ladder"] is True and lease.verify(doc, lease.pub_path())
+    agent = _agent()
+    assert agent.verify(doc, lease.pub_path())
+    doc["lease"]["expires"] = "2999-01-01"                               # tampered: the signature no longer matches
+    assert not agent.verify(doc, lease.pub_path())
+    assert cli.main(["lease", "issue", "hubby", "--days", "7"]) == 0   # our own box: the ladder off, installed locally
+    assert "ladder off" in capsys.readouterr().out and (scratch / "etc" / "fleet-lease.json").exists()
+    assert cli.main(["lease", "status"]) == 0
+    out = capsys.readouterr().out
+    assert "box-002  shop" in out and "valid (+30 d)" in out and "no lease issued" in out
+    assert cli.main(["lease", "show", "shop"]) == 0 and "paste line:" in capsys.readouterr().out
+
+
+def test_lease_issue_is_gated_by_the_obligations_and_revoke_is_immediate(lease_key, fake, capsys):
+    lease = lease_key
+    from fleet_tool import state
+    inv = config.load_inventory()
+    box = _box(inv, "box-002")
+    state.write_check({"id": "box-002", "checked_at": "2026-10-29T00:00:00+00:00", "status": "CRIT",
+                       "findings": [{"level": "CRIT", "code": "unpaid", "message": "unpaid 20 d past due"}]})
+    with pytest.raises(SystemExit, match="does not meet its obligations"):
+        cli.main(["lease", "issue", "shop"])
+    assert cli.main(["lease", "issue", "shop", "--anyway"]) == 0
+    assert cli.main(["lease", "revoke", "shop", "--reason", "offboarding"]) == 0
+    assert "revoked" in capsys.readouterr().out
+    assert lease.lease_state(lease.stored("box-002")["lease"], lease.today_for(box))[0] == "readonly"
+    assert cli.main(["lease", "issue", "hotel"]) == 0                 # tailnet box: 30 d lease, still delivered over ssh
+    fake.hosts["shop.example.test"]["run"]["fleet-lease.timer"] = (0, "lease: unleased")
+    assert cli.main(["lease", "deploy", "shop"]) == 0
+    units = [c[3] for c in fake.calls if c[0] == "scp_to" and c[1] == "box-002" and "systemd" in c[3]]
+    assert units == ["/etc/systemd/system/fleet-lease.service", "/etc/systemd/system/fleet-lease.timer"]
+
+
+def test_the_agent_applies_the_ladder_only_when_told_and_only_undoes_its_own(lease_key, tmp_path, monkeypatch, capsys):
+    import datetime as dt
+    lease = lease_key
+    agent = _agent()
+    monkeypatch.setattr(agent, "STATE", tmp_path / "state")
+    monkeypatch.setattr(agent, "LEASE", tmp_path / "fleet-lease.json")
+    monkeypatch.setattr(agent, "LEASE_PUB", lease.pub_path())
+    monkeypatch.setattr(agent, "LEASE_NGINX", tmp_path / "fleet-lease.conf")
+    ran = []
+    monkeypatch.setattr(agent, "sh", lambda cmd: ran.append(cmd) or "")
+    monkeypatch.setattr(agent, "nginx_reload", lambda: True)
+    c = {"FLEET_BOX_ID": "box-002", "TIMEZONE": "UTC", "BENCH": "/home/frappe/frappe-bench", "SITE": "site.local"}
+    assert agent.lease(c, dt.date(2026, 11, 1)) == 0                   # no lease file yet
+    st = json.loads((tmp_path / "state" / "lease-state.json").read_text())
+    assert st["state"] == "unleased" and not st["enforced"] and (tmp_path / "state" / "lease-clock").read_text().strip() == "2026-11-01"
+    doc = lease.sign({"v": 1, "box": "box-002", "issued": "2026-11-01", "expires": "2026-12-01", "grace_days": 15, "ladder": True})
+    agent.LEASE.write_text(json.dumps(doc))
+    assert agent.lease(c, dt.date(2026, 11, 20)) == 0
+    assert json.loads((tmp_path / "state" / "lease-state.json").read_text())["state"] == "notice" and not ran
+    assert agent.lease(c, dt.date(2026, 12, 5)) == 0                   # expired, inside the grace: the desk pauses, no bench call
+    st = json.loads((tmp_path / "state" / "lease-state.json").read_text())
+    assert st["state"] == "restricted" and st["enforced"] == "restricted" and "return 503" in agent.LEASE_NGINX.read_text() and not ran
+    assert agent.lease(c, dt.date(2026, 12, 20)) == 0                  # past the grace: maintenance mode, the pause file emptied
+    st = json.loads((tmp_path / "state" / "lease-state.json").read_text())
+    assert st["state"] == "readonly" and st["enforced"] == "readonly" and agent.LEASE_NGINX.read_text() == ""
+    assert len(ran) == 1 and "set-maintenance-mode on" in ran[0]
+    assert agent.lease(c, dt.date(2026, 12, 18)) == 0                  # the clock went back: recorded, nothing bypassed
+    st = json.loads((tmp_path / "state" / "lease-state.json").read_text())
+    assert st["clock"] == "back" and st["enforced"] == "readonly"
+    doc = lease.sign({"v": 1, "box": "box-002", "issued": "2026-12-20", "expires": "2027-01-19", "grace_days": 15, "ladder": True})
+    agent.LEASE.write_text(json.dumps(doc))
+    assert agent.lease(c, dt.date(2026, 12, 21)) == 0                  # renewed: only what the agent set is undone
+    st = json.loads((tmp_path / "state" / "lease-state.json").read_text())
+    assert st["state"] == "valid" and st["enforced"] == "" and "set-maintenance-mode off" in ran[-1]
+    other = lease.sign({"v": 1, "box": "box-003", "issued": "2026-12-20", "expires": "2027-01-19", "grace_days": 15, "ladder": True})
+    agent.LEASE.write_text(json.dumps(other))
+    assert agent.lease(c, dt.date(2026, 12, 22)) == 0                  # another box's lease: invalid, and the ladder is not run on it
+    assert json.loads((tmp_path / "state" / "lease-state.json").read_text())["state"] == "invalid"
+    ladder_off = lease.sign({"v": 1, "box": "box-002", "issued": "2026-01-01", "expires": "2026-02-01", "grace_days": 15, "ladder": False})
+    agent.LEASE.write_text(json.dumps(ladder_off))
+    before = len(ran)
+    assert agent.lease(c, dt.date(2026, 12, 23)) == 0
+    st = json.loads((tmp_path / "state" / "lease-state.json").read_text())
+    assert st["state"] == "readonly" and st["enforced"] == "" and len(ran) == before   # our own box: state only
+
+
+def test_check_judges_the_lease_the_probe_reports(scratch):
+    inv = config.load_inventory()
+    catalog = config.load_catalog()
+    box = _box(inv, "box-002")
+    from conftest import GOOD_PROBE
+    for line, level, needle in (("lease=notice 2026-12-01 - ok", "WARN", "lease ends 2026-12-01"),
+                                ("lease=restricted 2026-12-01 restricted ok", "CRIT", "the till sells"),
+                                ("lease=restricted 2026-12-01 - ok", "CRIT", "not enforced"),
+                                ("lease=readonly 2026-12-01 readonly back", "CRIT", "maintenance mode")):
+        raw = checks.parse_probe(GOOD_PROBE[1].replace("lease=", line), [])
+        raw["heads"] = {}
+        res = checks.evaluate(box, raw, inv, catalog)
+        hits = [f for f in res["findings"] if f["code"] == "lease"]
+        assert hits and hits[0]["level"] == level and needle in hits[0]["message"], line
+        if "back" in line:
+            assert any("clock went backwards" in f["message"] for f in hits)
+    raw = checks.parse_probe(GOOD_PROBE[1], [])
+    raw["heads"] = {}
+    assert not [f for f in checks.evaluate(box, raw, inv, catalog)["findings"] if f["code"] == "lease"]

@@ -163,7 +163,7 @@ def scratch(tmp_path, monkeypatch):
 GOOD_PROBE = (0, "\n".join([
     "targets=active active active", "failed_units=0", "failed_list=", "errorlog_rows_today=3", "open_shifts=1", "hotel_business_date=",
     "disk_free_gb=40", "ram_avail_mb=2000", "load1=0.2", "box_backup_age_h=5", "maintenance_mode=0", "uptime_s=900000",
-    "reboot_required=0", "kernel_running=6.8.0-1", "kernel_newest=6.8.0-1", "units="]))
+    "reboot_required=0", "kernel_running=6.8.0-1", "kernel_newest=6.8.0-1", "lease=", "units="]))
 HEADS = (0, "frappe=" + "a" * 40 + "\nerpnext=" + "b" * 40)
 HOTEL_PROBE = (0, GOOD_PROBE[1].replace("hotel_business_date=", "hotel_business_date=" + dt.date.today().isoformat()))
 

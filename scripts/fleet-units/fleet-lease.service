@@ -1,0 +1,6 @@
+[Unit]
+Description=Fleet lease check (this box verifies its signed lease and applies the ladder itself)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/fleet-agent lease

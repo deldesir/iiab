@@ -26,6 +26,8 @@ Install: copy to `/etc/systemd/system/`, `systemctl daemon-reload`,
 - `fleet-agent-upgrade.timer` / `.service`: daily, the box fetches the current release manifest and
   upgrades itself inside its maintenance window and outside its freeze windows (FREEZE_WINDOWS in its
   configuration, from the inventory's per-box `freeze_windows`: dates during which nothing touches the box).
+- `fleet-lease.timer` / `.service`: daily on every box (`fleet lease deploy ID` installs them with the
+  agent and the hub's public key); the box verifies its signed lease and applies the ladder itself.
 - `fleet-hub-watchdog.timer` / `.service`: every 5 minutes on a non-hub box; after 3 failed probes
   of the hub it asks Contabo for the instance status and sends `start` if it is stopped
   (credentials in `/etc/iiab/fleet-hub-watchdog.conf`, which the operator fills by hand).

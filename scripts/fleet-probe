@@ -25,6 +25,7 @@ echo "ram_avail_mb=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)"
 echo "load1=$(cut -d' ' -f1 /proc/loadavg)"
 echo "box_backup_age_h=$(f=$(ls -t "$B/sites/$S/private/backups/"*-database*.sql.gz 2>/dev/null | head -1); [ -n "$f" ] && echo $(( ($(date +%s) - $(stat -c %Y "$f")) / 3600 )) || echo '?')"
 echo "maintenance_mode=$(python3 -c "import json;print(json.load(open('$B/sites/$S/site_config.json')).get('maintenance_mode',0))" 2>/dev/null)"
+echo "lease=$(python3 -c "import json;d=json.load(open('/var/lib/fleet/lease-state.json'));print(d['state'],d.get('expires','-'),d.get('enforced') or '-',d.get('clock','ok'))" 2>/dev/null)"   # empty where the agent never ran a lease check
 echo "uptime_s=$(cut -d. -f1 /proc/uptime)"
 echo "reboot_required=$([ -f /var/run/reboot-required ] && echo 1 || echo 0)"
 echo "kernel_running=$(uname -r)"

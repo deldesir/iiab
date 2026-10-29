@@ -6,18 +6,26 @@
   fleet-agent upgrade   fetch the current release manifest from the fleet site and, inside
                         the maintenance window, run /root/bench-upgrade.sh pinned to it
                         (only when the manifest changed since the last applied one)
+  fleet-agent lease     verify this box's signed lease (/etc/iiab/fleet-lease.json against
+                        /etc/iiab/fleet-lease.pub) and apply the ladder it carries: notice,
+                        then the desk and storefront paused with the till still selling,
+                        then maintenance mode once the grace is over. State in
+                        /var/lib/fleet/lease-state.json, read by the probe. Runs without
+                        the agent configuration (every box has a lease, not every box reports).
 
 Config: /etc/iiab/fleet-agent.conf (FLEET_BOX_ID, FLEET_HUB_URL, FLEET_AGENT_TOKEN, KUMA_PUSH_URL,
 SITE, BENCH, MAINTENANCE_WINDOW, FREEZE_WINDOWS, TIMEZONE). Stdlib only. Runs as root. Never prints the token.
 The metrics come from fleet-probe, installed beside this script: the same file the hub sends over
 ssh to the boxes it can reach, so a report and a pull check measure the same things the same way.
 """
+import base64
 import datetime as dt
 import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -27,6 +35,17 @@ CONF = Path(os.environ.get("FLEET_AGENT_CONF", "/etc/iiab/fleet-agent.conf"))
 STATE = Path(os.environ.get("FLEET_AGENT_STATE", "/var/lib/fleet"))
 PROBE = Path(os.environ.get("FLEET_PROBE") or Path(__file__).resolve().with_name("fleet-probe"))
 TARGETS = ["frappe-bench-frappe-schedule", "frappe-bench-web.target", "frappe-bench-workers.target"]
+LEASE = Path(os.environ.get("FLEET_LEASE", "/etc/iiab/fleet-lease.json"))
+LEASE_PUB = Path(os.environ.get("FLEET_LEASE_PUB", "/etc/iiab/fleet-lease.pub"))
+LEASE_NGINX = Path(os.environ.get("FLEET_LEASE_NGINX", "/etc/nginx/fleet-lease.conf"))   # included by the site's nginx file (erpnext role)
+NOTICE_DAYS = 14
+RESTRICTED_NGINX = """# written by fleet-agent lease: the lease has expired. The desk and the storefront pause;
+# the till (/pos), the API and the assets keep working. Removed when a valid lease arrives.
+default_type text/html;
+if ($request_uri ~ "^/erp/(app($|/)|$|shop|products|item/|category/|categories|collection/|collections)") {
+    return 503 "<!doctype html><title>Paused</title><h1>This part of the service is paused</h1><p>The till keeps working. Please contact your provider to renew the service.</p>";
+}
+"""
 
 
 def conf() -> dict:
@@ -165,13 +184,112 @@ def upgrade(c: dict) -> int:
     return 0 if rc == 0 else 1
 
 
+def canonical(lease: dict) -> bytes:
+    return json.dumps(lease, sort_keys=True, separators=(",", ":")).encode()
+
+
+def verify(doc: dict, pub: Path) -> bool:
+    """Ed25519 through the openssl binary: no third-party module on the box."""
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "p").write_bytes(canonical(doc["lease"]))
+            Path(d, "s").write_bytes(base64.b64decode(doc["sig"]))
+            return subprocess.run(["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", str(pub), "-rawin", "-in", f"{d}/p", "-sigfile", f"{d}/s"],
+                                  capture_output=True).returncode == 0
+    except (KeyError, TypeError, ValueError, OSError):
+        return False
+
+
+def lease_state(lease: dict, today: dt.date) -> tuple[str, int]:
+    """valid > notice (last fortnight) > restricted (expired, inside the grace) > readonly; and the days left.
+    The same function as the hub's (fleet_tool.lease): the tests hold them together."""
+    expires = dt.date.fromisoformat(lease["expires"])
+    left = (expires - today).days
+    if left > NOTICE_DAYS:
+        return "valid", left
+    if left >= 0:
+        return "notice", left
+    if today <= expires + dt.timedelta(days=int(lease.get("grace_days") or 0)):
+        return "restricted", left
+    return "readonly", left
+
+
+def bench_cmd(c: dict, args: str) -> str:
+    bench = c.get("BENCH") or "/home/frappe/frappe-bench"
+    return f"sudo -u \"$(stat -c %U {bench})\" -H bash -c 'cd {bench} && bench --site {c.get('SITE') or 'site.local'} {args}'"
+
+
+def apply_stage(c: dict, old: str, new: str) -> str:
+    """Move the box from the stage the agent last enforced to the one the lease asks for. Only
+    what this agent set is ever undone: an operator's own maintenance mode is not touched."""
+    notes = []
+    if old == "readonly" and new != "readonly":
+        sh(bench_cmd(c, "set-maintenance-mode off") + " && " + bench_cmd(c, "clear-cache") + " >/dev/null; systemctl restart frappe-bench-frappe-web.service")
+        notes.append("maintenance mode off")
+    if new == "restricted" and old != "restricted":
+        LEASE_NGINX.write_text(RESTRICTED_NGINX)
+        notes.append("desk and storefront paused" if nginx_reload() else "desk pause written but nginx did not reload it")
+    elif old == "restricted" and new != "restricted":
+        LEASE_NGINX.write_text("")
+        notes.append("desk and storefront back" if nginx_reload() else "desk pause lifted but nginx did not reload")
+    if new == "readonly" and old != "readonly":
+        sh(bench_cmd(c, "set-maintenance-mode on") + " && " + bench_cmd(c, "clear-cache") + " >/dev/null; systemctl restart frappe-bench-frappe-web.service")
+        notes.append("maintenance mode on")
+    return "; ".join(notes)
+
+
+def nginx_reload() -> bool:
+    included = subprocess.run(["grep", "-rqs", str(LEASE_NGINX), "/etc/nginx/conf.d"], capture_output=True).returncode == 0
+    if not included:
+        print(f"nginx does not include {LEASE_NGINX} yet (the erpnext role adds it): the pause is recorded, not enforced")
+        return False
+    return subprocess.run(["bash", "-c", "nginx -t >/dev/null 2>&1 && systemctl reload nginx"], capture_output=True).returncode == 0
+
+
+def lease(c: dict, today: dt.date | None = None) -> int:
+    STATE.mkdir(parents=True, exist_ok=True)
+    sp = STATE / "lease-state.json"
+    prev = json.loads(sp.read_text()) if sp.exists() else {}
+    today = today or dt.datetime.now(ZoneInfo(c.get("TIMEZONE") or "UTC")).date()
+    st = {"checked": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "state": "unleased", "ladder": False, "enforced": prev.get("enforced", ""), "clock": "ok"}
+    hw = STATE / "lease-clock"
+    if hw.exists() and today < dt.date.fromisoformat(hw.read_text().strip()):
+        st["clock"] = "back"                      # the high-water mark stays; a clock set back is a finding, not a bypass
+    else:
+        hw.write_text(today.isoformat() + "\n")
+    if LEASE.exists():
+        try:
+            doc = json.loads(LEASE.read_text())
+        except ValueError:
+            doc = {}
+        mine = c.get("FLEET_BOX_ID") or (doc.get("lease") or {}).get("box")
+        if not LEASE_PUB.exists() or not verify(doc, LEASE_PUB) or doc["lease"].get("box") != mine:
+            st["state"] = "invalid"
+        else:
+            le = doc["lease"]
+            st["state"], st["days_left"] = lease_state(le, today)
+            st.update(issued=le.get("issued"), expires=le["expires"], grace_days=le.get("grace_days", 0), ladder=bool(le.get("ladder")))
+    want = st["state"] if st["ladder"] and st["state"] in ("restricted", "readonly") else ""
+    if want != (prev.get("enforced") or ""):
+        st["applied"] = apply_stage(c, prev.get("enforced") or "", want)
+        st["enforced"] = want
+    sp.write_text(json.dumps(st, indent=1))
+    print(f"lease: {st['state']}" + (f" (expires {st['expires']}, {st['days_left']:+d} d, ladder {'on' if st['ladder'] else 'off'})" if "expires" in st else "")
+          + (f"; enforced: {st['enforced']}" if st["enforced"] else "") + (f"; {st['applied']}" if st.get("applied") else "") + ("; CLOCK WENT BACK" if st["clock"] == "back" else ""))
+    return 0
+
+
 def main() -> int:
-    if len(sys.argv) < 2 or sys.argv[1] not in ("report", "upgrade"):
+    if len(sys.argv) < 2 or sys.argv[1] not in ("report", "upgrade", "lease"):
         print(__doc__)
         return 2
     if not CONF.exists():
+        if sys.argv[1] == "lease":
+            return lease({})
         sys.exit(f"fleet-agent: {CONF} missing (the hub's `fleet deploy-agent <id>` writes it)")
     c = conf()
+    if sys.argv[1] == "lease":
+        return lease(c)
     return report(c) if sys.argv[1] == "report" else upgrade(c)
 
 
