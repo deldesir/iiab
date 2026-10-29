@@ -8,7 +8,7 @@ on:
 env:
   FORK_ROLES: ai-gateway ai-update anki email-bridge erpnext hardening organized rapidpro rivebot siyuan social-code ssl uv uv-service wuzapi
   FORK_PY: scripts/fleet scripts/fleet_tool scripts/tests scripts/fleet-agent scripts/fleet-kuma-seed scripts/fleet-hub-watchdog scripts/fleet-install/demo-seed.py scripts/fleet-install/demo-hotel-seed.py scripts/fleet-install/semaphore-seed.py scripts/fleet-install/semaphore-run.py
-  FORK_SH: scripts/fleet-mirror scripts/install-release-binary.sh scripts/build-go-release.sh scripts/bench-upgrade.sh scripts/bench-rollback.sh scripts/bench-smoke.sh scripts/go-fork-tests.sh scripts/temba-fork-tests.sh scripts/maintain_patch.sh update_frappe_forks.sh
+  FORK_SH: scripts/fleet-mirror scripts/fleet-probe scripts/install-release-binary.sh scripts/build-go-release.sh scripts/bench-upgrade.sh scripts/bench-rollback.sh scripts/bench-smoke.sh scripts/go-fork-tests.sh scripts/temba-fork-tests.sh scripts/maintain_patch.sh update_frappe_forks.sh
 jobs:
   checks:
     runs-on: ubuntu-latest
