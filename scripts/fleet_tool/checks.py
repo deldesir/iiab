@@ -65,27 +65,27 @@ def hub_backup_age_hours(host: str) -> float | None:
     return None if newest is None else round((time.time() - newest) / 3600, 1)
 
 
-REMOTE_PROBE = r"""
-B={bench}; S={site}
-db=$(python3 -c "import json;print(json.load(open('$B/sites/$S/site_config.json'))['db_name'])" 2>/dev/null)
-echo "targets=$(systemctl is-active {targets} 2>/dev/null | tr '\n' ' ')"
-echo "failed_units=$(systemctl --failed --no-legend | wc -l)"
-echo "failed_list=$(systemctl --failed --no-legend --plain | awk '{{print $1}}' | tr '\n' ',')"
-LOGDB=$B/sites/$S/private/files/sqlite.db   # Frappe keeps Error Log in a per-site SQLite file now; the MariaDB table is a leftover on older sites
-echo "errorlog=$( ( [ -r "$LOGDB" ] && python3 -c "import sqlite3; c=sqlite3.connect('file:$LOGDB?mode=ro', uri=True); print(c.execute('select count(*) from \"tabError Log\" where creation > ?', ('{since}',)).fetchone()[0])" 2>/dev/null ) || mysql -N -e "select count(*) from \`tabError Log\` where creation > '{since}'" $db 2>/dev/null || echo '?')"
-echo "open_shifts=$(mysql -N -e "select count(*) from \`tabPOS Opening Shift\` where status='Open' and docstatus=1" $db 2>/dev/null || echo '?')"
-echo "hotel_business_date=$(mysql -N -e "select max(business_date) from \`tabProperty\` where is_active=1" $db 2>/dev/null)"   # empty where there is no PMS
-echo "disk_free_gb=$(df -BG --output=avail / | awk 'NR==2{{print $1+0}}')"
-echo "ram_avail_mb=$(awk '/MemAvailable/{{print int($2/1024)}}' /proc/meminfo)"
-echo "load1=$(cut -d' ' -f1 /proc/loadavg)"
-echo "box_backup_age_h=$(f=$(ls -t $B/sites/$S/private/backups/*-database*.sql.gz 2>/dev/null | head -1); [ -n "$f" ] && echo $(( ($(date +%s) - $(stat -c %Y "$f")) / 3600 )) || echo '?')"
-echo "maintenance=$(python3 -c "import json;print(json.load(open('$B/sites/$S/site_config.json')).get('maintenance_mode',0))" 2>/dev/null)"
-echo "uptime_s=$(cut -d. -f1 /proc/uptime)"
-echo "reboot_required=$([ -f /var/run/reboot-required ] && echo 1 || echo 0)"
-echo "kernel_running=$(uname -r)"
-echo "kernel_newest=$(ls /boot/vmlinuz-* 2>/dev/null | sed 's/.*vmlinuz-//' | sort -V | tail -1)"
-echo "units={units_out}"
-"""
+PROBE = SCRIPTS / "fleet-probe"   # the box-side probe, one file for the hub's check and fleet-agent
+PROBE_KEYS = ("targets", "failed_units", "failed_list", "errorlog_rows_today", "open_shifts", "hotel_business_date", "disk_free_gb",
+              "ram_avail_mb", "load1", "box_backup_age_h", "maintenance_mode", "uptime_s", "reboot_required", "kernel_running", "kernel_newest")
+PROBE_DEFAULTS = {"targets": "", "failed_list": "", "hotel_business_date": "", "reboot_required": "0", "kernel_running": "", "kernel_newest": ""}
+
+
+def probe_command(bench: str, site: str, since: str, units: list[str]) -> str:
+    """The probe's text with its parameters set in front of it: one command for run_on."""
+    params = {"B": bench, "S": site, "SINCE": since, "TARGETS": " ".join(TARGETS), "UNITS": " ".join(units)}
+    return "; ".join(f"{k}={shlex.quote(v)}" for k, v in params.items()) + "\n" + PROBE.read_text()
+
+
+def parse_probe(out: str, units: list[str]) -> dict:
+    """The probe's key=value lines as the check's raw metrics; a missing line reads as unknown."""
+    kv = {}
+    for line in out.splitlines():
+        k, _, v = line.partition("=")
+        kv[k.strip()] = v.strip()
+    raw = {k: kv.get(k, PROBE_DEFAULTS.get(k, "?")) or PROBE_DEFAULTS.get(k, "?") for k in PROBE_KEYS}
+    raw["monitor_units"] = dict(zip(units, [u for u in kv.get("units", "").split(",") if u])) if units else {}
+    return raw
 
 
 def collect_pull(box: dict, catalog: dict) -> dict:
@@ -106,22 +106,8 @@ def collect_pull(box: dict, catalog: dict) -> dict:
         elif svc.get("kind") == "hub" and box["role"] in ("hub", "observer"):
             units += svc.get("units") or []     # hub-kind services run on the hub/observer; other boxes only receive them
     units = sorted(set(units))
-    units_out = ("$(systemctl is-active " + " ".join(shlex.quote(u) for u in units) + " 2>/dev/null | tr '\\n' ',')") if units else ""
-    probe = REMOTE_PROBE.format(bench=box["bench"], site=box["site"], targets=" ".join(TARGETS), since=since, units_out=units_out)
-    rc, out = run_on(box, probe)
-    kv = {}
-    for line in out.splitlines():
-        k, _, v = line.partition("=")
-        kv[k.strip()] = v.strip()
-    raw.update({
-        "targets": kv.get("targets", ""), "failed_units": kv.get("failed_units", "?"), "failed_list": kv.get("failed_list", ""),
-        "errorlog_rows_today": kv.get("errorlog", "?"), "open_shifts": kv.get("open_shifts", "?"),
-        "hotel_business_date": kv.get("hotel_business_date", "") or "",
-        "disk_free_gb": kv.get("disk_free_gb", "?"), "ram_avail_mb": kv.get("ram_avail_mb", "?"), "load1": kv.get("load1", "?"),
-        "box_backup_age_h": kv.get("box_backup_age_h", "?"), "maintenance_mode": kv.get("maintenance", "?"), "uptime_s": kv.get("uptime_s", "?"),
-        "monitor_units": dict(zip(units, [s for s in kv.get("units", "").split(",") if s])) if units else {},
-        "reboot_required": kv.get("reboot_required", "0"), "kernel_running": kv.get("kernel_running", ""), "kernel_newest": kv.get("kernel_newest", ""),
-    })
+    rc, out = run_on(box, probe_command(box["bench"], box["site"], since, units))
+    raw.update(parse_probe(out, units))
     # the pipeline's off-box snapshot copy: second-brain-offsite.conf (OFFSITE_HOST, OFFSITE_DIR) lives on
     # the box that runs the assistant; the copy may sit on this machine or on another box
     if "whatsapp-assistant" in box["services"]:

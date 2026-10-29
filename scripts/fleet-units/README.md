@@ -21,6 +21,8 @@ Install: copy to `/etc/systemd/system/`, `systemctl daemon-reload`,
 ## Box-side units (installed by `fleet deploy-agent <id>` / `fleet deploy-watchdog <id>`)
 
 - `fleet-agent.timer` / `.service`: hourly report from an offline (push-mode) box to the fleet site.
+  The metrics come from `scripts/fleet-probe`, installed beside the agent: the same file the hub
+  sends over ssh to the boxes it polls.
 - `fleet-agent-upgrade.timer` / `.service`: daily, the box fetches the current release manifest and
   upgrades itself inside its maintenance window.
 - `fleet-hub-watchdog.timer` / `.service`: every 5 minutes on a non-hub box; after 3 failed probes

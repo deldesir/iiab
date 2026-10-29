@@ -1,0 +1,33 @@
+#!/bin/bash
+# fleet-probe: the box-side probe of the fleet check, one file for both ways a box is checked.
+# The hub sends this text over ssh to a box it can reach (fleet_tool/checks.py); fleet-agent runs
+# the installed copy on an offline box and posts the result. Either way the output is one key=value
+# line per metric, named as the check's raw metrics are named, so the two sides parse it the same.
+#
+# Parameters come in the environment: B (the bench), S (the site), SINCE (the day's start, for
+# the error log), TARGETS (the bench's systemd targets, space-separated), UNITS (the box's monitored
+# units, space-separated, may be empty).
+B=${B:-/home/frappe/frappe-bench}; S=${S:-site.local}
+SINCE=${SINCE:-$(date +%F) 00:00:00}
+TARGETS=${TARGETS:-frappe-bench-frappe-schedule frappe-bench-web.target frappe-bench-workers.target}
+db=$(python3 -c "import json;print(json.load(open('$B/sites/$S/site_config.json'))['db_name'])" 2>/dev/null)
+# shellcheck disable=SC2086   # the targets and the units are lists
+echo "targets=$(systemctl is-active $TARGETS 2>/dev/null | tr '\n' ' ')"
+echo "failed_units=$(systemctl --failed --no-legend 2>/dev/null | wc -l)"
+echo "failed_list=$(systemctl --failed --no-legend --plain 2>/dev/null | awk '{print $1}' | tr '\n' ',')"
+# Frappe keeps the Error Log in a per-site SQLite file now; the MariaDB table is a leftover on older sites
+LOGDB=$B/sites/$S/private/files/sqlite.db
+echo "errorlog_rows_today=$( ( [ -r "$LOGDB" ] && python3 -c "import sqlite3; c=sqlite3.connect('file:$LOGDB?mode=ro', uri=True); print(c.execute('select count(*) from \"tabError Log\" where creation > ?', ('$SINCE',)).fetchone()[0])" 2>/dev/null ) || mysql -N -e "select count(*) from \`tabError Log\` where creation > '$SINCE'" "$db" 2>/dev/null || echo '?')"
+echo "open_shifts=$(mysql -N -e "select count(*) from \`tabPOS Opening Shift\` where status='Open' and docstatus=1" "$db" 2>/dev/null || echo '?')"
+echo "hotel_business_date=$(mysql -N -e "select max(business_date) from \`tabProperty\` where is_active=1" "$db" 2>/dev/null)"   # empty where there is no PMS
+echo "disk_free_gb=$(df -BG --output=avail / | awk 'NR==2{print $1+0}')"
+echo "ram_avail_mb=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)"
+echo "load1=$(cut -d' ' -f1 /proc/loadavg)"
+echo "box_backup_age_h=$(f=$(ls -t "$B/sites/$S/private/backups/"*-database*.sql.gz 2>/dev/null | head -1); [ -n "$f" ] && echo $(( ($(date +%s) - $(stat -c %Y "$f")) / 3600 )) || echo '?')"
+echo "maintenance_mode=$(python3 -c "import json;print(json.load(open('$B/sites/$S/site_config.json')).get('maintenance_mode',0))" 2>/dev/null)"
+echo "uptime_s=$(cut -d. -f1 /proc/uptime)"
+echo "reboot_required=$([ -f /var/run/reboot-required ] && echo 1 || echo 0)"
+echo "kernel_running=$(uname -r)"
+echo "kernel_newest=$(ls /boot/vmlinuz-* 2>/dev/null | sed 's/.*vmlinuz-//' | sort -V | tail -1)"
+# shellcheck disable=SC2086
+echo "units=$([ -n "$UNITS" ] && systemctl is-active $UNITS 2>/dev/null | tr '\n' ',')"
