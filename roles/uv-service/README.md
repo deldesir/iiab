@@ -27,6 +27,11 @@ Entries: `main` installs the tree; `enable` enables and restarts (or disables an
 listed units and timers; `update` moves an installed tree and its libraries to the wanted
 version and re-syncs (the ai-update path; the calling role restarts on `uv_service_changed`).
 
+A unit in `units` is a template file name, rendered as itself, or a mapping `{src, name, job}`:
+the template `src` rendered as the unit `name` with the mapping `job` in reach as `unit_job`.
+The gateway's scheduled jobs use the second form: one pair of templates for every job, the
+jobs themselves a dictionary in its defaults.
+
 The keys of the dict and their defaults are in `defaults/main.yml`. Templates and files are
 read from the calling role (`roles/<role>/templates`, `roles/<role>/files`), so a service
 role still owns its unit and environment templates.
