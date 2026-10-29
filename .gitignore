@@ -17,3 +17,6 @@ roles/rapidpro/RAPIDPRO_TECHNICAL_EVOLUTION.md
 *.doc
 __pycache__/
 *.tar.gz
+
+# IDE session state, never part of the repository
+.antigravitycli/
