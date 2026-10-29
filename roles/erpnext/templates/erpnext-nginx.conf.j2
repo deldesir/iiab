@@ -19,6 +19,10 @@ location = /erp {
 }
 
 location /erp/ {
+    # The fleet lease: fleet-agent writes a pause into this file when the box's lease has
+    # expired (desk and storefront paused, the till keeps selling) and empties it again.
+    include /etc/nginx/fleet-lease.conf;
+
     # Safety net: handle double-prefixing gracefully
     rewrite ^/erp/erp/(.*) /erp/$1 last;
 

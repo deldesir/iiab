@@ -16,6 +16,14 @@
     insertafter: "^http \\{"
   when: erpnext_enabled | bool
 
+- name: The fleet lease's nginx file exists (empty until fleet-agent writes a pause into it; the site file includes it)
+  ansible.builtin.copy:
+    content: ""
+    dest: /etc/nginx/fleet-lease.conf
+    force: false
+    mode: "0644"
+  when: erpnext_enabled | bool
+
 - name: Configure IIAB Nginx Sub-Path Proxy for ERPNext
   ansible.builtin.template:
     mode: "0644"

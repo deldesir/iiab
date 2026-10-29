@@ -67,8 +67,8 @@ def hub_backup_age_hours(host: str) -> float | None:
 
 PROBE = SCRIPTS / "fleet-probe"   # the box-side probe, one file for the hub's check and fleet-agent
 PROBE_KEYS = ("targets", "failed_units", "failed_list", "errorlog_rows_today", "open_shifts", "hotel_business_date", "disk_free_gb",
-              "ram_avail_mb", "load1", "box_backup_age_h", "maintenance_mode", "uptime_s", "reboot_required", "kernel_running", "kernel_newest")
-PROBE_DEFAULTS = {"targets": "", "failed_list": "", "hotel_business_date": "", "reboot_required": "0", "kernel_running": "", "kernel_newest": ""}
+              "ram_avail_mb", "load1", "box_backup_age_h", "maintenance_mode", "uptime_s", "reboot_required", "kernel_running", "kernel_newest", "lease")
+PROBE_DEFAULTS = {"lease": "", "targets": "", "failed_list": "", "hotel_business_date": "", "reboot_required": "0", "kernel_running": "", "kernel_newest": ""}
 
 
 def probe_command(bench: str, site: str, since: str, units: list[str]) -> str:
@@ -168,6 +168,7 @@ def evaluate(box: dict, raw: dict, inv: dict, catalog: dict) -> dict:
            "checked_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "release_current": inv.get("current_release") or ""}
     res.update({k: v for k, v in raw.items() if k != "findings"})
     suspended = box["status"] == "suspended"
+    judge_lease(raw, f)
     if raw.get("unreachable"):
         f("CRIT", "unreachable", "unreachable: could not read app heads over ssh")
     if raw.get("stale_h") is not None:
@@ -279,6 +280,26 @@ def evaluate(box: dict, raw: dict, inv: dict, catalog: dict) -> dict:
     res["findings"] = F
     res["problems"] = [x["message"] for x in F if x["level"] in ("CRIT", "STALE", "WARN")]
     return res
+
+
+def judge_lease(raw: dict, f) -> None:
+    """The box's own reading of its lease (the probe prints `lease=<state> <expires> <enforced> <clock>`
+    from the agent's state file); a box without one says nothing."""
+    parts = (raw.get("lease") or "").split()
+    if not parts or parts[0] in ("unleased", "?"):
+        return
+    state, expires = parts[0], parts[1] if len(parts) > 1 else "?"
+    enforced, clock = (parts[2] if len(parts) > 2 else "-"), (parts[3] if len(parts) > 3 else "ok")
+    if state == "notice":
+        f("WARN", "lease", f"lease ends {expires}: renew (fleet lease issue) or the ladder starts")
+    elif state == "restricted":
+        f("CRIT", "lease", f"lease expired {expires}; desk and storefront paused, the till sells" + ("" if enforced == "restricted" else " (not enforced on the box)"))
+    elif state == "readonly":
+        f("CRIT", "lease", f"lease past its grace (expired {expires}); maintenance mode" + ("" if enforced == "readonly" else " (not enforced on the box)"))
+    elif state == "invalid":
+        f("WARN", "lease", "the box's lease does not verify (wrong key, tampered, or another box's)")
+    if clock == "back":
+        f("WARN", "lease", "the box's clock went backwards since the last lease check")
 
 
 def judge_receivables(box: dict, res: dict, catalog: dict, f) -> None:

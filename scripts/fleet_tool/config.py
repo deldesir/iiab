@@ -156,7 +156,7 @@ def require_targets(a) -> None:
         sys.exit("fleet: name the box(es) or pass --all (this command changes boxes)")
 
 
-MUTATING = {"check", "dunning", "upgrade", "rollback", "suspend", "resume", "offboard", "onboard", "rename", "hostname",
+MUTATING = {"check", "dunning", "lease", "upgrade", "rollback", "suspend", "resume", "offboard", "onboard", "rename", "hostname",
             "authorize-key", "manifest", "deploy-agent", "deploy-watchdog", "agent-token", "reboot", "push", "vars"}
 
 

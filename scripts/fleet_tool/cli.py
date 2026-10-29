@@ -27,6 +27,7 @@ accept id, alias or host; output shows "id alias".
   fleet agent-token ID                    the stanza for /etc/iiab/fleet-agent.conf on an
                                           offline (push-mode) box
   fleet deploy-agent ID                   install fleet-agent + units on that box (ssh)
+  fleet lease issue|revoke|show|deploy ID the signed lease a box applies itself (fleet lease status: all)
   fleet deploy-watchdog ID                install the hub watchdog on a non-hub box (ssh)
   fleet runrole ID ROLE [--tags T]        run an IIAB role on a box through its own runrole
   fleet reboot ID|--all [--now]           reboot inside the window, wait, re-check
@@ -57,6 +58,7 @@ from .config import MUTATING, acquire_lock, load_inventory
 from .deploy import cmd_agent_token, cmd_authorize_key, cmd_deploy_agent, cmd_deploy_watchdog, cmd_hostname, cmd_vars
 from .identity import cmd_onboard, cmd_rename
 from .lifecycle import cmd_dunning, cmd_offboard, cmd_resume, cmd_suspend
+from .lease import cmd_lease
 from .releases import cmd_manifest
 from .site import cmd_push
 from .upgrade import cmd_backup_pull, cmd_reboot, cmd_rollback, cmd_runrole, cmd_upgrade
@@ -69,7 +71,7 @@ COMMANDS = {"list": cmd_list, "status": cmd_status, "tailnet": cmd_tailnet, "che
             "agent-token": cmd_agent_token, "deploy-agent": cmd_deploy_agent, "deploy-watchdog": cmd_deploy_watchdog,
             "runrole": cmd_runrole, "vars": cmd_vars, "reboot": cmd_reboot, "backup-pull": cmd_backup_pull,
             "onboard": cmd_onboard, "rename": cmd_rename, "hostname": cmd_hostname, "authorize-key": cmd_authorize_key,
-            "rollback": cmd_rollback, "dunning": cmd_dunning}
+            "rollback": cmd_rollback, "dunning": cmd_dunning, "lease": cmd_lease}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -94,6 +96,17 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_parser("list", help="every release, the current one marked")
     c = ps.add_parser("show", help="the commits of a release"); c.add_argument("id")
     c = ps.add_parser("set-current", help="make a release the one the fleet is judged against"); c.add_argument("id")
+    p = sub.add_parser("lease", help="the signed lease every box applies itself: keygen, issue, revoke, show, status, deploy")
+    ps = p.add_subparsers(dest="action", required=True, metavar="ACTION")
+    ps.add_parser("keygen", help="create the hub's signing key once")
+    ps.add_parser("status", help="every box's issued lease and its state today")
+    c = ps.add_parser("issue", help="sign a lease for a box and deliver it (ssh), or print the handover for an offline box"); c.add_argument("id")
+    c.add_argument("--days", type=int, help="lease length (default 30; 90 for an offline box)"); c.add_argument("--grace", type=int, help="grace after expiry (default the box's grace_days; 30 offline)")
+    c.add_argument("--ladder", choices=["on", "off"], help="whether the box applies the ladder (default: on for a customer's box, off for our own)")
+    c.add_argument("--anyway", action="store_true", help="renew although the last check shows unpaid or offsite CRIT findings")
+    c = ps.add_parser("revoke", help="the ladder's last step at once: an already-expired lease, past its grace"); c.add_argument("id"); c.add_argument("--reason", default="")
+    c = ps.add_parser("show", help="the lease issued to a box and its paste line"); c.add_argument("id")
+    c = ps.add_parser("deploy", help="install the agent, the public key and the daily lease timer on a reachable box"); c.add_argument("id")
     p = sub.add_parser("upgrade", help="upgrade boxes in canary order, each followed and checked; stops at the first failure")
     p.add_argument("ids", nargs="*"); p.add_argument("--all", action="store_true")
     p.add_argument("--release", help="a manifest to pin every app to (default: the current release)")
