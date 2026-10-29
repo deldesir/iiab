@@ -4,6 +4,7 @@ FLEET_NO_NETWORK (conftest.py)."""
 import json
 import os
 import re
+import subprocess
 
 import pytest
 
@@ -140,6 +141,54 @@ def test_collect_pull_parses_the_probe_through_the_fake_transport(scratch, fake)
     assert raw["probes"][0]["code"] == "200" and raw["tls_days_left"] == 60
     assert raw["domain_days_left"] is None          # no RDAP answer in the tests
     assert all(c[1] == "box-002" for c in fake.calls if c[0] == "run_on")
+
+
+def test_collect_pull_sends_the_shared_probe_with_its_parameters(scratch, fake):
+    inv = config.load_inventory()
+    box = _box(inv, "box-002")
+    checks.collect_pull(box, config.load_catalog())
+    cmd = next(c[2] for c in fake.calls if c[0] == "run_on" and "targets=" in c[2])
+    assert cmd.startswith(f"B={box['bench']}; S={box['site']}; SINCE=") and "TARGETS=" in cmd and "UNITS=" in cmd
+    assert cmd.split("\n", 1)[1] == checks.PROBE.read_text()     # the file itself, not a copy of it
+
+
+def test_the_probe_script_yields_every_metric_the_check_reads(tmp_path):
+    bench = tmp_path / "bench"
+    (bench / "sites" / "s.test").mkdir(parents=True)
+    (bench / "sites" / "s.test" / "site_config.json").write_text(json.dumps({"db_name": "_x", "maintenance_mode": 1}))
+    env = {**os.environ, "B": str(bench), "S": "s.test", "SINCE": "2026-01-01 00:00:00", "TARGETS": "no-such.target", "UNITS": "no-such.service"}
+    out = subprocess.run(["bash", str(checks.PROBE)], capture_output=True, text=True, timeout=60, env=env).stdout
+    raw = checks.parse_probe(out, ["no-such.service"])
+    assert set(checks.PROBE_KEYS) <= set(raw) and raw["maintenance_mode"] == "1"
+    assert all(raw[k].isdigit() for k in ("disk_free_gb", "ram_avail_mb", "uptime_s", "failed_units"))
+    assert raw["box_backup_age_h"] == "?" and raw["errorlog_rows_today"] == "?"      # no backups, no database: unknown, not wrong
+    assert raw["kernel_running"] and raw["reboot_required"] in ("0", "1")
+    assert "no-such.service" in raw["monitor_units"]
+
+
+def _agent():
+    import importlib.machinery
+    import importlib.util
+    loader = importlib.machinery.SourceFileLoader("fleet_agent", str(config.SCRIPTS / "fleet-agent"))
+    spec = importlib.util.spec_from_loader("fleet_agent", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def test_the_agent_reads_the_probe_as_the_hub_does(tmp_path):
+    agent = _agent()
+    assert agent.PROBE == checks.PROBE                              # beside the script, in the repository as on a box
+    from conftest import GOOD_PROBE
+    hub = checks.parse_probe(GOOD_PROBE[1], [])
+    hub.pop("monitor_units")
+    assert {k: v for k, v in agent.parse_probe(GOOD_PROBE[1]).items() if k != "units"} == hub
+    bench = tmp_path / "bench"
+    (bench / "sites" / "s.test").mkdir(parents=True)
+    (bench / "sites" / "s.test" / "site_config.json").write_text(json.dumps({"db_name": "_x"}))
+    raw = agent.collect({"BENCH": str(bench), "SITE": "s.test"})
+    assert raw["agent"] == "fleet-agent/2" and set(checks.PROBE_KEYS) <= set(raw) and raw["heads"] == {}
+    assert raw["probes"][0]["service"] == "erp"
 
 
 def test_check_box_end_to_end_and_the_history(scratch, fake):

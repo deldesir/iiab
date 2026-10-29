@@ -33,6 +33,7 @@ def cmd_deploy_agent(a, inv):
     tmp = STATE / f"agent-{box['id']}.conf"
     write_private(tmp, agent_conf_text(box))
     scp_to(box, SCRIPTS / "fleet-agent", "/usr/local/sbin/fleet-agent")
+    scp_to(box, SCRIPTS / "fleet-probe", "/usr/local/sbin/fleet-probe")
     scp_to(box, UPGRADE_SCRIPT, "/root/bench-upgrade.sh")
     scp_to(box, tmp, "/etc/iiab/fleet-agent.conf", "0600")
     for u in ("fleet-agent.service", "fleet-agent.timer", "fleet-agent-upgrade.service", "fleet-agent-upgrade.timer"):
