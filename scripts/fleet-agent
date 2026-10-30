@@ -65,6 +65,14 @@ def sh(cmd: str) -> str:
         return ""
 
 
+def run(cmd: str) -> int:
+    """Like sh, for a command whose outcome matters more than its output: the exit status (124 on a timeout)."""
+    try:
+        return subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, timeout=300).returncode
+    except subprocess.TimeoutExpired:
+        return 124
+
+
 def parse_probe(out: str) -> dict:
     """The probe's key=value lines, as the hub's check parses them (fleet_tool/checks.py)."""
     raw = {}
@@ -216,15 +224,30 @@ def lease_state(lease: dict, today: dt.date) -> tuple[str, int]:
 
 def bench_cmd(c: dict, args: str) -> str:
     bench = c.get("BENCH") or "/home/frappe/frappe-bench"
-    return f"sudo -u \"$(stat -c %U {bench})\" -H bash -c 'cd {bench} && bench --site {c.get('SITE') or 'site.local'} {args}'"
+    # a login shell: bench lives in the bench user's ~/.local/bin, which a plain bash -c never sees
+    return f"sudo -u \"$(stat -c %U {bench})\" -H bash -lc 'cd {bench} && bench --site {c.get('SITE') or 'site.local'} {args}'"
 
 
-def apply_stage(c: dict, old: str, new: str) -> str:
-    """Move the box from the stage the agent last enforced to the one the lease asks for. Only
-    what this agent set is ever undone: an operator's own maintenance mode is not touched."""
+def maintenance(c: dict, on: bool) -> int:
+    """Flip the site's maintenance mode and restart the web service (its workers cache the site config)."""
+    return run(bench_cmd(c, f"set-maintenance-mode {'on' if on else 'off'}") + " && " + bench_cmd(c, "clear-cache") + " >/dev/null && systemctl restart frappe-bench-frappe-web.service")
+
+
+def apply_stage(c: dict, old: str, new: str) -> tuple[str, str]:
+    """Move the box from the stage the agent last enforced to the one the lease asks for, and say
+    what is enforced afterwards. Only what this agent set is ever undone: an operator's own
+    maintenance mode is not touched. A bench failure changes nothing that was enforced before
+    (the pause stays up on the way down) and is retried on the next run."""
     notes = []
+    if new == "readonly" and old != "readonly":
+        rc = maintenance(c, True)
+        if rc:
+            return f"maintenance mode not set (bench rc={rc}); retried on the next run", old
+        notes.append("maintenance mode on")
     if old == "readonly" and new != "readonly":
-        sh(bench_cmd(c, "set-maintenance-mode off") + " && " + bench_cmd(c, "clear-cache") + " >/dev/null; systemctl restart frappe-bench-frappe-web.service")
+        rc = maintenance(c, False)
+        if rc:
+            return f"maintenance mode not lifted (bench rc={rc}); retried on the next run", old
         notes.append("maintenance mode off")
     if new == "restricted" and old != "restricted":
         LEASE_NGINX.write_text(RESTRICTED_NGINX)
@@ -232,10 +255,7 @@ def apply_stage(c: dict, old: str, new: str) -> str:
     elif old == "restricted" and new != "restricted":
         LEASE_NGINX.write_text("")
         notes.append("desk and storefront back" if nginx_reload() else "desk pause lifted but nginx did not reload")
-    if new == "readonly" and old != "readonly":
-        sh(bench_cmd(c, "set-maintenance-mode on") + " && " + bench_cmd(c, "clear-cache") + " >/dev/null; systemctl restart frappe-bench-frappe-web.service")
-        notes.append("maintenance mode on")
-    return "; ".join(notes)
+    return "; ".join(notes), new
 
 
 def nginx_reload() -> bool:
@@ -271,8 +291,7 @@ def lease(c: dict, today: dt.date | None = None) -> int:
             st.update(issued=le.get("issued"), expires=le["expires"], grace_days=le.get("grace_days", 0), ladder=bool(le.get("ladder")))
     want = st["state"] if st["ladder"] and st["state"] in ("restricted", "readonly") else ""
     if want != (prev.get("enforced") or ""):
-        st["applied"] = apply_stage(c, prev.get("enforced") or "", want)
-        st["enforced"] = want
+        st["applied"], st["enforced"] = apply_stage(c, prev.get("enforced") or "", want)
     sp.write_text(json.dumps(st, indent=1))
     print(f"lease: {st['state']}" + (f" (expires {st['expires']}, {st['days_left']:+d} d, ladder {'on' if st['ladder'] else 'off'})" if "expires" in st else "")
           + (f"; enforced: {st['enforced']}" if st["enforced"] else "") + (f"; {st['applied']}" if st.get("applied") else "") + ("; CLOCK WENT BACK" if st["clock"] == "back" else ""))
