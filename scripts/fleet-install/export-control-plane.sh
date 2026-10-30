@@ -3,7 +3,7 @@
 # with the fleet passphrase, for import on another machine (import-control-plane.sh).
 #
 # Contents: /etc/iiab fleet files (inventory, config, catalog, releases, local_vars copies,
-# backup conf + passphrase files), /var/lib/fleet state (no venv), the fleet site (database +
+# backup conf + passphrase files, the lease signing key), /var/lib/fleet state (no venv), the fleet site (database +
 # files + site_config), the fleet_ops app source (its repository is private), Semaphore config
 # + database dump, the tailnet nginx listener, Uptime Kuma data (only if it moves too).
 # Output: /library/backups/control-plane-export-<stamp>.tar.gpg. Prints no secrets.
@@ -15,7 +15,7 @@ B=/home/frappe/frappe-bench; SITE=fleet.local; PASS=/etc/iiab/fleet-backup.passp
 [ -s "$PASS" ] || { echo "missing $PASS"; exit 2; }
 T=$(mktemp -d /var/tmp/cp-export.XXXXXX); trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/etc/iiab" "$T/var/lib" "$T/site" "$T/app" "$T/semaphore" "$T/nginx" "$T/kuma"
-for f in fleet.yml fleet.conf fleet-catalog.yml second-brain-offsite.conf fleet-backup.conf fleet-backup.passphrase fleet-hub-watchdog.conf; do
+for f in fleet.yml fleet.conf fleet-catalog.yml second-brain-offsite.conf fleet-backup.conf fleet-backup.passphrase fleet-hub-watchdog.conf fleet-lease.key fleet-lease.pub; do
   [ -e /etc/iiab/$f ] && cp -a /etc/iiab/$f "$T/etc/iiab/"
 done
 for d in fleet-releases fleet-vars fleet-backup.passphrase.d; do
