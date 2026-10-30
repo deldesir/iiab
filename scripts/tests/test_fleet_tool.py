@@ -609,3 +609,13 @@ def test_check_judges_the_lease_the_probe_reports(scratch):
     raw = checks.parse_probe(GOOD_PROBE[1], [])
     raw["heads"] = {}
     assert not [f for f in checks.evaluate(box, raw, inv, catalog)["findings"] if f["code"] == "lease"]
+
+
+def test_backup_pull_mirrors_from_the_mail_box(scratch, fake, tmp_path, capsys):
+    inv = config.load_inventory()
+    inv["backup_mail_box"] = "box-002"                                   # the observer runs fleet-backup-mail
+    config.save_inventory(inv)
+    assert cli.main(["backup-pull", "--dest", str(tmp_path / "copies")]) == 0
+    assert "mirrored from box-002" in capsys.readouterr().out
+    assert any(c[0] == "rsync" and c[1].startswith("root@shop.example.test:") for c in fake.calls)
+
