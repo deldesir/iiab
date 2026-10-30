@@ -176,7 +176,8 @@ def cmd_lease(a, inv):
         units = config.SCRIPTS / "fleet-units"
         scp_to(box, config.SCRIPTS / "fleet-agent", "/usr/local/sbin/fleet-agent")
         scp_to(box, config.SCRIPTS / "fleet-probe", "/usr/local/sbin/fleet-probe")
-        scp_to(box, pub_path(), BOX_PUB, "0644")
+        if not (box.get("local") and str(pub_path()) == BOX_PUB):   # the hub itself: the key already sits where the agent reads it
+            scp_to(box, pub_path(), BOX_PUB, "0644")
         for u in ("fleet-lease.service", "fleet-lease.timer"):
             scp_to(box, units / u, f"/etc/systemd/system/{u}", "0644")
         rc, out = run_on(box, "mkdir -p /var/lib/fleet && systemctl daemon-reload && systemctl enable --now fleet-lease.timer && /usr/local/sbin/fleet-agent lease", timeout=120)

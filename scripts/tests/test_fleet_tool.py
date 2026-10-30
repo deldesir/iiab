@@ -524,7 +524,7 @@ def test_lease_issue_signs_delivers_and_the_agent_verifies(lease_key, fake, caps
     assert cli.main(["lease", "show", "shop"]) == 0 and "paste line:" in capsys.readouterr().out
 
 
-def test_lease_issue_is_gated_by_the_obligations_and_revoke_is_immediate(lease_key, fake, capsys):
+def test_lease_issue_is_gated_by_the_obligations_and_revoke_is_immediate(lease_key, fake, capsys, monkeypatch):
     lease = lease_key
     from fleet_tool import state
     inv = config.load_inventory()
@@ -542,6 +542,11 @@ def test_lease_issue_is_gated_by_the_obligations_and_revoke_is_immediate(lease_k
     assert cli.main(["lease", "deploy", "shop"]) == 0
     units = [c[3] for c in fake.calls if c[0] == "scp_to" and c[1] == "box-002" and "systemd" in c[3]]
     assert units == ["/etc/systemd/system/fleet-lease.service", "/etc/systemd/system/fleet-lease.timer"]
+    monkeypatch.setattr(lease, "BOX_PUB", str(lease.pub_path()))          # on the hub itself the key already sits where the agent reads it
+    fake.hosts["hub.example.test"]["run"]["fleet-lease.timer"] = (0, "lease: valid")
+    assert cli.main(["lease", "deploy", "hubby"]) == 0
+    assert not [c for c in fake.calls if c[0] == "scp_to" and c[1] == "box-001" and c[3] == lease.BOX_PUB]
+    assert [c[3] for c in fake.calls if c[0] == "scp_to" and c[1] == "box-001" and "systemd" in c[3]] == units
 
 
 def test_the_agent_applies_the_ladder_only_when_told_and_only_undoes_its_own(lease_key, tmp_path, monkeypatch, capsys):
@@ -553,7 +558,7 @@ def test_the_agent_applies_the_ladder_only_when_told_and_only_undoes_its_own(lea
     monkeypatch.setattr(agent, "LEASE_PUB", lease.pub_path())
     monkeypatch.setattr(agent, "LEASE_NGINX", tmp_path / "fleet-lease.conf")
     ran = []
-    monkeypatch.setattr(agent, "sh", lambda cmd: ran.append(cmd) or "")
+    monkeypatch.setattr(agent, "run", lambda cmd: ran.append(cmd) or 0)
     monkeypatch.setattr(agent, "nginx_reload", lambda: True)
     c = {"FLEET_BOX_ID": "box-002", "TIMEZONE": "UTC", "BENCH": "/home/frappe/frappe-bench", "SITE": "site.local"}
     assert agent.lease(c, dt.date(2026, 11, 1)) == 0                   # no lease file yet
@@ -566,10 +571,17 @@ def test_the_agent_applies_the_ladder_only_when_told_and_only_undoes_its_own(lea
     assert agent.lease(c, dt.date(2026, 12, 5)) == 0                   # expired, inside the grace: the desk pauses, no bench call
     st = json.loads((tmp_path / "state" / "lease-state.json").read_text())
     assert st["state"] == "restricted" and st["enforced"] == "restricted" and "return 503" in agent.LEASE_NGINX.read_text() and not ran
+    monkeypatch.setattr(agent, "run", lambda cmd: ran.append(cmd) or 1)   # bench fails (say, missing): the pause stays, retried tomorrow
+    assert agent.lease(c, dt.date(2026, 12, 20)) == 0
+    st = json.loads((tmp_path / "state" / "lease-state.json").read_text())
+    assert st["state"] == "readonly" and st["enforced"] == "restricted" and "return 503" in agent.LEASE_NGINX.read_text()
+    assert len(ran) == 1 and "not set" in st["applied"]
+    ran.clear()
+    monkeypatch.setattr(agent, "run", lambda cmd: ran.append(cmd) or 0)
     assert agent.lease(c, dt.date(2026, 12, 20)) == 0                  # past the grace: maintenance mode, the pause file emptied
     st = json.loads((tmp_path / "state" / "lease-state.json").read_text())
     assert st["state"] == "readonly" and st["enforced"] == "readonly" and agent.LEASE_NGINX.read_text() == ""
-    assert len(ran) == 1 and "set-maintenance-mode on" in ran[0]
+    assert len(ran) == 1 and "set-maintenance-mode on" in ran[0] and "bash -lc" in ran[0]
     assert agent.lease(c, dt.date(2026, 12, 18)) == 0                  # the clock went back: recorded, nothing bypassed
     st = json.loads((tmp_path / "state" / "lease-state.json").read_text())
     assert st["clock"] == "back" and st["enforced"] == "readonly"
