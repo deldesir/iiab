@@ -414,10 +414,13 @@ def build_digest(inv: dict, checks: dict[str, dict], hub_notes: list[str] | None
     return "\n".join(lines)
 
 
-def _set_backup_box(inv: dict) -> None:
+def _set_backup_box(inv: dict) -> dict | None:
+    """Remember (and return) the box running fleet-backup-mail when it is not this machine. The
+    return value matters: a module that imported the name bound None at import time."""
     global _BACKUP_BOX
     bid = inv.get("backup_mail_box")
     _BACKUP_BOX = next((b for b in inv["boxes"] if b["id"] == bid and not b.get("local")), None) if bid else None
+    return _BACKUP_BOX
 
 
 def cmd_check(a, inv):
