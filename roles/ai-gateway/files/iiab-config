@@ -1,0 +1,524 @@
+#!/usr/bin/env python3
+"""iiab-config: see, change and check a box's settings without editing files by hand.
+
+The settings of this estate live in three layers that override each other: the roles'
+defaults (in the iiab checkout), /etc/iiab/local_vars.yml (the box's own choices, the
+source of truth for a reinstall), and the services' env files (.env written by the role,
+.env.local written by hand and loaded last). This command reads all three and writes the
+right one.
+
+    iiab-config show ai-gateway          what is in force, with its source; secrets masked
+    iiab-config set VAR VALUE [--new]    change a variable in local_vars.yml, validated
+    iiab-config check [ROLE]             drift and mistakes across the three layers
+    iiab-config apply ROLE [--restart]   render the role's env file from the vars, as the role would
+    iiab-config secret ENV_NAME [--var VAR] [--service ROLE]
+                                         type a secret once, without echo, into the right files
+    iiab-config roles                    the roles that have settings
+"""
+
+import argparse
+import datetime as dt
+import difflib
+import getpass
+import os
+import re
+import shutil
+import stat
+import sys
+
+import yaml
+
+ROLES_DIR = os.environ.get("IIAB_ROLES", "/opt/iiab/iiab/roles")
+LOCAL_VARS = os.environ.get("IIAB_LOCAL_VARS", "/etc/iiab/local_vars.yml")
+
+# Services whose env file this command can read and render. The template is the role's;
+# ".local" is the hand-written override the role never touches.
+SERVICES = {
+    "ai-gateway": {"env": "/opt/iiab/ai-gateway/.env", "local": "/opt/iiab/ai-gateway/.env.local",
+                   "template": "ai-gateway/templates/ai-gateway.env.j2", "unit": "ai-gateway"},
+    "rivebot": {"env": "/opt/iiab/rivebot/.env", "local": "/opt/iiab/rivebot/.env.local",
+                "template": "rivebot/templates/rivebot.env.j2", "unit": "rivebot"},
+    "email-bridge": {"env": "/opt/iiab/email-bridge/.env", "local": "/opt/iiab/email-bridge/.env.local",
+                     "template": "email-bridge/templates/email-bridge.env.j2", "unit": "email-bridge"},
+    "social-code": {"env": "/opt/iiab/social-code/.env", "local": "/opt/iiab/social-code/.env.local",
+                    "template": "social-code/templates/social-code.env.j2", "unit": "social-code"},
+    "siyuan": {"env": "/library/siyuan/.env", "local": "/library/siyuan/.env.local",
+               "template": "siyuan/templates/siyuan.env.j2", "unit": "siyuan"},
+    "organized": {"env": "/etc/iiab/organized.env", "local": "/etc/iiab/organized.env.local",
+                  "template": "organized/templates/organized.env.j2", "unit": "organized"},
+}
+SECRET_WORDS = ("key", "token", "password", "passwd", "secret", "passphrase", "credential", "auth")
+
+
+# ── reading ─────────────────────────────────────────────────────────────────────────────
+
+def role_prefix(role: str) -> str:
+    return role.replace("-", "_") + "_"
+
+
+def roles_with_settings() -> list[str]:
+    out = []
+    for name in sorted(os.listdir(ROLES_DIR)):
+        if os.path.isfile(os.path.join(ROLES_DIR, name, "defaults", "main.yml")):
+            out.append(name)
+    return out
+
+
+def load_defaults(role: str) -> dict:
+    path = os.path.join(ROLES_DIR, role, "defaults", "main.yml")
+    if not os.path.isfile(path):
+        sys.exit(f"no such role: {role} (no {path})")
+    with open(path, encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+def all_defaults() -> dict:
+    merged = {}
+    for role in roles_with_settings():
+        merged.update(load_defaults(role))
+    return merged
+
+
+def load_local_vars() -> dict:
+    if not os.path.isfile(LOCAL_VARS):
+        return {}
+    with open(LOCAL_VARS, encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+def parse_env(path: str) -> dict:
+    out = {}
+    if not os.path.isfile(path):
+        return out
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            v = v.split("    #")[0].strip()
+            if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+                v = v[1:-1]
+            out[k.strip()] = v
+    return out
+
+
+def template_map(role: str) -> dict:
+    """ENV_KEY -> var, from the role's env template (lines like KEY={{ var ... }})."""
+    svc = SERVICES.get(role)
+    if not svc:
+        return {}
+    path = os.path.join(ROLES_DIR, svc["template"])
+    if not os.path.isfile(path):
+        return {}
+    out = {}
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            # Only a value that IS the variable (optionally filtered), not one that embeds it.
+            m = re.match(r"^([A-Z][A-Z0-9_]*)=\{\{\s*([a-z][a-z0-9_]*)\s*(\|[^}]*)?\}\}\s*$", line.strip())
+            if m:
+                out[m.group(1)] = m.group(2)
+    return out
+
+
+def is_secret(name: str) -> bool:
+    low = name.lower()
+    return any(w in low for w in SECRET_WORDS)
+
+
+def mask(value) -> str:
+    s = "" if value is None else str(value)
+    if not s:
+        return "(empty)"
+    return s[:4] + "…" if len(s) > 8 else "•" * len(s)
+
+
+# ── rendering, the way the role does it ─────────────────────────────────────────────────
+
+def jinja_env(**kw):
+    """A Jinja environment close to Ansible's template module: blocks trimmed, and the
+    few Ansible filters these env templates use."""
+    import json
+    import jinja2
+    env = jinja2.Environment(undefined=jinja2.StrictUndefined, trim_blocks=True, **kw)
+
+    def to_bool(v):
+        if isinstance(v, bool):
+            return v
+        return str(v).strip().lower() in ("1", "true", "yes", "on", "y")
+
+    env.filters.update({
+        "bool": to_bool,
+        "to_json": lambda v: json.dumps(v),
+        "to_yaml": lambda v: yaml.safe_dump(v, default_flow_style=False),
+        "regex_replace": lambda v, pat, rep="": re.sub(pat, rep, str(v)),
+        "basename": os.path.basename,
+        "dirname": os.path.dirname,
+        "mandatory": lambda v: v,
+        "quote": lambda v: f"'{v}'",
+    })
+    return env
+
+
+def render_context(role: str) -> dict:
+    """Defaults of every role under the box's local vars, with Jinja defaults resolved."""
+    import jinja2
+    ctx = {**all_defaults(), **load_local_vars()}
+    env = jinja_env()
+    for _ in range(3):   # defaults may reference each other
+        changed = False
+        for k, v in list(ctx.items()):
+            if isinstance(v, str) and "{{" in v:
+                try:
+                    rendered = env.from_string(v).render(**ctx)
+                except jinja2.TemplateError:
+                    continue   # Ansible-only syntax or a variable only the play knows: left as is
+                if rendered != v:
+                    ctx[k] = rendered
+                    changed = True
+        if not changed:
+            break
+    return ctx
+
+
+class RenderError(Exception):
+    pass
+
+
+def render_env(role: str) -> str:
+    import jinja2
+    svc = SERVICES[role]
+    path = os.path.join(ROLES_DIR, svc["template"])
+    env = jinja_env(keep_trailing_newline=True)
+    with open(path, encoding="utf-8") as f:
+        tpl = env.from_string(f.read())
+    try:
+        return tpl.render(**render_context(role))
+    except jinja2.UndefinedError as e:
+        raise RenderError(f"cannot render {svc['template']}: {e} (set the missing variable in {LOCAL_VARS})")
+    except jinja2.TemplateError as e:
+        raise RenderError(f"cannot render {svc['template']} outside Ansible: {e} (run the role instead: sudo runrole {role})")
+
+
+def known_names(role: str) -> set:
+    """Every setting a role knows: its defaults, plus any variable its templates and tasks
+    mention (a role may read a local_vars entry it does not default)."""
+    names = set(load_defaults(role))
+    prefix = role_prefix(role)
+    base = os.path.join(ROLES_DIR, role)
+    for sub in ("templates", "tasks", "defaults", "vars", "handlers"):
+        d = os.path.join(base, sub)
+        if not os.path.isdir(d):
+            continue
+        for fn in os.listdir(d):
+            try:
+                text = open(os.path.join(d, fn), encoding="utf-8").read()
+            except (OSError, UnicodeDecodeError):
+                continue
+            names.update(re.findall(rf"\b({re.escape(prefix)}[a-z0-9_]+)\b", text))
+    return names
+
+
+# ── commands ────────────────────────────────────────────────────────────────────────────
+
+def cmd_roles(_a):
+    for role in roles_with_settings():
+        n = len(load_defaults(role))
+        tag = "  (env file managed)" if role in SERVICES else ""
+        print(f"{role:20s} {n:3d} settings{tag}")
+
+
+def cmd_show(a):
+    role = a.role
+    defaults = load_defaults(role)
+    local = load_local_vars()
+    ctx = render_context(role) if role in SERVICES else {**all_defaults(), **local}
+    tmap = template_map(role)
+    var_to_env = {v: k for k, v in tmap.items()}
+    env_vals = parse_env(SERVICES[role]["env"]) if role in SERVICES else {}
+    local_env = parse_env(SERVICES[role]["local"]) if role in SERVICES else {}
+    prefix = role_prefix(role)
+    names = [k for k in defaults if k.startswith(prefix)] or list(defaults)
+    width = max(len(n) for n in names) if names else 20
+    print(f"{role}: {len(names)} settings. Sources: default < local_vars; env files: .env (role-written) < .env.local (hand, wins)")
+    for name in names:
+        in_local = name in local
+        value = local.get(name, defaults.get(name))
+        derived = isinstance(defaults.get(name), str) and "{{" in defaults[name] and not in_local
+        if derived:
+            value = ctx.get(name, "")
+        shown = mask(value) if is_secret(name) else ("" if value is None else str(value))
+        if derived:
+            shown += "  (derived)"
+        source = "local_vars" if in_local else "default"
+        line = f"  {name:<{width}}  {shown:<32}  {source}"
+        envkey = var_to_env.get(name)
+        if envkey:
+            if envkey in local_env:
+                line += f"   .env.local wins: {mask(local_env[envkey]) if is_secret(envkey) else local_env[envkey]}"
+            elif envkey in env_vals:
+                cur = env_vals[envkey]
+                want = str(ctx.get(name, ""))
+                if cur != want:
+                    line += f"   .env differs: {mask(cur) if is_secret(envkey) else cur}"
+        print(line)
+    if not a.all:
+        extra = [k for k in local if k.startswith(prefix) and k not in defaults]
+        if extra:
+            print(f"  (not in the role's defaults: {', '.join(extra)}; the role will not write them unless it knows them)")
+
+
+def yaml_value(default, raw: str):
+    """Coerce the typed value to the default's type, so a number stays a number and a
+    string that looks like one stays a string."""
+    if isinstance(default, bool):
+        if raw.lower() in ("true", "yes", "on", "1"):
+            return True
+        if raw.lower() in ("false", "no", "off", "0"):
+            return False
+        sys.exit(f"{raw!r} is not a boolean (true/false)")
+    if isinstance(default, int) and not isinstance(default, bool):
+        try:
+            return int(raw)
+        except ValueError:
+            sys.exit(f"{raw!r} is not an integer")
+    if isinstance(default, float):
+        try:
+            return float(raw)
+        except ValueError:
+            sys.exit(f"{raw!r} is not a number")
+    if isinstance(default, (dict, list)):
+        value = yaml.safe_load(raw)
+        if not isinstance(value, type(default)):
+            sys.exit(f"{raw!r} must be YAML of type {type(default).__name__}")
+        return value
+    return raw
+
+
+def write_local_vars_line(var: str, value) -> str:
+    """Set var in local_vars.yml in place, keeping an inline comment; append when new."""
+    dumped = yaml.safe_dump({var: value}, default_flow_style=True, allow_unicode=True, width=10**6).strip()
+    assert dumped.startswith("{") and dumped.endswith("}")
+    line = dumped[1:-1].strip()          # "var: value"
+    if isinstance(value, str) and not line.split(":", 1)[1].strip().startswith(("'", '"')):
+        line = f"{var}: \"{value}\""      # strings quoted, as the file does by hand
+    text = open(LOCAL_VARS, encoding="utf-8").read() if os.path.isfile(LOCAL_VARS) else ""
+    lines = text.splitlines()
+    pattern = re.compile(rf"^{re.escape(var)}\s*:")
+    for i, old in enumerate(lines):
+        if pattern.match(old):
+            comment = ""
+            m = re.search(r"\s{2,}#.*$", old)
+            if m:
+                comment = m.group(0)
+            lines[i] = line + comment
+            break
+    else:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.append(f"# set by iiab-config on {dt.date.today().isoformat()}")
+        lines.append(line)
+    return "\n".join(lines) + "\n"
+
+
+def backup(path: str) -> str:
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    dst = f"{path}.bak-{stamp}"
+    shutil.copy2(path, dst)
+    return dst
+
+
+def write_preserving(path: str, content: str, mode=None):
+    """Write a file keeping its owner and mode; a new file gets `mode`."""
+    existed = os.path.isfile(path)
+    st = os.stat(path) if existed else None
+    tmp = path + ".iiab-config.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(content)
+    if st:
+        os.chown(tmp, st.st_uid, st.st_gid)
+        os.chmod(tmp, stat.S_IMODE(st.st_mode))
+    elif mode is not None:
+        os.chmod(tmp, mode)
+    os.replace(tmp, path)
+
+
+def cmd_set(a):
+    var, raw = a.var, a.value
+    defaults = all_defaults()
+    if var not in defaults and not a.new:
+        near = difflib.get_close_matches(var, list(defaults), n=3)
+        hint = f" Did you mean: {', '.join(near)}?" if near else ""
+        sys.exit(f"{var} is not a setting of any role.{hint} (use --new to add it anyway)")
+    value = yaml_value(defaults.get(var, ""), raw)
+    if os.path.isfile(LOCAL_VARS):
+        saved = backup(LOCAL_VARS)
+    else:
+        saved = None
+    content = write_local_vars_line(var, value)
+    try:
+        yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        sys.exit(f"refusing to write: the result would not be valid YAML ({e})")
+    write_preserving(LOCAL_VARS, content, mode=0o600)
+    shown = mask(value) if is_secret(var) else value
+    print(f"{var} = {shown}  (written to {LOCAL_VARS}" + (f", backup {os.path.basename(saved)}" if saved else "") + ")")
+    role = next((r for r in roles_with_settings() if var.startswith(role_prefix(r))), None)
+    if role in SERVICES:
+        print(f"next: iiab-config apply {role} --restart   (renders the env file and restarts the service)")
+    elif role:
+        print(f"next: sudo runrole {role}   (the role writes its files from local_vars)")
+
+
+def cmd_apply(a):
+    role = a.role
+    if role not in SERVICES:
+        sys.exit(f"{role} has no env file this command renders; run the role: sudo runrole {role}")
+    svc = SERVICES[role]
+    try:
+        new = render_env(role)
+    except RenderError as e:
+        sys.exit(str(e))
+    old = open(svc["env"], encoding="utf-8").read() if os.path.isfile(svc["env"]) else ""
+    if new == old:
+        print(f"{svc['env']} already matches the vars.")
+    else:
+        diff = list(difflib.unified_diff(old.splitlines(), new.splitlines(), "current", "rendered", lineterm="", n=0))
+        for line in diff:
+            if line.startswith(("+", "-")) and "=" in line:
+                k = line[1:].split("=", 1)[0]
+                if is_secret(k):
+                    line = line.split("=", 1)[0] + "=" + mask(line.split("=", 1)[1])
+            print(line)
+        if a.dry_run:
+            print("(dry run: nothing written)")
+            return
+        if os.path.isfile(svc["env"]):
+            print(f"backup {os.path.basename(backup(svc['env']))}")
+        write_preserving(svc["env"], new, mode=0o600)
+        print(f"written {svc['env']}")
+    if a.restart:
+        os.system(f"systemctl restart {svc['unit']} && sleep 3 && systemctl is-active {svc['unit']}")
+
+
+def cmd_check(a):
+    roles = [a.role] if a.role else roles_with_settings()
+    local = load_local_vars()
+    defaults = all_defaults()
+    problems = 0
+    # Settings of the managed services that no file of the role mentions: a typo, or a
+    # setting the role stopped reading. The install/enabled switches belong to the init role.
+    for service in (roles if a.role else SERVICES):
+        if service not in SERVICES:
+            continue
+        prefix = role_prefix(service)
+        known = known_names(service)
+        unknown = [k for k in local if k.startswith(prefix) and k not in known
+                   and not k.endswith(("_install", "_enabled"))]
+        if unknown:
+            problems += len(unknown)
+            print(f"{service}: local_vars has {len(unknown)} setting(s) the role never reads: {', '.join(unknown)}")
+    for role in roles:
+        if role not in SERVICES:
+            continue
+        svc = SERVICES[role]
+        if not os.path.isfile(svc["env"]):
+            continue
+        try:
+            want = parse_env_text(render_env(role))
+        except RenderError as e:
+            print(f"{role}: {e}; drift not checked")
+            continue
+        have = parse_env(svc["env"])
+        over = parse_env(svc["local"])
+        only_ansible = [k for k, v in want.items() if "{{" in v or "lookup(" in v]
+        if only_ansible:
+            print(f"{role}: {len(only_ansible)} value(s) only the play can compute (lookups), not compared: {', '.join(only_ansible)}")
+        for k, v in want.items():
+            if k in only_ansible:
+                continue
+            if have.get(k, "") != v and k not in over:
+                problems += 1
+                print(f"{role}: {k} in .env is not what the vars say "
+                      f"({mask(have.get(k, '')) if is_secret(k) else have.get(k, '(unset)')} vs {mask(v) if is_secret(k) else v}); iiab-config apply {role}")
+        for k in over:
+            if k in want and over[k] != want[k]:
+                print(f"{role}: {k} is overridden in .env.local (that copy wins); make local_vars agree or keep it on purpose")
+        if role == "ai-gateway":
+            provider = parse_env(svc["env"]).get("HERMES_PROVIDER") or over.get("HERMES_PROVIDER") or ""
+            provider = over.get("HERMES_PROVIDER", provider)
+            keyvar = {"gemini": "GEMINI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}.get(provider)
+            if keyvar and not (have.get(keyvar) or over.get(keyvar)):
+                problems += 1
+                print(f"ai-gateway: provider {provider} but {keyvar} is empty in both env files")
+    print("ok: nothing to fix" if problems == 0 else f"{problems} thing(s) to fix")
+    sys.exit(1 if problems else 0)
+
+
+def parse_env_text(text: str) -> dict:
+    out = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        v = v.split("    #")[0].strip()
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+            v = v[1:-1]
+        out[k.strip()] = v
+    return out
+
+
+def cmd_secret(a):
+    name = a.env_name
+    service = a.service
+    svc = SERVICES.get(service)
+    if not svc:
+        sys.exit(f"unknown service {service}; one of {', '.join(SERVICES)}")
+    first = getpass.getpass(f"{name}: ")
+    second = getpass.getpass(f"{name} again: ")
+    if first != second:
+        sys.exit("the two entries differ; nothing written")
+    if not first.strip():
+        sys.exit("empty; nothing written")
+    value = first.strip()
+    # .env.local: replace or append, mode 600, owner kept
+    path = svc["local"]
+    text = open(path, encoding="utf-8").read() if os.path.isfile(path) else ""
+    lines = text.splitlines()
+    pat = re.compile(rf"^{re.escape(name)}=")
+    for i, old in enumerate(lines):
+        if pat.match(old):
+            lines[i] = f"{name}={value}"
+            break
+    else:
+        lines.append(f"{name}={value}")
+    if os.path.isfile(path):
+        backup(path)
+    write_preserving(path, "\n".join(lines) + "\n", mode=0o600)
+    print(f"{name} written to {path} (value not shown)")
+    # local_vars too, so a reinstall keeps it
+    var = a.var or {v: k for k, v in template_map(service).items()}.get(name)
+    if var:
+        if os.path.isfile(LOCAL_VARS):
+            backup(LOCAL_VARS)
+        write_preserving(LOCAL_VARS, write_local_vars_line(var, value), mode=0o600)
+        print(f"{var} written to {LOCAL_VARS}")
+    print(f"next: systemctl restart {svc['unit']}")
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="iiab-config", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("roles").set_defaults(fn=cmd_roles)
+    p = sub.add_parser("show"); p.add_argument("role"); p.add_argument("--all", action="store_true"); p.set_defaults(fn=cmd_show)
+    p = sub.add_parser("set"); p.add_argument("var"); p.add_argument("value"); p.add_argument("--new", action="store_true"); p.set_defaults(fn=cmd_set)
+    p = sub.add_parser("check"); p.add_argument("role", nargs="?"); p.set_defaults(fn=cmd_check)
+    p = sub.add_parser("apply"); p.add_argument("role"); p.add_argument("--restart", action="store_true"); p.add_argument("--dry-run", action="store_true"); p.set_defaults(fn=cmd_apply)
+    p = sub.add_parser("secret"); p.add_argument("env_name"); p.add_argument("--var"); p.add_argument("--service", default="ai-gateway"); p.set_defaults(fn=cmd_secret)
+    a = ap.parse_args()
+    a.fn(a)
+
+
+if __name__ == "__main__":
+    main()
