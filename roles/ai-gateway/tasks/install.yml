@@ -113,6 +113,7 @@
     - jwlinker-refresh
     - hermes-elevate
     - pipeline-health-check
+    - iiab-config
   become: true
 
 # TOTP-gated root window for the chat assistant (hermes-elevate).
