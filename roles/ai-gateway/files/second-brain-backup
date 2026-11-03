@@ -49,6 +49,15 @@ tar -czf "$DEST/$STAMP/mempalace-palace.tar.gz" \
     -C /opt/iiab/ai-gateway/data palace 2>/dev/null
 echo "palace ok"
 
+# Hermes state: its config (auxiliary models, skills), identity files, the
+# session store and auth. Caches are rebuilt, so they stay out.
+if [ -d /opt/iiab/ai-gateway/data/hermes ]; then
+    tar -czf "$DEST/$STAMP/hermes-state.tar.gz" \
+        --exclude=hermes/cache --exclude=hermes/audio_cache --exclude='hermes/*.lock' \
+        -C /opt/iiab/ai-gateway/data hermes 2>/dev/null \
+        && echo "hermes state ok" || echo "WARN: hermes state tar failed" >&2
+fi
+
 # RapidPro media: contact/attachment uploads and, without S3, the inbound
 # WhatsApp attachments courier stores here. The database alone can't rebuild
 # these.
