@@ -1,9 +1,10 @@
 ---
-- name: The model key must be set in local_vars when the gateway is enabled
+- name: The chosen provider's key must be set in local_vars when the gateway is enabled
   ansible.builtin.assert:
     that:
-      - ai_gateway_gemini_api_key | default('') | length > 0
-    fail_msg: "ai_gateway_gemini_api_key is empty - set it in /etc/iiab/local_vars.yml"
+      - (ai_gateway_hermes_provider | default('')) != 'gemini' or (ai_gateway_gemini_api_key | default('') | length > 0)
+      - (ai_gateway_hermes_provider | default('')) != 'anthropic' or (ai_gateway_anthropic_api_key | default('') | length > 0)
+    fail_msg: "the API key for ai_gateway_hermes_provider is empty - set ai_gateway_gemini_api_key or ai_gateway_anthropic_api_key in /etc/iiab/local_vars.yml"
     quiet: true
   when: ai_gateway_enabled | default(false) | bool
 
