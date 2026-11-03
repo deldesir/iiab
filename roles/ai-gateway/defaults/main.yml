@@ -80,19 +80,28 @@ ai_gateway_user: "{{ iiab_admin_user }}"
 # App entrypoint (uvicorn factory)
 ai_gateway_app: "app.api.app:create_app"
 
-# LLM Integration — native Gemini provider.
+# LLM Integration — a native Hermes provider.
 #
-# Default path: the gateway runs Hermes with provider "gemini"
-# (GeminiNativeClient → Google AI Studio), which needs only a Gemini API key.
-# Set GEMINI_API_KEY once in local_vars (see ai_gateway_gemini_api_key below)
-# and the engine auto-selects the native provider.
+# The gateway runs Hermes with one native provider: "gemini" (Google AI
+# Studio, needs a Gemini API key) or "anthropic" (the Anthropic API, needs an
+# Anthropic API key). Set the key in local_vars and the provider follows it;
+# set ai_gateway_hermes_provider explicitly when both keys are present. When
+# the other provider's key is also set, the engine falls back to it mid-turn
+# (rate limit, credit, auth, overload, timeout); "none" disables that.
 #
-# Custom-endpoint path: leave ai_gateway_gemini_api_key empty and set
-# ai_gateway_hermes_provider="" — the engine then falls back to the
-# OpenAI-compatible client at ai_gateway_openai_api_base.
-ai_gateway_hermes_provider: "{{ 'gemini' if (ai_gateway_gemini_api_key | default('')) else '' }}"
-# Set in /etc/iiab/local_vars.yml (secret; defined in exactly one place).
-ai_gateway_gemini_api_key: ""   # no default: set it in /etc/iiab/local_vars.yml; the role refuses to run while it is empty
+# Custom-endpoint path: no keys and ai_gateway_hermes_provider="" — the engine
+# then falls back to the OpenAI-compatible client at ai_gateway_openai_api_base.
+ai_gateway_hermes_provider: "{{ 'anthropic' if (ai_gateway_anthropic_api_key | default('')) else ('gemini' if (ai_gateway_gemini_api_key | default('')) else '') }}"
+# Keys are set in /etc/iiab/local_vars.yml (secret; defined in exactly one place).
+# The role refuses to run while the chosen provider's key is empty.
+ai_gateway_gemini_api_key: ""
+ai_gateway_anthropic_api_key: ""
+ai_gateway_llm_fallback_chain: ""      # "provider:model, provider:model"; empty = one rung down on the same provider, then the other provider when its key is set; "none" = no fallback
+ai_gateway_llm_fallback_provider: ""   # the single-entry form of the chain
+ai_gateway_llm_fallback_model: ""
+ai_gateway_hermes_effort: ""           # low | medium | high | xhigh | max; empty = Hermes' default
+# One model per persona, e.g. {talkprep: claude-fable-5-1}; every other persona runs ai_gateway_llm_model.
+ai_gateway_llm_model_by_persona: {}
 ai_gateway_openai_api_base: "http://localhost:4000"    # any OpenAI-compatible endpoint (fallback path only)
 ai_gateway_openai_api_key: "change-me"
 ai_gateway_llm_model: "gemini-3.5-flash"
