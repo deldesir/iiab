@@ -13,6 +13,9 @@ right one.
     iiab-config apply ROLE [--restart]   render the role's env file from the vars, as the role would
     iiab-config secret ENV_NAME [--var VAR] [--service ROLE]
                                          type a secret once, without echo, into the right files
+    iiab-config sync [--dry-run]         copy what was set from WhatsApp (the gateway's
+                                         settings store) into local_vars.yml, so it survives
+                                         a reinstall
     iiab-config roles                    the roles that have settings
 """
 
@@ -20,6 +23,7 @@ import argparse
 import datetime as dt
 import difflib
 import getpass
+import json
 import os
 import re
 import shutil
@@ -48,6 +52,18 @@ SERVICES = {
                   "template": "organized/templates/organized.env.j2", "unit": "organized"},
 }
 SECRET_WORDS = ("key", "token", "password", "passwd", "secret", "passphrase", "credential", "auth")
+
+# The gateway's settings store: what the operator sets from the WhatsApp Settings list
+# (the line reads it per turn, before the env). Each key and the local_vars variable that
+# makes the same choice durable; a persona model lives inside the by-persona map.
+RUNTIME_SETTINGS = os.environ.get("IIAB_RUNTIME_SETTINGS", "/opt/iiab/ai-gateway/data/settings.json")
+RUNTIME_TO_VARS = {
+    "llm_model": ("ai_gateway_llm_model", None),
+    "llm_model_talkprep": ("ai_gateway_llm_model_by_persona", "talkprep"),
+    "llm_effort": ("ai_gateway_hermes_effort", None),
+    "llm_fallback": ("ai_gateway_llm_fallback_chain", None),
+    "reply_language": ("ai_gateway_talkprep_lang", None),
+}
 
 
 # ── reading ─────────────────────────────────────────────────────────────────────────────
@@ -295,14 +311,16 @@ def yaml_value(default, raw: str):
     return raw
 
 
-def write_local_vars_line(var: str, value) -> str:
-    """Set var in local_vars.yml in place, keeping an inline comment; append when new."""
+def write_local_vars_line(var: str, value, text: str | None = None) -> str:
+    """Set var in local_vars.yml in place, keeping an inline comment; append when new.
+    `text` is the file's content to start from (several writes in a row), else the file."""
     dumped = yaml.safe_dump({var: value}, default_flow_style=True, allow_unicode=True, width=10**6).strip()
     assert dumped.startswith("{") and dumped.endswith("}")
     line = dumped[1:-1].strip()          # "var: value"
     if isinstance(value, str) and not line.split(":", 1)[1].strip().startswith(("'", '"')):
         line = f"{var}: \"{value}\""      # strings quoted, as the file does by hand
-    text = open(LOCAL_VARS, encoding="utf-8").read() if os.path.isfile(LOCAL_VARS) else ""
+    if text is None:
+        text = open(LOCAL_VARS, encoding="utf-8").read() if os.path.isfile(LOCAL_VARS) else ""
     lines = text.splitlines()
     pattern = re.compile(rf"^{re.escape(var)}\s*:")
     for i, old in enumerate(lines):
@@ -314,9 +332,12 @@ def write_local_vars_line(var: str, value) -> str:
             lines[i] = line + comment
             break
     else:
-        if lines and lines[-1].strip():
-            lines.append("")
-        lines.append(f"# set by iiab-config on {dt.date.today().isoformat()}")
+        stamp = f"# set by iiab-config on {dt.date.today().isoformat()}"
+        tail = lines[lines.index(stamp) + 1:] if stamp in lines else None
+        if tail is None or not tail or any(not t.strip() or t.startswith("#") for t in tail):
+            if lines and lines[-1].strip():
+                lines.append("")
+            lines.append(stamp)       # one stamp heads the lines written today
         lines.append(line)
     return "\n".join(lines) + "\n"
 
@@ -401,6 +422,86 @@ def cmd_apply(a):
         os.system(f"systemctl restart {svc['unit']} && sleep 3 && systemctl is-active {svc['unit']}")
 
 
+def runtime_settings() -> dict:
+    """The values the operator set from WhatsApp, or {} when none."""
+    if not os.path.isfile(RUNTIME_SETTINGS):
+        return {}
+    try:
+        with open(RUNTIME_SETTINGS, encoding="utf-8") as f:
+            return (json.load(f) or {}).get("values") or {}
+    except (OSError, ValueError):
+        return {}
+
+
+def runtime_drift() -> list[tuple[str, str, object, object]]:
+    """(setting, var, value on the line, value in the vars) for every WhatsApp-set value
+    that local_vars (or the defaults) would not reproduce on a reinstall."""
+    values = runtime_settings()
+    if not values:
+        return []
+    vars_ = {**all_defaults(), **load_local_vars()}
+    out = []
+    for key, (var, member) in RUNTIME_TO_VARS.items():
+        if key not in values:
+            continue
+        got = values[key]
+        if member:
+            have = (vars_.get(var) or {}).get(member, "") if isinstance(vars_.get(var), dict) else ""
+        else:
+            have = vars_.get(var, "")
+        if key == "llm_fallback":
+            # "none" is the only value the store can say that the vars must repeat; "auto"
+            # means the default chain, which any custom chain in the vars still satisfies.
+            if got == "none" and have != "none" or got != "none" and have == "none":
+                out.append((key, var, got, have))
+            continue
+        if str(got or "") != str(have or ""):
+            out.append((key, var, got, have))
+    return out
+
+
+def cmd_sync(a):
+    drift = runtime_drift()
+    if not drift:
+        print("ok: local_vars already says what the line is running")
+        return
+    local = load_local_vars()
+    defaults = all_defaults()
+    changes = {}
+    for key, var, got, have in drift:
+        member = RUNTIME_TO_VARS[key][1]
+        if member:
+            value = dict(local.get(var) or {})
+            if got:
+                value[member] = got
+            else:
+                value.pop(member, None)
+        elif key == "llm_fallback":
+            value = "none" if got == "none" else ""
+        else:
+            value = got
+        changes[var] = value
+        print(f"{key}: the line runs {got if got not in (None, '') else '(blank)'}; "
+              f"local_vars says {have if have not in (None, '') else '(blank)'}  →  {var}: {value}")
+    if a.dry_run:
+        print(f"dry run: {len(changes)} variable(s) would be written to {LOCAL_VARS}")
+        return
+    if os.path.isfile(LOCAL_VARS):
+        backup(LOCAL_VARS)
+    content = open(LOCAL_VARS, encoding="utf-8").read() if os.path.isfile(LOCAL_VARS) else ""
+    for var, value in changes.items():
+        if var not in defaults:
+            print(f"note: {var} is not a setting of the role yet; written anyway")
+        content = write_local_vars_line(var, value, text=content)
+    try:
+        yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        sys.exit(f"refusing to write: the result would not be valid YAML ({e})")
+    write_preserving(LOCAL_VARS, content, mode=0o600)
+    print(f"{len(changes)} variable(s) written to {LOCAL_VARS}")
+    print("next: iiab-config apply ai-gateway   (so .env says the same; no restart needed, the line already runs it)")
+
+
 def cmd_check(a):
     roles = [a.role] if a.role else roles_with_settings()
     local = load_local_vars()
@@ -451,6 +552,11 @@ def cmd_check(a):
             if keyvar and not (have.get(keyvar) or over.get(keyvar)):
                 problems += 1
                 print(f"ai-gateway: provider {provider} but {keyvar} is empty in both env files")
+            for key, var, got, have_v in runtime_drift():
+                problems += 1
+                print(f"ai-gateway: {key} was set from WhatsApp to {got if got not in (None, '') else '(blank)'} "
+                      f"but local_vars says {have_v if have_v not in (None, '') else '(blank)'} "
+                      f"(a reinstall would undo it); iiab-config sync")
     print("ok: nothing to fix" if problems == 0 else f"{problems} thing(s) to fix")
     sys.exit(1 if problems else 0)
 
@@ -515,6 +621,7 @@ def main():
     p = sub.add_parser("set"); p.add_argument("var"); p.add_argument("value"); p.add_argument("--new", action="store_true"); p.set_defaults(fn=cmd_set)
     p = sub.add_parser("check"); p.add_argument("role", nargs="?"); p.set_defaults(fn=cmd_check)
     p = sub.add_parser("apply"); p.add_argument("role"); p.add_argument("--restart", action="store_true"); p.add_argument("--dry-run", action="store_true"); p.set_defaults(fn=cmd_apply)
+    p = sub.add_parser("sync"); p.add_argument("--dry-run", action="store_true"); p.set_defaults(fn=cmd_sync)
     p = sub.add_parser("secret"); p.add_argument("env_name"); p.add_argument("--var"); p.add_argument("--service", default="ai-gateway"); p.set_defaults(fn=cmd_secret)
     a = ap.parse_args()
     a.fn(a)

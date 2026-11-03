@@ -107,6 +107,7 @@ ai_gateway_openai_api_key: "change-me"
 ai_gateway_llm_model: "gemini-3.5-flash"
 ai_gateway_llm_model_summarize: "gemini-3.5-flash"
 ai_gateway_llm_temperature: "0.3"
+ai_gateway_talkprep_lang: "ht"          # language of the talk-preparation replies: ht | en
 
 # Embeddings (#5 — nomic-embed-text-v1.5 is 2x better than MiniLM at same size)
 ai_gateway_embedding_provider: "local"
