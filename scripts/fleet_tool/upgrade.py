@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-from .checks import _BACKUP_BOX, _set_backup_box, check_box
+from .checks import _set_backup_box, check_box
 from .config import HUB_BACKUPS, ROLLBACK_SCRIPT, UPGRADE_SCRIPT, frozen, in_window, label, load_catalog, log_action, require_targets, select_boxes
 from .releases import manifest_path, read_manifest
 from .site import push
@@ -165,15 +165,15 @@ def cmd_rollback(a, inv):
 def cmd_backup_pull(a, inv):
     """Mirror /library/backups/fleet from the box that runs fleet-backup-mail onto this hub,
     so the fleet's backups also sit on hardware we own. Keeps what the source keeps."""
-    _set_backup_box(inv)
-    if not _BACKUP_BOX:
+    mail_box = _set_backup_box(inv)      # the returned value, not the name imported from checks (bound to None at import)
+    if not mail_box:
         sys.exit("fleet: set backup_mail_box in the inventory to the box running fleet-backup-mail (not this machine)")
     dest = Path(a.dest or str(HUB_BACKUPS))
     dest.mkdir(parents=True, exist_ok=True, mode=0o700)
-    src = f"{_BACKUP_BOX['ssh_user']}@{_BACKUP_BOX['reach']['ssh']}:{HUB_BACKUPS}/"
+    src = f"{mail_box['ssh_user']}@{mail_box['reach']['ssh']}:{HUB_BACKUPS}/"
     rc, err = rsync(src, str(dest) + "/", delete=True)
-    print(err[-300:] if rc else f"backup copies mirrored from {_BACKUP_BOX['id']} to {dest}")
-    log_action(f"backup-pull from={_BACKUP_BOX['id']} rc={rc}")
+    print(err[-300:] if rc else f"backup copies mirrored from {mail_box['id']} to {dest}")
+    log_action(f"backup-pull from={mail_box['id']} rc={rc}")
     if rc == 0:
         hub = next((b for b in inv["boxes"] if b.get("local")), None)
         print(f"Check: ls {dest}" + (f"; fleet check {hub['id']}  (its 'bak hub' age reads this mirror)" if hub else ""))
