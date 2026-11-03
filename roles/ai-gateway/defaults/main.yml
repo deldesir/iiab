@@ -48,7 +48,7 @@ ai_gateway_jwlinker_version: master
 # the session:compress event. Voice/A2A/MCP2 are optional extras the gateway does NOT install.
 ai_gateway_hermes_repo: "https://github.com/nousresearch/hermes-agent.git"
 ai_gateway_hermes_dir: /opt/iiab/hermes-agent
-ai_gateway_hermes_version: v0.22.3
+ai_gateway_hermes_version: v0.22.6
 # The deldesir fork is the integration point: upstream MemPalace is merged INTO it
 # deliberately (feature-aware, e.g. the embeddinggemma default is too heavy for 4 GB targets).
 ai_gateway_mempalace_repo: "https://github.com/deldesir/mempalace.git"
