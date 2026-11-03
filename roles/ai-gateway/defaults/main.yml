@@ -96,9 +96,12 @@ ai_gateway_hermes_provider: "{{ 'anthropic' if (ai_gateway_anthropic_api_key | d
 # The role refuses to run while the chosen provider's key is empty.
 ai_gateway_gemini_api_key: ""
 ai_gateway_anthropic_api_key: ""
-ai_gateway_llm_fallback_provider: ""   # empty = the other provider when its key is set; "none" = no fallback
-ai_gateway_llm_fallback_model: ""      # empty = the engine's default for that provider
+ai_gateway_llm_fallback_chain: ""      # "provider:model, provider:model"; empty = one rung down on the same provider, then the other provider when its key is set; "none" = no fallback
+ai_gateway_llm_fallback_provider: ""   # the single-entry form of the chain
+ai_gateway_llm_fallback_model: ""
 ai_gateway_hermes_effort: ""           # low | medium | high | xhigh | max; empty = Hermes' default
+# One model per persona, e.g. {talkprep: claude-fable-5-1}; every other persona runs ai_gateway_llm_model.
+ai_gateway_llm_model_by_persona: {}
 ai_gateway_openai_api_base: "http://localhost:4000"    # any OpenAI-compatible endpoint (fallback path only)
 ai_gateway_openai_api_key: "change-me"
 ai_gateway_llm_model: "gemini-3.5-flash"
