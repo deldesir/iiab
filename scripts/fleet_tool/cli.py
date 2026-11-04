@@ -28,6 +28,7 @@ accept id, alias or host; output shows "id alias".
                                           offline (push-mode) box
   fleet deploy-agent ID                   install fleet-agent + units on that box (ssh)
   fleet lease issue|revoke|show|deploy ID the signed lease a box applies itself (fleet lease status: all)
+  fleet assistant setup|bind|unbind|rotate ID … the retail line: the assistant user on a box, the numbers bound to it (list, push)
   fleet deploy-watchdog ID                install the hub watchdog on a non-hub box (ssh)
   fleet runrole ID ROLE [--tags T]        run an IIAB role on a box through its own runrole
   fleet reboot ID|--all [--now]           reboot inside the window, wait, re-check
@@ -58,6 +59,7 @@ from .config import MUTATING, acquire_lock, load_inventory
 from .deploy import cmd_agent_token, cmd_authorize_key, cmd_deploy_agent, cmd_deploy_watchdog, cmd_hostname, cmd_vars
 from .identity import cmd_onboard, cmd_rename
 from .lifecycle import cmd_dunning, cmd_offboard, cmd_resume, cmd_suspend
+from .assistant import cmd_assistant
 from .lease import cmd_lease
 from .releases import cmd_manifest
 from .site import cmd_push
@@ -71,7 +73,7 @@ COMMANDS = {"list": cmd_list, "status": cmd_status, "tailnet": cmd_tailnet, "che
             "agent-token": cmd_agent_token, "deploy-agent": cmd_deploy_agent, "deploy-watchdog": cmd_deploy_watchdog,
             "runrole": cmd_runrole, "vars": cmd_vars, "reboot": cmd_reboot, "backup-pull": cmd_backup_pull,
             "onboard": cmd_onboard, "rename": cmd_rename, "hostname": cmd_hostname, "authorize-key": cmd_authorize_key,
-            "rollback": cmd_rollback, "dunning": cmd_dunning, "lease": cmd_lease}
+            "rollback": cmd_rollback, "dunning": cmd_dunning, "lease": cmd_lease, "assistant": cmd_assistant}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -96,6 +98,11 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_parser("list", help="every release, the current one marked")
     c = ps.add_parser("show", help="the commits of a release"); c.add_argument("id")
     c = ps.add_parser("set-current", help="make a release the one the fleet is judged against"); c.add_argument("id")
+    p = sub.add_parser("assistant", help="the retail line: the assistant user on a box and the numbers bound to it")
+    p.add_argument("action", choices=["setup", "bind", "unbind", "list", "push", "rotate"])
+    p.add_argument("id", nargs="?"); p.add_argument("number", nargs="?")
+    p.add_argument("--role", default="owner"); p.add_argument("--lang", default=""); p.add_argument("--default", action="store_true")
+    p.add_argument("--writer", action="store_true"); p.add_argument("--no-push", action="store_true")
     p = sub.add_parser("lease", help="the signed lease every box applies itself: keygen, issue, revoke, show, status, deploy")
     ps = p.add_subparsers(dest="action", required=True, metavar="ACTION")
     ps.add_parser("keygen", help="create the hub's signing key once")
