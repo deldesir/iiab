@@ -140,6 +140,9 @@ wuzapi_admintoken: "{{ lookup('password', iiab_etc_path ~ '/wuzapi_admintoken ch
 ai_gateway_install: True
 ai_gateway_enabled: True
 ai_gateway_profile: retail
+# The line's own updates: `fleet runrole ID ai-update` moves the gateway, the router and their
+# libraries to their wanted versions and restarts what changed. A shop's box has no RapidPro suite.
+ai_update_skip: [rapidpro, courier, mailroom]
 ai_gateway_postgres_uri: ""
 ai_gateway_default_persona: shop
 ai_gateway_admin_phone: ""
