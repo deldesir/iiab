@@ -75,8 +75,8 @@
       name: "{{ ai_gateway_retail_line_name }}"
       token: "{{ ai_gateway_wuzapi_token }}"
       webhook: "http://127.0.0.1:{{ ai_gateway_port }}/v1/bridge/wuzapi"
-      events: ["Message"]
-      active: true
+      events: "Message"                              # the bridge takes a comma-separated string, not a list
+      hmacKey: "{{ ai_gateway_bridge_hmac_key | default('') }}"   # the adapter checks the signature when the key is set
     status_code: [200, 201]
   when:
     - ai_gateway_profile == 'retail' and (wuzapi_enabled | default(false) | bool)
