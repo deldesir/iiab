@@ -5,6 +5,7 @@
 import json
 
 import frappe
+import frappe.permissions
 
 READ_ROLE, WRITE_ROLE = "Assistant Reader", "Assistant Writer"
 READS = ["Sales Invoice", "Item", "Item Price", "Price List", "Bin", "Warehouse", "Customer", "Customer Group",
@@ -19,6 +20,9 @@ def ensure_role(name: str) -> None:
 
 
 def ensure_perm(doctype: str, role: str, **flags) -> None:
+    # Frappe reads ONLY the custom rows once a doctype has any: the standard rows must be
+    # copied first (what the permission manager does), or every other role loses the doctype.
+    frappe.permissions.setup_custom_perms(doctype)
     if frappe.db.exists("Custom DocPerm", {"parent": doctype, "role": role, "permlevel": 0}):
         doc = frappe.get_doc("Custom DocPerm", {"parent": doctype, "role": role, "permlevel": 0})
         changed = False
