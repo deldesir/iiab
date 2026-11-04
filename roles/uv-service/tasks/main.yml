@@ -134,8 +134,8 @@
     - uv_service_venv_python.rc != 0 or uv_service_venv_python.stdout.strip() != svc.python
   changed_when: true   # runs only when the venv is missing or on another Python
 
-- name: Install the dependencies from the lock file (uv sync --frozen)
-  ansible.builtin.command: "{{ uv_service_bin }} sync --frozen"
+- name: Install the dependencies from the lock file (uv sync --frozen, with the service's extras)
+  ansible.builtin.command: "{{ uv_service_bin }} sync --frozen{% for e in (svc.extras | default([])) %} --extra {{ e }}{% endfor %}"
   args:
     chdir: "{{ svc.dir }}"
   become: true
