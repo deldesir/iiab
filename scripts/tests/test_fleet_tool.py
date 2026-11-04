@@ -725,7 +725,7 @@ def test_assistant_user_script_copies_standard_perms_before_adding_its_own():
     sys.modules["frappe"], sys.modules["frappe.permissions"] = frappe, frappe.permissions
     try:
         src = (config.SCRIPTS / "fleet-tasks" / "assistant-user.py").read_text()
-        exec(compile(src, "assistant-user.py", "exec"), {"WRITER": True, "__name__": "assistant_user_test"})
+        exec(compile(src, "assistant-user.py", "exec"), {"WRITER": True, "__name__": "assistant_user_test"})  # noqa: S102 - the script itself is under test
     finally:
         for k, v in saved.items():
             if v is None:
