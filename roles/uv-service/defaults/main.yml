@@ -20,6 +20,7 @@ uv_service_defaults:
   depth: 0               # git: shallow clone depth, 0 = full history
   files: []              # files: names under roles/<role>/files copied into `dir`
   libraries: []          # editable dependencies, each {name, repo, dest, version}: cloned when absent, moved with the service by the update entry
+  extras: []             # the project's optional extras to install with the lock (uv sync --extra), e.g. the talk-preparation pair on the pipeline box
   python: ""             # lock: the venv's interpreter version (written to .python-version; another version recreates the venv)
                          # requirements: the interpreter the venv is created with (a path or a version); "" lets uv choose
   deps: lock             # lock (uv sync --frozen) | requirements (uv pip install -r requirements.txt) | none

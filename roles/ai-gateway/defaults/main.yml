@@ -55,7 +55,11 @@ ai_gateway_mempalace_repo: "https://github.com/deldesir/mempalace.git"
 ai_gateway_mempalace_dir: /opt/iiab/mempalace
 ai_gateway_mempalace_version: develop
 
-ai_gateway_libraries:
+# The talk-preparation pair (talkmaster, jwlinker) is the pipeline box's: an optional extra of the
+# gateway, installed in the full profile only; the retail profile carries hermes and mempalace.
+ai_gateway_extras: "{{ ['talkprep'] if ai_gateway_profile != 'retail' else [] }}"
+ai_gateway_libraries: "{{ ai_gateway_libraries_full if ai_gateway_profile != 'retail' else ai_gateway_libraries_full[:2] }}"
+ai_gateway_libraries_full:
   - name: hermes-agent
     repo: "{{ ai_gateway_hermes_repo }}"
     dest: "{{ ai_gateway_hermes_dir }}"
@@ -444,6 +448,7 @@ ai_gateway_service:
   repo: "{{ ai_gateway_repo }}"
   version: "{{ ai_gateway_repo_version }}"
   libraries: "{{ ai_gateway_libraries }}"
+  extras: "{{ ai_gateway_extras }}"
   python: "{{ ai_gateway_python }}"
   env: ai-gateway.env.j2
   env_local: true
