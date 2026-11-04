@@ -170,7 +170,12 @@ RETAIL_BLOCK_MARK = "# --- retail line (fleet assistant line) ---"
 def line_vars(box: dict) -> str:
     """The retail line's variables appended to a box's local vars (the preset carries the same block)."""
     return "\n".join([
-        RETAIL_BLOCK_MARK, "wuzapi_install: True", "wuzapi_enabled: True",
+        RETAIL_BLOCK_MARK,
+        # The line's units come from the public release mirrors (releases only, no history): a box holds no credential.
+        "ai_gateway_repo: \"https://github.com/deldesir/gateway-release.git\"",
+        "rivebot_repo: \"https://github.com/deldesir/rivebot-release.git\"",
+        "ai_update_skip: [rapidpro, courier, mailroom]",
+        "wuzapi_install: True", "wuzapi_enabled: True",
         "wuzapi_admintoken: \"{{ lookup('password', iiab_etc_path ~ '/wuzapi_admintoken chars=ascii_letters,digits length=40') }}\"",
         "ai_gateway_install: True", "ai_gateway_enabled: True",
         "ai_gateway_profile: retail", "ai_gateway_postgres_uri: \"\"", "ai_gateway_default_persona: shop", "ai_gateway_admin_phone: \"\"",
