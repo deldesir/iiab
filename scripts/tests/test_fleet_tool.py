@@ -690,3 +690,50 @@ def test_a_box_with_the_line_gets_its_own_registry_and_a_pairing_code(scratch, f
     assert (tmp_path / "keys" / "box-002-qr.png").read_bytes() == b"\x89PNG fake"
     assert "Linked devices" in capsys.readouterr().out
 
+
+
+def test_assistant_user_script_copies_standard_perms_before_adding_its_own():
+    """Frappe reads only the custom rows once a doctype has any: the script must copy the
+    standard rows first, or the tills lose the doctype (a till could not close its shift, 2026-11-04)."""
+    import types
+
+    events = []
+
+    class _Doc(dict):
+        def insert(self, **kw):
+            events.append(("insert", self["doctype"], self.get("parent") or self.get("email")))
+
+        def save(self, **kw):
+            events.append(("save", self.get("doctype")))
+
+        def set(self, k, v):
+            self[k] = v
+
+    frappe = types.ModuleType("frappe")
+    frappe.local = types.SimpleNamespace(site="site.local")
+    frappe.db = types.SimpleNamespace(
+        exists=lambda doctype, name=None: doctype in ("DocType",),      # roles, perms, user: absent
+        commit=lambda: None,
+    )
+    frappe.get_doc = lambda d, *a: _Doc(d)
+    frappe.generate_hash = lambda length=15: "x" * length
+    frappe.clear_cache = lambda **kw: None
+    frappe.permissions = types.SimpleNamespace(setup_custom_perms=lambda dt: events.append(("setup_custom_perms", dt)))
+    import sys
+
+    saved = {k: sys.modules.get(k) for k in ("frappe", "frappe.permissions")}
+    sys.modules["frappe"], sys.modules["frappe.permissions"] = frappe, frappe.permissions
+    try:
+        src = (config.SCRIPTS / "fleet-tasks" / "assistant-user.py").read_text()
+        exec(compile(src, "assistant-user.py", "exec"), {"WRITER": True, "__name__": "assistant_user_test"})  # noqa: S102 - the script itself is under test
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                sys.modules.pop(k, None)
+            else:
+                sys.modules[k] = v
+    perm_inserts = [i for i, e in enumerate(events) if e[0] == "insert" and e[1] == "Custom DocPerm"]
+    assert perm_inserts, "the script adds its permission rows"
+    for i in perm_inserts:
+        doctype = events[i][2]
+        assert ("setup_custom_perms", doctype) in events[:i], f"standard rows copied before the row on {doctype}"
