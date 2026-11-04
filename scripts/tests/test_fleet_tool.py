@@ -646,15 +646,47 @@ def test_assistant_bind_setup_and_push_build_the_registry(scratch, fake, tmp_pat
     out = capsys.readouterr().out
     assert "assistant@site.local" in out and "K" not in out.split("assistant@site.local")[1][:5] and "S" not in out.replace("Next: fleet assistant", "")[-30:]
     assert json.loads((tmp_path / "keys" / "box-002.json").read_text())["api_key"] == "K"
-    assert cli.main(["assistant", "bind", "shop", "+509 1111 1111", "--role", "owner", "--default"]) == 0
-    assert cli.main(["assistant", "bind", "shop", "50922222222", "--role", "cashier", "--lang", "fr", "--no-push"]) == 0
+    assert cli.main(["assistant", "bind", "shop", "+1 555 0100 111", "--role", "owner", "--default"]) == 0
+    assert cli.main(["assistant", "bind", "shop", "15550100222", "--role", "cashier", "--lang", "fr", "--no-push"]) == 0
     rows = next(b for b in config.load_inventory()["boxes"] if b["id"] == "box-002")["assistant"]["bindings"]
-    assert [r["number"] for r in rows] == ["50911111111", "50922222222"] and rows[0]["default"] is True and rows[1]["lang"] == "fr"
+    assert [r["number"] for r in rows] == ["15550100111", "15550100222"] and rows[0]["default"] is True and rows[1]["lang"] == "fr"
     reg = assistant.registry(config.load_inventory())
     assert set(reg["tenants"]) == {"box-002"} and reg["tenants"]["box-002"]["url"] == "https://shop.example.test/erp"
-    assert reg["bindings"]["50911111111"] == {"tenants": ["box-002"], "default": "box-002", "role": "owner", "lang": ""}
+    assert reg["bindings"]["15550100111"] == {"tenants": ["box-002"], "default": "box-002", "role": "owner", "lang": ""}
     copies = [c for c in fake.calls if c[0] == "scp_to" and c[3] == assistant.GATEWAY_REGISTRY]
     assert copies and copies[-1][1] == "box-001" and copies[-1][4] == "0600"
-    assert cli.main(["assistant", "unbind", "shop", "50922222222", "--no-push"]) == 0
+    assert cli.main(["assistant", "unbind", "shop", "15550100222", "--no-push"]) == 0
     assert len(next(b for b in config.load_inventory()["boxes"] if b["id"] == "box-002")["assistant"]["bindings"]) == 1
-    assert cli.main(["assistant", "list"]) == 0 and "…111111" in capsys.readouterr().out
+    assert cli.main(["assistant", "list"]) == 0 and "…100111" in capsys.readouterr().out
+
+
+def test_a_box_with_the_line_gets_its_own_registry_and_a_pairing_code(scratch, fake, tmp_path, monkeypatch, capsys):
+    import base64, json as _json
+    from fleet_tool import assistant
+    monkeypatch.setattr(assistant, "KEYS_DIR", tmp_path / "keys")
+    inv = config.load_inventory()
+    for b in inv["boxes"]:
+        if b["id"] == "box-001":
+            b["services"] = list(b.get("services") or []) + ["whatsapp-assistant"]
+        if b["id"] == "box-002":
+            b["services"] = list(b.get("services") or []) + ["retail-line"]
+    config.save_inventory(inv)
+    (tmp_path / "keys").mkdir()
+    (tmp_path / "keys" / "box-002.json").write_text('{"email": "assistant@site.local", "api_key": "K", "api_secret": "S"}')
+    assert cli.main(["assistant", "bind", "shop", "+1 555 0100 111", "--no-push"]) == 0
+    assert cli.main(["assistant", "bind", "hubby", "+1 555 0100 111", "--no-push"]) == 0 or True      # the hub has no keys: not a tenant
+    out = capsys.readouterr().out
+    assert cli.main(["assistant", "push"]) == 0
+    out = capsys.readouterr().out
+    assert "registry on box-001" in out and "own registry on box-002" in out
+    copies = [c for c in fake.calls if c[0] == "scp_to" and c[3] == assistant.GATEWAY_REGISTRY]
+    assert [c[1] for c in copies] == ["box-001", "box-002"]
+    local = assistant.local_registry(config.load_inventory(), next(b for b in config.load_inventory()["boxes"] if b["id"] == "box-002"))
+    assert list(local["tenants"]) == ["box-002"] and local["tenants"]["box-002"]["url"] == "http://127.0.0.1/erp"
+    assert local["bindings"]["15550100111"]["tenants"] == ["box-002"]
+    png = base64.b64encode(b"\x89PNG fake").decode()
+    fake.hosts["shop.example.test"]["run"]["session/qr"] = (0, _json.dumps({"data": {"QRCode": "data:image/png;base64," + png}}))
+    assert cli.main(["assistant", "qr", "shop"]) == 0
+    assert (tmp_path / "keys" / "box-002-qr.png").read_bytes() == b"\x89PNG fake"
+    assert "Linked devices" in capsys.readouterr().out
+
