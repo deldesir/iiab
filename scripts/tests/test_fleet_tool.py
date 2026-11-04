@@ -631,3 +631,30 @@ def test_backup_pull_mirrors_from_the_mail_box(scratch, fake, tmp_path, capsys):
     assert "mirrored from box-002" in capsys.readouterr().out
     assert any(c[0] == "rsync" and c[1].startswith("root@shop.example.test:") for c in fake.calls)
 
+
+
+def test_assistant_bind_setup_and_push_build_the_registry(scratch, fake, tmp_path, monkeypatch, capsys):
+    from fleet_tool import assistant
+    monkeypatch.setattr(assistant, "KEYS_DIR", tmp_path / "keys")
+    inv = config.load_inventory()
+    for b in inv["boxes"]:
+        if b["id"] == "box-001":
+            b["services"] = list(b.get("services") or []) + ["whatsapp-assistant"]      # the hub box runs the assistant in the scratch fleet
+    config.save_inventory(inv)
+    fake.hosts["shop.example.test"]["run"]["fleet-assistant-user.py"] = (0, 'noise\nASSISTANT-USER {"email": "assistant@site.local", "api_key": "K", "api_secret": "S", "writer": false}\n')
+    assert cli.main(["assistant", "setup", "shop"]) == 0
+    out = capsys.readouterr().out
+    assert "assistant@site.local" in out and "K" not in out.split("assistant@site.local")[1][:5] and "S" not in out.replace("Next: fleet assistant", "")[-30:]
+    assert json.loads((tmp_path / "keys" / "box-002.json").read_text())["api_key"] == "K"
+    assert cli.main(["assistant", "bind", "shop", "+509 1111 1111", "--role", "owner", "--default"]) == 0
+    assert cli.main(["assistant", "bind", "shop", "50922222222", "--role", "cashier", "--lang", "fr", "--no-push"]) == 0
+    rows = next(b for b in config.load_inventory()["boxes"] if b["id"] == "box-002")["assistant"]["bindings"]
+    assert [r["number"] for r in rows] == ["50911111111", "50922222222"] and rows[0]["default"] is True and rows[1]["lang"] == "fr"
+    reg = assistant.registry(config.load_inventory())
+    assert set(reg["tenants"]) == {"box-002"} and reg["tenants"]["box-002"]["url"] == "https://shop.example.test/erp"
+    assert reg["bindings"]["50911111111"] == {"tenants": ["box-002"], "default": "box-002", "role": "owner", "lang": ""}
+    copies = [c for c in fake.calls if c[0] == "scp_to" and c[3] == assistant.GATEWAY_REGISTRY]
+    assert copies and copies[-1][1] == "box-001" and copies[-1][4] == "0600"
+    assert cli.main(["assistant", "unbind", "shop", "50922222222", "--no-push"]) == 0
+    assert len(next(b for b in config.load_inventory()["boxes"] if b["id"] == "box-002")["assistant"]["bindings"]) == 1
+    assert cli.main(["assistant", "list"]) == 0 and "…111111" in capsys.readouterr().out
