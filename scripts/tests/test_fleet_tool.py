@@ -649,7 +649,7 @@ def test_assistant_bind_setup_and_push_build_the_registry(scratch, fake, tmp_pat
     assert cli.main(["assistant", "bind", "shop", "+1 555 0100 111", "--role", "owner", "--default"]) == 0
     assert cli.main(["assistant", "bind", "shop", "15550100222", "--role", "cashier", "--lang", "fr", "--no-push"]) == 0
     rows = next(b for b in config.load_inventory()["boxes"] if b["id"] == "box-002")["assistant"]["bindings"]
-    assert [r["number"] for r in rows] == ["50911111111", "15550100222"] and rows[0]["default"] is True and rows[1]["lang"] == "fr"
+    assert [r["number"] for r in rows] == ["15550100111", "15550100222"] and rows[0]["default"] is True and rows[1]["lang"] == "fr"
     reg = assistant.registry(config.load_inventory())
     assert set(reg["tenants"]) == {"box-002"} and reg["tenants"]["box-002"]["url"] == "https://shop.example.test/erp"
     assert reg["bindings"]["15550100111"] == {"tenants": ["box-002"], "default": "box-002", "role": "owner", "lang": ""}
