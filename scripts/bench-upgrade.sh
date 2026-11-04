@@ -138,6 +138,14 @@ done
 
 step "python + node requirements"
 asf "bench setup requirements" || fail "setup requirements"
+# A box can carry an app the release manifest does not name (the hub's fleet_ops): the
+# requirements step has been seen to drop its editable install from the env. Put back any app
+# the env can no longer import before anything runs against it.
+for a in $APPS; do
+  asf "env/bin/python -c 'import $a'" >/dev/null 2>&1 && continue
+  echo "  $a is not importable from the env: re-installing it"
+  asf "uv pip install --quiet -e apps/$a --python env/bin/python" || fail "re-install $a"
+done
 
 # The asset build can peak at several GB. On a box with little free memory and no swap,
 # add temporary swap for the build (as the erpnext role does) rather than risk the OOM killer.
@@ -158,15 +166,16 @@ drop_swap
 # lock_wait_timeout is a DAY. Seen when jumping from old code; a rerun is clean because
 # the patch is already logged. The watchdog ends a migrate stuck like that so the retry runs.
 migrate_once() {
-  asf "bench --site $SITE migrate" &
+  local site=${1:-$SITE}
+  asf "bench --site $site migrate" &
   local mp=$!
   (
     while kill -0 "$mp" 2>/dev/null; do
       sleep 30
-      stuck=$(val "bench --site $SITE mariadb -N -e \"select count(*) from information_schema.processlist where db = database() and state like 'Waiting for table metadata lock' and time > 120\"")
+      stuck=$(val "bench --site $site mariadb -N -e \"select count(*) from information_schema.processlist where db = database() and state like 'Waiting for table metadata lock' and time > 120\"")
       if [[ "${stuck:-0}" =~ ^[0-9]+$ ]] && [ "$stuck" -ge 1 ]; then
         echo "WATCHDOG: migrate has waited >120s on a metadata lock held by its own process; terminating it so the retry can run"
-        pkill -TERM -u frappe -f "frappe.utils.bench_helper frappe --site $SITE migrate"
+        pkill -TERM -u frappe -f "frappe.utils.bench_helper frappe --site $site migrate"
         break
       fi
     done
@@ -177,15 +186,23 @@ migrate_once() {
   return $rc
 }
 
-step "migrate"
-if ! migrate_once; then
-  echo "migrate failed once (lock waits happen); retrying in 20s"; sleep 20
-  migrate_once || fail "migrate"
-fi
+# Every site of the bench, the default one first: a hub carries its fleet site next to the
+# demo site, and a site left behind answers 500 once the code expects a table it never got.
+SITES=$SITE
+for d in "$B"/sites/*/; do
+  s=$(basename "$d"); [ -f "$d/site_config.json" ] && [ "$s" != "$SITE" ] && SITES="$SITES $s"
+done
+for s in $SITES; do
+  step "migrate $s"
+  if ! migrate_once "$s"; then
+    echo "migrate $s failed once (lock waits happen); retrying in 20s"; sleep 20
+    migrate_once "$s" || fail "migrate $s"
+  fi
+done
 
 step "start services"
 start_services; STOPPED=0
-asf "bench --site $SITE clear-cache >/dev/null && bench --site $SITE clear-website-cache >/dev/null" || true
+for s in $SITES; do asf "bench --site $s clear-cache >/dev/null && bench --site $s clear-website-cache >/dev/null" || true; done
 
 step "post-state"
 for a in $APPS; do printf '%-9s %s\n' "$a" "$(val "git -C apps/$a log -1 --format='%h %cd' --date=short")"; done
