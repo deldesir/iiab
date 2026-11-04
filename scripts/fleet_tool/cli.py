@@ -28,7 +28,7 @@ accept id, alias or host; output shows "id alias".
                                           offline (push-mode) box
   fleet deploy-agent ID                   install fleet-agent + units on that box (ssh)
   fleet lease issue|revoke|show|deploy ID the signed lease a box applies itself (fleet lease status: all)
-  fleet assistant setup|bind|unbind|rotate ID … the retail line: the assistant user on a box, the numbers bound to it (list, push)
+  fleet assistant setup|bind|unbind|rotate|line|qr ID … the retail line: the assistant user, the bindings, the line on a box, its pairing code
   fleet deploy-watchdog ID                install the hub watchdog on a non-hub box (ssh)
   fleet runrole ID ROLE [--tags T]        run an IIAB role on a box through its own runrole
   fleet reboot ID|--all [--now]           reboot inside the window, wait, re-check
@@ -99,7 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
     c = ps.add_parser("show", help="the commits of a release"); c.add_argument("id")
     c = ps.add_parser("set-current", help="make a release the one the fleet is judged against"); c.add_argument("id")
     p = sub.add_parser("assistant", help="the retail line: the assistant user on a box and the numbers bound to it")
-    p.add_argument("action", choices=["setup", "bind", "unbind", "list", "push", "rotate"])
+    p.add_argument("action", choices=["setup", "bind", "unbind", "list", "push", "rotate", "qr", "line"])
     p.add_argument("id", nargs="?"); p.add_argument("number", nargs="?")
     p.add_argument("--role", default="owner"); p.add_argument("--lang", default=""); p.add_argument("--default", action="store_true")
     p.add_argument("--writer", action="store_true"); p.add_argument("--no-push", action="store_true")

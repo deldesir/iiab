@@ -28,12 +28,13 @@
   ansible.builtin.include_role:
     name: nginx
 
-- name: Install the IIAB Postgres cluster the gateway's tables live in (roles/postgresql, once)
+- name: Install the IIAB Postgres cluster the gateway's tables live in (roles/postgresql, once; the retail profile keeps SQLite)
   ansible.builtin.include_role:
     name: postgresql
   vars:
     postgresql_install: true
     postgresql_enabled: true
+  when: ai_gateway_profile != 'retail'
 
 # The service runs from this working tree. A fast-forward to the wanted version is the only
 # change the role makes to it: a tree with local modifications stops the role so the operator
@@ -50,6 +51,38 @@
 
 # Hermes and MemPalace keep their state inside the gateway's data/ directory (IIAB's data-vs-code
 # separation; the units point HERMES_HOME and MEMPALACE_PALACE_PATH there).
+# The shop's line (retail profile): the bridge posts every event of one WhatsApp number to the
+# gateway's adapter. The bridge user is made once through the bridge's admin API, idempotently.
+- name: The bridge users (retail profile)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ wuzapi_port | default(8095) }}/admin/users"
+    headers:
+      Authorization: "{{ wuzapi_admintoken }}"
+    return_content: true
+    status_code: [200]
+  register: ai_gateway_bridge_users
+  when: ai_gateway_profile == 'retail' and (wuzapi_enabled | default(false) | bool)
+  no_log: true
+
+- name: The shop's line on the bridge (retail profile) - one user, its token, its webhook to the adapter
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ wuzapi_port | default(8095) }}/admin/users"
+    method: POST
+    headers:
+      Authorization: "{{ wuzapi_admintoken }}"
+    body_format: json
+    body:
+      name: "{{ ai_gateway_retail_line_name }}"
+      token: "{{ ai_gateway_wuzapi_token }}"
+      webhook: "http://127.0.0.1:{{ ai_gateway_port }}/v1/bridge/wuzapi"
+      events: ["Message"]
+      active: true
+    status_code: [200, 201]
+  when:
+    - ai_gateway_profile == 'retail' and (wuzapi_enabled | default(false) | bool)
+    - "ai_gateway_retail_line_name not in ((ai_gateway_bridge_users.json | default({})).get('data', []) | map(attribute='name') | list)"
+  no_log: true
+
 - name: Ensure AI Gateway data directories exist
   ansible.builtin.file:
     path: "{{ item }}"

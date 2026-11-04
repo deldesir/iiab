@@ -62,6 +62,12 @@ services:
       - { url: http://127.0.0.1:8086/health, expect: 200, critical: true }
       - { url: http://127.0.0.1:8087/health, expect: 200, critical: true }
     notes: one RapidPro organisation and one WhatsApp number per customer, hosted on the hub; grants file is the access control
+  retail-line:
+    title: The shop's WhatsApp line (the box-local assistant)
+    kind: box
+    maturity: trial
+    units: [wuzapi, ai-gateway, rivebot]
+    notes: the shop's own number on the bridge; the gateway in its retail profile answers the bound numbers (dialog, verbs; the model optional); the registry of bindings lives on the box (fleet assistant push); no flow engine
   email-channel:
     title: Email channel (bridge to the assistant)
     kind: hub

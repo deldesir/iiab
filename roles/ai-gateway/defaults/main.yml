@@ -167,6 +167,15 @@ ai_gateway_postgres_uri: "postgresql+asyncpg://{{ rapidpro_db_user | default('te
 # Fallback persona when no channel→persona mapping exists
 ai_gateway_default_persona: "konex-support"
 
+# The profile: "full" is the operator's pipeline box (RapidPro, the cockpit jobs, Postgres);
+# "retail" is a shop's box (D-013): the bridge speaks to the gateway directly, the shop dialog
+# and verbs answer the shop's bound numbers, the model is optional, no cockpit jobs, SQLite.
+ai_gateway_profile: full
+ai_gateway_bridge_persona: shop
+ai_gateway_bridge_hmac_key: ""                 # the bridge signs its posts with it when set; loopback only otherwise
+ai_gateway_retail_line_name: "shop"            # the bridge user (one WhatsApp number) the shop's line runs on
+ai_gateway_internal_key: "{{ rivebot_gateway_internal_key | default('') }}"   # the tools API key the router uses
+
 # Hermes runs in the gateway's process: these go into the service unit's environment.
 ai_gateway_hermes_max_iterations: 15
 ai_gateway_hermes_thread_pool_size: 2         # 2 on a 4 GB box; 3 on roomier ones
@@ -425,7 +434,7 @@ ai_gateway_units: >-
      + (ai_gateway_maintenance_units | product(['.service.j2', '.timer.j2']) | map('join') | list) }}
 ai_gateway_timers: >-
   {{ (ai_gateway_jobs | list | map('regex_replace', '^', 'ai-gateway-') | map('regex_replace', '$', '.timer') | list)
-     + ['pipeline-health-check.timer', 'second-brain-backup.timer'] }}
+     + (['pipeline-health-check.timer', 'second-brain-backup.timer'] if ai_gateway_profile != 'retail' else []) }}
 
 ai_gateway_service:
   name: ai-gateway
