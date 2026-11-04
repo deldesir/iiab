@@ -139,6 +139,9 @@ wuzapi_enabled: True
 wuzapi_admintoken: "{{ lookup('password', iiab_etc_path ~ '/wuzapi_admintoken chars=ascii_letters,digits length=40') }}"
 ai_gateway_install: True
 ai_gateway_enabled: True
+# The line's units come from the public release mirrors (releases only, no history): the box holds no credential.
+ai_gateway_repo: "https://github.com/deldesir/gateway-release.git"
+rivebot_repo: "https://github.com/deldesir/rivebot-release.git"
 ai_gateway_profile: retail
 # The line's own updates: `fleet runrole ID ai-update` moves the gateway, the router and their
 # libraries to their wanted versions and restarts what changed. A shop's box has no RapidPro suite.
