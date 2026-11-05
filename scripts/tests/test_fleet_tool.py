@@ -737,3 +737,67 @@ def test_assistant_user_script_copies_standard_perms_before_adding_its_own():
     for i in perm_inserts:
         doctype = events[i][2]
         assert ("setup_custom_perms", doctype) in events[:i], f"standard rows copied before the row on {doctype}"
+
+
+def _line_host(fake, host="shop.example.test", checkout=(0, "IIAB-OK abc1234"), block="absent", roles=(0, "ROLES-OK")):
+    run = fake.hosts[host]["run"]
+    run["git fetch -q origin master"] = checkout
+    run["superseded by the retail line block"] = (0, "")
+    run["grep -q '# --- retail line"] = (0, block)
+    run["cat /root/fleet-retail-line.yml >>"] = (0, "")
+    run["./runrole $r"] = roles
+
+
+def test_assistant_line_refreshes_the_checkout_supersedes_old_keys_then_runs_the_roles(scratch, fake, capsys):
+    """A till ran the line's roles from a checkout four merges behind, then its bridge refused the
+    gateway role: an older preset had defined the same keys with another token (2026-11-05)."""
+    _line_host(fake)
+    assert cli.main(["assistant", "line", "shop"]) == 0
+    out = capsys.readouterr().out
+    cmds = [c[2] for c in fake.calls if c[0] == "run_on" and c[1] == "box-002"]
+    refresh = next(i for i, c in enumerate(cmds) if "git fetch -q origin master" in c)
+    supersede = next(i for i, c in enumerate(cmds) if "superseded by the retail line block" in c)
+    roles = next(i for i, c in enumerate(cmds) if "./runrole $r" in c)
+    assert refresh < supersede < roles
+    assert "--ff-only origin/master" in cmds[refresh] and "IIAB-DIRTY" in cmds[refresh]
+    sed = cmds[supersede]
+    assert sed.startswith("cp -a /etc/iiab/local_vars.yml /etc/iiab/local_vars.yml.bak-") and "sed -i -E '/^# --- retail line \\(fleet assistant line\\) ---/,$!{" in sed
+    for key in ("wuzapi_admintoken", "wuzapi_enabled", "ai_gateway_api_key", "rivebot_install", "ai_update_skip"):
+        assert key in sed
+    assert "abc1234" in out and "retail-line" in next(b for b in config.load_inventory()["boxes"] if b["id"] == "box-002")["services"]
+    copies = [c for c in fake.calls if c[0] == "scp_to" and c[3] == "/root/fleet-retail-line.yml"]
+    assert len(copies) == 1 and copies[0][4] == "0600"
+
+
+def test_assistant_line_stops_on_a_checkout_it_cannot_bring_to_master(scratch, fake, capsys):
+    _line_host(fake, checkout=(1, "IIAB-DIRTY"))
+    assert cli.main(["assistant", "line", "shop"]) == 1
+    out = capsys.readouterr().out
+    assert "IIAB-DIRTY" in out and "fix it there first" in out
+    assert not [c for c in fake.calls if c[0] == "run_on" and "./runrole" in c[2]]
+    assert "retail-line" not in (next(b for b in config.load_inventory()["boxes"] if b["id"] == "box-002").get("services") or [])
+
+
+def test_assistant_line_does_not_record_the_service_when_a_role_fails(scratch, fake, capsys):
+    _line_host(fake, block="present", roles=(1, "ROLE-FAILED ai-gateway\nfatal: something"))
+    assert cli.main(["assistant", "line", "shop"]) == 1
+    assert "did not finish" in capsys.readouterr().out
+    assert not [c for c in fake.calls if c[0] == "scp_to" and c[3] == "/root/fleet-retail-line.yml"]      # the block was present: not appended twice
+    assert "retail-line" not in (next(b for b in config.load_inventory()["boxes"] if b["id"] == "box-002").get("services") or [])
+    assert "assistant line box-002 result=FAILED" in (scratch / "state" / "actions.log").read_text()
+
+
+def test_runrole_refreshes_the_checkout_before_the_run(scratch, fake, capsys, monkeypatch):
+    monkeypatch.setattr(upgrade.time, "sleep", lambda s: None)
+    run = fake.hosts["shop.example.test"]["run"]
+    run["git fetch -q origin master"] = (0, "IIAB-OK abc1234")
+    run["systemd-run"] = (0, "")
+    run["wc -l <"] = (0, "2\ninactive")
+    run["sed -n '1,2p'"] = (0, "PLAY RECAP\nfailed=0 unreachable=0")
+    run["tail -n 25"] = (0, "ok=3 changed=0 unreachable=0 failed=0")
+    assert cli.main(["runrole", "shop", "wuzapi"]) == 0
+    cmds = [c[2] for c in fake.calls if c[0] == "run_on" and c[1] == "box-002"]
+    assert "git fetch -q origin master" in cmds[0] and any("systemd-run" in c for c in cmds[1:])
+    run["git fetch -q origin master"] = (1, "IIAB-BRANCH feature-x")
+    with pytest.raises(SystemExit, match="IIAB-BRANCH feature-x"):
+        cli.main(["runrole", "shop", "wuzapi"])

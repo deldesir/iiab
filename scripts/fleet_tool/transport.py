@@ -167,3 +167,21 @@ def box_http_code(box: dict, url: str, timeout: int = 20) -> str:
     rc, out = run_on(box, f"curl -s -o /dev/null -m {timeout} -w '%{{http_code}}' -L {shlex.quote(url)}", timeout=timeout + 15)
     code = out.strip()[-3:]
     return code if rc == 0 and code.isdigit() else "000"
+
+
+IIAB_CHECKOUT = "/opt/iiab/iiab"
+
+
+def refresh_checkout(box: dict) -> tuple[bool, str]:
+    """A box runs its roles from its own IIAB checkout, so before a run the checkout is brought to
+    the published master, fast-forward only. A checkout with local changes, on another branch or
+    unable to fast-forward is left as it is and the run stops: what runs on a box is what was
+    reviewed, never a stale copy (a till once ran a role four merges behind) and never a surprise."""
+    cmd = (f"cd {IIAB_CHECKOUT} && git status --porcelain --untracked-files=no | grep -q . && echo IIAB-DIRTY && exit 1; "
+           f"[ \"$(git rev-parse --abbrev-ref HEAD)\" = master ] || {{ echo IIAB-BRANCH $(git rev-parse --abbrev-ref HEAD); exit 1; }}; "
+           f"git fetch -q origin master && git merge -q --ff-only origin/master && echo IIAB-OK $(git rev-parse --short HEAD)")
+    rc, out = run_on(box, cmd, timeout=300)
+    last = (out.strip().splitlines() or [""])[-1]
+    if rc != 0 or not last.startswith("IIAB-OK"):
+        return False, f"the IIAB checkout on the box was not brought to master ({last or f'rc={rc}'}): fix it there first"
+    return True, f"IIAB checkout at {last.split()[-1]}"
