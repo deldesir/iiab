@@ -124,7 +124,7 @@ services:
     apps: [lms]
     upstream: https://github.com/frappe/lms
     probes:
-      - { path: /lms, expect: 200, critical: false }
+      - { path: /erp/lms, expect: 200, critical: false }
     notes: on the hub for the fleet's training courses, on a school box with Education; ready once priced
   helpdesk:
     title: Support desk (Frappe Helpdesk)
@@ -133,7 +133,7 @@ services:
     apps: [helpdesk, telephony]
     upstream: https://github.com/frappe/helpdesk
     probes:
-      - { path: /helpdesk, expect: 200, critical: false }
+      - { path: /erp/helpdesk, expect: 200, critical: false }
     notes: on the hub, the customers' support desk with SLAs; ready once the support tier is priced
   insights:
     title: Reporting and dashboards (Frappe Insights)
@@ -142,7 +142,7 @@ services:
     apps: [insights]
     upstream: https://github.com/frappe/insights
     probes:
-      - { path: /insights, expect: 200, critical: false }
+      - { path: /erp/insights, expect: 200, critical: false }
     notes: in the fleet app list, so every new box carries it; ready once priced
   healthcare:
     title: Clinic management (Marley Health)
