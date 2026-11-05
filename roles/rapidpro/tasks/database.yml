@@ -18,6 +18,11 @@
   become: true
   become_user: postgres
 
+# pgvector is built in install.yml, but a box installed before the knowledge app has none, and
+# enabling RapidPro there stopped at the extension (a till, 2026-11-05). Ensured here as well.
+- name: Ensure pgvector before the extensions
+  ansible.builtin.include_tasks: pgvector.yml
+
 - name: Enable PostgreSQL extensions
   community.postgresql.postgresql_ext:
     name: "{{ item }}"
