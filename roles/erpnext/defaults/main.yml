@@ -29,6 +29,13 @@ erpnext_extra_apps:
   - { name: "https://github.com/deldesir/webshop.git", branch: "develop", app_name: "webshop" }
   - { name: "https://github.com/deldesir/POSNext.git", branch: "develop", app_name: "pos_next" }
   - { name: "https://github.com/deldesir/lending.git", branch: "develop", app_name: "lending" }
+  - { name: "https://github.com/deldesir/print_designer.git", branch: "develop", app_name: "print_designer" }
+  - { name: "https://github.com/deldesir/insights.git", branch: "develop", app_name: "insights" }
+
+# Apps a box profile adds on top of the fleet list (same entry shape). A profile's vars file sets
+# only this, so the fleet list is spelled out once, here. The role installs
+# erpnext_extra_apps + erpnext_profile_apps, in that order.
+erpnext_profile_apps: []
 
 # IIAB Storefront and Builder CLI repositories
 builder_cli_repo: "https://github.com/deldesir/builder-cli.git"

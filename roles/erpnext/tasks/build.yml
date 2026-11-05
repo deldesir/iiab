@@ -103,7 +103,7 @@
         chdir: "/home/{{ erpnext_user_name }}/frappe-bench/apps/builder/frontend"
       become: true
       become_user: "{{ erpnext_user_name }}"
-      when: erpnext_enabled | bool and 'builder' in (erpnext_extra_apps | map(attribute='app_name') | list)
+      when: erpnext_enabled | bool and 'builder' in ((erpnext_extra_apps + erpnext_profile_apps) | map(attribute='app_name') | list)
       changed_when: true   # same
 
     - name: Deploy IIAB asset patching script

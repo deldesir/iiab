@@ -42,7 +42,7 @@
     chdir: /home/{{ erpnext_user_name }}/frappe-bench
   environment:
     PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-  loop: "{{ erpnext_extra_apps }}"
+  loop: "{{ erpnext_extra_apps + erpnext_profile_apps }}"
   when:
     - erpnext_enabled | bool
     - "item.app_name not in (_installed_apps.stdout | default(''))"
