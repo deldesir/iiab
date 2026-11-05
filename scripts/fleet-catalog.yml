@@ -48,6 +48,13 @@ services:
     kind: box
     maturity: ready
     apps: [crm, whatsapp]
+  print:
+    title: Receipt and document designer (Print Designer)
+    kind: box
+    maturity: on-request
+    apps: [print_designer]
+    upstream: https://github.com/frappe/print_designer
+    notes: in the fleet app list; shops and hotels lay out their own receipts, invoices and folios in the Desk
   lending:
     title: Loans and installment plans (Frappe Lending)
     kind: box
@@ -98,35 +105,44 @@ services:
   education:
     title: School administration (Frappe Education)
     kind: box
-    maturity: candidate
+    maturity: on-request
     apps: [education]
     upstream: https://github.com/frappe/education
+    notes: the school profile (local_vars_fleet_box_school.yml) installs it with Learning; ready once priced
   learning:
     title: Courses and learning (Frappe Learning)
     kind: box
-    maturity: candidate
+    maturity: on-request
     apps: [lms]
     upstream: https://github.com/frappe/lms
     probes:
-      - { path: /erp/lms, expect: 200, critical: false }
+      - { path: /lms, expect: 200, critical: false }
+    notes: on the hub for the fleet's training courses, on a school box with Education; ready once priced
   helpdesk:
     title: Support desk (Frappe Helpdesk)
     kind: box
-    maturity: candidate
-    apps: [helpdesk]
+    maturity: on-request
+    apps: [helpdesk, telephony]
     upstream: https://github.com/frappe/helpdesk
+    probes:
+      - { path: /helpdesk, expect: 200, critical: false }
+    notes: on the hub, the customers' support desk with SLAs; ready once the support tier is priced
   insights:
     title: Reporting and dashboards (Frappe Insights)
     kind: box
-    maturity: candidate
+    maturity: on-request
     apps: [insights]
     upstream: https://github.com/frappe/insights
+    probes:
+      - { path: /insights, expect: 200, critical: false }
+    notes: in the fleet app list, so every new box carries it; ready once priced
   healthcare:
     title: Clinic management (Marley Health)
     kind: box
-    maturity: candidate
+    maturity: on-request
     apps: [healthcare]
     upstream: https://github.com/earthians/marley
+    notes: the clinic profile (local_vars_fleet_box_clinic.yml) installs it; the pharmacy sells through the till; ready once priced
   hospitality:
     title: "Hotel management (Hospitality PMS: front desk, rooms, rates, folios, housekeeping, night audit)"
     kind: box

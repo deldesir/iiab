@@ -138,15 +138,6 @@ anki_enabled: False
 email_bridge_install: False
 email_bridge_enabled: False
 
-# The fleet's Frappe apps (the role's default list) plus the hotel PMS. Defining the variable
-# replaces the default list, so every app is spelled out here.
-erpnext_extra_apps:
-  - { name: "https://github.com/deldesir/hrms.git",    branch: "develop", app_name: "hrms" }
-  - { name: "whatsapp",   branch: "develop", app_name: "whatsapp" }
-  - { name: "https://github.com/deldesir/crm.git",     branch: "develop", app_name: "crm" }
-  - { name: "https://github.com/deldesir/builder.git",  branch: "develop", app_name: "builder" }
-  - { name: "payments",   branch: "develop", app_name: "payments" }
-  - { name: "https://github.com/deldesir/webshop.git",  branch: "develop", app_name: "webshop" }
-  - { name: "https://github.com/deldesir/POSNext.git",  branch: "develop", app_name: "pos_next" }
+# The hotel adds the Hospitality PMS to the fleet's Frappe apps (the role's default list).
+erpnext_profile_apps:
   - { name: "https://github.com/deldesir/hospitality_pms.git", branch: "version-16", app_name: "hospitality_pms" }
-  - { name: "https://github.com/deldesir/lending.git", branch: "develop", app_name: "lending" }

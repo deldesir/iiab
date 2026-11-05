@@ -14,6 +14,13 @@ frappe/payments
 deldesir/POSNext
 deldesir/hospitality_pms
 deldesir/lending
+deldesir/print_designer
+deldesir/insights
+deldesir/lms
+deldesir/helpdesk
+deldesir/education
+deldesir/marley
+frappe/telephony
 deldesir/rapidpro
 deldesir/mailroom
 deldesir/courier

@@ -31,7 +31,7 @@ APPS=${APPS:-$(tr "\n" " " < $B/sites/apps.txt 2>/dev/null)}
 FORK_OWNER=${FORK_OWNER:-deldesir}
 # Apps that are not forks track their upstream directly; name the GitHub owner whose
 # remote to follow. Everything else follows FORK_OWNER.
-declare -A APP_OWNER=( [payments]=frappe [whatsapp]=frappe )
+declare -A APP_OWNER=( [payments]=frappe [whatsapp]=frappe [telephony]=frappe )
 # Extra paths (ERE) whose local changes were checked by hand and may be discarded on
 # THIS box, e.g. a hotfix that has since landed in the fork. Empty = none.
 ALLOW_DISCARD=${ALLOW_DISCARD:-}
