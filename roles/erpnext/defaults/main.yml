@@ -28,6 +28,7 @@ erpnext_extra_apps:
   - { name: "payments", branch: "develop", app_name: "payments" }
   - { name: "https://github.com/deldesir/webshop.git", branch: "develop", app_name: "webshop" }
   - { name: "https://github.com/deldesir/POSNext.git", branch: "develop", app_name: "pos_next" }
+  - { name: "https://github.com/deldesir/lending.git", branch: "develop", app_name: "lending" }
 
 # IIAB Storefront and Builder CLI repositories
 builder_cli_repo: "https://github.com/deldesir/builder-cli.git"
