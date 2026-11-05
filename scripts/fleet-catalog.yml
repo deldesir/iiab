@@ -81,6 +81,14 @@ services:
     maturity: trial
     units: [wuzapi, ai-gateway, rivebot]
     notes: the shop's own number on the bridge; the gateway in its retail profile answers the bound numbers (dialog, verbs; the model optional); the registry of bindings lives on the box (fleet assistant push); no flow engine
+  rapidpro:
+    title: RapidPro on the box (flows, contacts, channels; the suite with courier and mailroom)
+    kind: box
+    maturity: trial
+    units: [rapidpro-gunicorn, rapidpro-celery, rapidpro-courier, rapidpro-mailroom]
+    probes:
+      - { path: /rp/, expect: 200, critical: true }
+    notes: the box's own RapidPro under /rp; a channel needs a number of its own (the shop's line on the bridge keeps the bridge's); the update role moves temba, courier and mailroom with the box unless ai_update_skip names them
   email-channel:
     title: Email channel (bridge to the assistant)
     kind: hub
