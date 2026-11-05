@@ -6,6 +6,10 @@
 # calling role keeps everything specific to its service (asserts, data directories, database
 # objects, nginx) around the include. README.md documents the keys; these are their defaults.
 uv_service_bin: /usr/local/bin/uv
+# Where uv keeps the interpreters it installs. The default would be the root home, which some
+# boxes keep at 0700: a venv made there runs as root and nobody else (a till's units looped on
+# 'Permission denied', 2026-11-05). A shared directory is readable by every service user.
+uv_service_python_dir: /usr/local/share/uv/python
 
 uv_service_defaults:
   name: ""               # the service's label; a unit of that name is what `services` usually lists
