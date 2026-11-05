@@ -21,3 +21,9 @@ ai_update_go_bin: /usr/local/go/bin/go
 # Usage: ./runrole ai-update -e '{"ai_update_skip": ["wuzapi", "rapidpro"]}'
 # Names: ai-gateway (with its libraries), rivebot, rapidpro, courier, mailroom, wuzapi
 ai_update_skip: []
+
+# The user that owns the flow engine's tree and runs its management commands in the apply stage.
+# The gateway role's own default (ai_gateway_user) does not reach this role: an included role's
+# defaults stay inside it, so the apply stage found the name undefined on a box whose update was
+# the first since the stages were split (2026-11-05).
+ai_update_gateway_user: "{{ ai_gateway_user | default(iiab_admin_user) }}"
