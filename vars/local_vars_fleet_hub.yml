@@ -140,3 +140,10 @@ anki_install: False
 anki_enabled: False
 email_bridge_install: False
 email_bridge_enabled: False
+
+# The hub hosts the support desk and the training courses for the customers on its own bench.
+# Helpdesk requires the telephony app; it must be installed first.
+erpnext_profile_apps:
+  - { name: "telephony", branch: "develop", app_name: "telephony" }
+  - { name: "https://github.com/deldesir/helpdesk.git", branch: "develop", app_name: "helpdesk" }
+  - { name: "https://github.com/deldesir/lms.git", branch: "develop", app_name: "lms" }

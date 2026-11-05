@@ -24,7 +24,7 @@ while [ $# -gt 0 ]; do
 done
 B=/home/frappe/frappe-bench
 SITE=site.local
-APPS="frappe erpnext hrms whatsapp crm builder pos_next webshop payments lending"
+APPS="frappe erpnext hrms whatsapp crm builder pos_next webshop payments lending print_designer insights"
 TARGETS="frappe-bench-frappe-schedule frappe-bench-web.target frappe-bench-workers.target"
 
 run() { if [ "$LOCAL" = 1 ]; then bash -c "$1"; else ssh -o ConnectTimeout=10 -o BatchMode=yes "root@$H" "$1"; fi; }
