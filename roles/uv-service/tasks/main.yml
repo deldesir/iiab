@@ -116,18 +116,23 @@
   become: true
   when: svc.deps == 'lock' and svc.python | length > 0
 
-- name: Which Python the venv runs, if it exists
+# Asked as the service user: an interpreter the user cannot read counts as another Python and the
+# venv is made again (a root-only interpreter once left a till's units looping on 'Permission denied').
+- name: Which Python the venv runs, if it exists (as the service user)
   ansible.builtin.command: "{{ svc.dir }}/.venv/bin/python -c 'import sys; print(f\"{sys.version_info[0]}.{sys.version_info[1]}\")'"
   register: uv_service_venv_python
   changed_when: false
   failed_when: false
   become: true
+  become_user: "{{ svc.user }}"
   when: svc.deps == 'lock' and svc.python | length > 0
 
 - name: Create the venv (only when missing or on another Python)
   ansible.builtin.command: "{{ uv_service_bin }} venv .venv --python {{ svc.python }}"
   args:
     chdir: "{{ svc.dir }}"
+  environment:
+    UV_PYTHON_INSTALL_DIR: "{{ uv_service_python_dir }}"
   become: true
   when:
     - svc.deps == 'lock' and svc.python | length > 0
@@ -138,6 +143,8 @@
   ansible.builtin.command: "{{ uv_service_bin }} sync --frozen{% for e in (svc.extras | default([])) %} --extra {{ e }}{% endfor %}"
   args:
     chdir: "{{ svc.dir }}"
+  environment:
+    UV_PYTHON_INSTALL_DIR: "{{ uv_service_python_dir }}"
   become: true
   register: uv_service_sync
   changed_when: "'Installed' in uv_service_sync.stderr or 'Uninstalled' in uv_service_sync.stderr"
@@ -148,6 +155,8 @@
   args:
     chdir: "{{ svc.dir }}"
     creates: "{{ svc.dir }}/.venv"
+  environment:
+    UV_PYTHON_INSTALL_DIR: "{{ uv_service_python_dir }}"
   become: true
   when: svc.deps == 'requirements'
 
@@ -157,6 +166,7 @@
     chdir: "{{ svc.dir }}"
   environment:
     VIRTUAL_ENV: "{{ svc.dir }}/.venv"
+    UV_PYTHON_INSTALL_DIR: "{{ uv_service_python_dir }}"
   become: true
   register: uv_service_pip
   changed_when: "'Installed' in uv_service_pip.stderr"
@@ -168,6 +178,7 @@
     chdir: "{{ svc.dir }}"
   environment:
     VIRTUAL_ENV: "{{ svc.dir }}/.venv"
+    UV_PYTHON_INSTALL_DIR: "{{ uv_service_python_dir }}"
   become: true
   register: uv_service_packages
   changed_when: "'Installed' in uv_service_packages.stderr"

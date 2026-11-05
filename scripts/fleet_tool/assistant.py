@@ -16,7 +16,7 @@ from pathlib import Path
 
 from . import config
 from .config import label, log_action, save_inventory
-from .transport import bench, run_on, scp_to
+from .transport import bench, refresh_checkout, run_on, scp_to
 
 KEYS_DIR = Path(os.environ.get("FLEET_ASSISTANT_KEYS", str(config.STATE / "assistant")))
 BOX_SCRIPT = "/home/frappe/fleet-assistant-user.py"   # readable by the bench user, removed after the run
@@ -187,9 +187,27 @@ def line_vars(box: dict) -> str:
         "# --- end retail line ---", ""])
 
 
+LOCAL_VARS = "/etc/iiab/local_vars.yml"
+
+
+def supersede_command(box: dict) -> str:
+    """Comment out, above the block, every earlier definition of a key the block sets. Ansible keeps
+    the last of duplicate keys, but a role that installed once keeps what it rendered then: a till
+    carried a bridge block from an older preset, with another admin token, and the gateway role
+    was refused by the bridge. The address spares the block itself, present or not."""
+    keys = "|".join(sorted(set(re.findall(r"^([a-z_]+):", line_vars(box), re.M))))
+    mark = RETAIL_BLOCK_MARK.replace("(", "\\(").replace(")", "\\)")
+    return f"sed -i -E '/^{mark}/,$!{{s/^({keys}):(.*)$/# \\1:\\2   # superseded by the retail line block/}}' {LOCAL_VARS}"
+
+
 def enable_line(box: dict) -> str:
-    """Append the block once and run the three roles on the box; the inventory gains the service."""
-    rc, out = run_on(box, f"grep -q '{RETAIL_BLOCK_MARK}' /etc/iiab/local_vars.yml && echo present || echo absent")
+    """Bring the box's IIAB checkout to master, supersede the older definitions, append the block
+    once and run the three roles on the box; the inventory gains the service."""
+    ok, note = refresh_checkout(box)
+    if not ok:
+        return f"the line did not start on {label(box)}: {note}"
+    run_on(box, f"cp -a {LOCAL_VARS} {LOCAL_VARS}.bak-$(date +%Y%m%d-%H%M%S) && " + supersede_command(box))
+    rc, out = run_on(box, f"grep -q '{RETAIL_BLOCK_MARK}' {LOCAL_VARS} && echo present || echo absent")
     if "absent" in out:
         with tempfile.NamedTemporaryFile("w", suffix=".yml", delete=False) as f:
             f.write("\n" + line_vars(box))
@@ -198,11 +216,11 @@ def enable_line(box: dict) -> str:
             scp_to(box, tmp, "/root/fleet-retail-line.yml", "0600")
         finally:
             tmp.unlink(missing_ok=True)
-        run_on(box, "cat /root/fleet-retail-line.yml >> /etc/iiab/local_vars.yml && rm -f /root/fleet-retail-line.yml")
+        run_on(box, f"cat /root/fleet-retail-line.yml >> {LOCAL_VARS} && rm -f /root/fleet-retail-line.yml")
     rc, out = run_on(box, "cd /opt/iiab/iiab && for r in wuzapi ai-gateway rivebot; do ./runrole $r > /root/fleet-retail-line-$r.log 2>&1 || { echo \"ROLE-FAILED $r\"; tail -5 /root/fleet-retail-line-$r.log; exit 1; }; done; echo ROLES-OK", timeout=3600)
     if rc != 0 or "ROLES-OK" not in out:
         return f"the line's roles did not finish on {label(box)}: {out.strip()[-400:]}"
-    return f"the line's roles ran on {label(box)} (logs /root/fleet-retail-line-*.log there)"
+    return f"the line's roles ran on {label(box)} ({note}; logs /root/fleet-retail-line-*.log there)"
 
 
 def cmd_assistant(a, inv):
@@ -258,7 +276,11 @@ def cmd_assistant(a, inv):
         return 0
     if a.action == "line":
         box = find_box(inv, a.id)
-        print(enable_line(box))
+        result = enable_line(box)
+        print(result)
+        if "roles ran" not in result:
+            log_action(f"assistant line {box['id']} result=FAILED")
+            return 1
         for b in inv["boxes"]:
             if b["id"] == box["id"] and "retail-line" not in (b.get("services") or []):
                 b["services"] = list(b.get("services") or []) + ["retail-line"]

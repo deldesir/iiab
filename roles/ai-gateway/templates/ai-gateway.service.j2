@@ -40,7 +40,9 @@ Environment="HERMES_THREAD_POOL_SIZE={{ ai_gateway_hermes_thread_pool_size }}"
 Environment="OMP_NUM_THREADS=1"
 Environment="TOKENIZERS_PARALLELISM=false"
 
-ExecStart={{ ai_gateway_uv_bin }} run uvicorn {{ ai_gateway_app }} \
+# --no-sync: the role installs the lock; a start must not resolve it again (a box without the
+# optional libraries cannot build their metadata, and a start is not the place to change the venv).
+ExecStart={{ ai_gateway_uv_bin }} run --no-sync uvicorn {{ ai_gateway_app }} \
     --host 127.0.0.1 \
     --port {{ ai_gateway_port }}
 

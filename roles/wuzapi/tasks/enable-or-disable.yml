@@ -1,4 +1,17 @@
 ---
+# The unit carries the admin, encryption and HMAC keys. A box whose keys changed since the install
+# (a line enabled on a box that had the bridge from an older preset) renders the unit again, so the
+# bridge and the roles that call its admin API agree on the token; the restart below picks it up.
+- name: Render the wuzapi systemd unit again, 0600, if wuzapi_enabled (the keys may have changed since the install)
+  ansible.builtin.template:
+    src: wuzapi.service.j2
+    dest: /etc/systemd/system/wuzapi.service
+    mode: "0600"
+  become: true
+  when:
+    - wuzapi_enabled
+    - not is_proot
+
 - name: Enable & Restart 'wuzapi' systemd service, if wuzapi_enabled
   ansible.builtin.systemd:
     name: wuzapi

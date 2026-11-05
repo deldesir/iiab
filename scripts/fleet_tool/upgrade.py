@@ -14,7 +14,7 @@ from .config import HUB_BACKUPS, ROLLBACK_SCRIPT, UPGRADE_SCRIPT, frozen, in_win
 from .releases import manifest_path, read_manifest
 from .site import push
 from .state import write_check
-from .transport import http_code, rsync, run_on, scp_to
+from .transport import http_code, refresh_checkout, rsync, run_on, scp_to
 
 
 def box_log(box: dict, prefix: str) -> tuple[str, int]:
@@ -231,6 +231,10 @@ def cmd_runrole(a, inv):
         sys.exit("fleet: offline box; run the role on the box itself")
     if not re.fullmatch(r"[a-z0-9_-]+", a.role):
         sys.exit("fleet: role name must be a plain role directory name")
+    ok, note = refresh_checkout(box)
+    if not ok:
+        sys.exit(f"fleet: {note}")
+    print(f"== {box['id']}: {note}")
     log = f"/opt/iiab/iiab/fleet-runrole-{a.role}-{dt.datetime.now():%Y%m%d-%H%M%S}.log"
     if a.tags:
         cmd = (f"cd /opt/iiab/iiab && ANSIBLE_LOG_PATH={log} ansible-playbook -i ansible_hosts run-one-role.yml --connection=local "
