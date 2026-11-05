@@ -48,6 +48,12 @@ services:
     kind: box
     maturity: ready
     apps: [crm, whatsapp]
+  lending:
+    title: Loans and installment plans (Frappe Lending)
+    kind: box
+    maturity: on-request
+    apps: [lending]
+    notes: loan products, disbursements, daily interest accrual, repayments and penalties posting to the box's ERPNext books; payroll deducts staff loans through Frappe HR; ready once priced
   notes:
     title: Second brain (SiYuan)
     kind: box
