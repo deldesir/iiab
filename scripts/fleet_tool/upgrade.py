@@ -240,7 +240,7 @@ def cmd_runrole(a, inv):
         cmd = (f"cd /opt/iiab/iiab && ANSIBLE_LOG_PATH={log} ansible-playbook -i ansible_hosts run-one-role.yml --connection=local "
                f"--extra-vars '{{\"role_to_run\":\"{a.role}\"}}' --tags {shlex.quote(a.tags)}")
     else:
-        cmd = f"/opt/iiab/iiab/runrole {a.role} {log}"
+        cmd = f"cd /opt/iiab/iiab && ./runrole {a.role} {log}"   # the script looks for the playbook in its working directory
     unit = f"fleet-runrole-{int(time.time())}"
     rc, out = run_on(box, f"systemd-run --unit={unit} --collect --setenv=HOME=/root /bin/bash -lc {shlex.quote(cmd)}")
     if rc != 0:

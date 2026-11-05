@@ -798,6 +798,8 @@ def test_runrole_refreshes_the_checkout_before_the_run(scratch, fake, capsys, mo
     assert cli.main(["runrole", "shop", "wuzapi"]) == 0
     cmds = [c[2] for c in fake.calls if c[0] == "run_on" and c[1] == "box-002"]
     assert "git fetch -q origin master" in cmds[0] and any("systemd-run" in c for c in cmds[1:])
+    started = next(c for c in cmds if "systemd-run" in c)
+    assert "cd /opt/iiab/iiab && ./runrole wuzapi" in started       # the script exits at once when started outside its directory (a till, 2026-11-05)
     run["git fetch -q origin master"] = (1, "IIAB-BRANCH feature-x")
     with pytest.raises(SystemExit, match="IIAB-BRANCH feature-x"):
         cli.main(["runrole", "shop", "wuzapi"])
