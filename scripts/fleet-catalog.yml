@@ -138,12 +138,12 @@ services:
   insights:
     title: Reporting and dashboards (Frappe Insights)
     kind: box
-    maturity: on-request
+    maturity: ready
     apps: [insights]
     upstream: https://github.com/frappe/insights
     probes:
       - { path: /erp/insights, expect: 200, critical: false }
-    notes: in the fleet app list, so every new box carries it; ready once priced
+    notes: part of the standard plan on every box since 2026-11-06, no add-on price; the owner dashboard (scripts/site-scripts/insights-dashboard.py) is built for the Accounts and Sales Manager roles
   healthcare:
     title: Clinic management (Marley Health)
     kind: box
