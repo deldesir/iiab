@@ -415,6 +415,12 @@ ai_gateway_jobs:
     on_calendar:
       - '*-*-* 08:15:00 America/Port-au-Prince'
     timer_description: Timer for the team contact notifier (daily check for directory changes)
+  airtime:
+    description: Credit outcomes (carry the prepaid-credit ledger's results to the directory line's tickets and requesters; quiet when the ledger is not configured)
+    module: app.jobs.airtime_outcomes
+    on_calendar:
+      - '*:0/5:00'
+    timer_description: Timer for the credit outcomes job (every 5 min)
 ai_gateway_maintenance_units:
   - pipeline-health-check
   - second-brain-backup
