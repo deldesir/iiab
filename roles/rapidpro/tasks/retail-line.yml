@@ -21,9 +21,9 @@
     - retail_line_workspace.py
 
 - name: Create the shop's workspace, key global, catch-all flow and trigger (idempotent)
+  # the venv's own interpreter: become_user leaves HOME at root's, where uv cannot open its cache
   ansible.builtin.shell: |
-    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    uv run python manage.py shell < {{ rapidpro_dir }}/retail-line/retail_line_workspace.py
+    .venv/bin/python manage.py shell < {{ rapidpro_dir }}/retail-line/retail_line_workspace.py
   args:
     chdir: "{{ rapidpro_dir }}"
   environment:
