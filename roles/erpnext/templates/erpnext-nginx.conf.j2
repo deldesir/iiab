@@ -26,6 +26,11 @@ location /erp/ {
     # Safety net: handle double-prefixing gracefully
     rewrite ^/erp/erp/(.*) /erp/$1 last;
 
+    # Insights keeps the prefix. The bench is told the app lives at erp/insights (common site
+    # config `insights_path`, set in tasks/apps.yml), so the site routes it, links it on the
+    # apps screen and bases its router there; the request must therefore reach the site
+    # with the prefix on. Everything else loses /erp on its way in.
+    rewrite ^/erp/(insights(/.*)?)$ /erp/$1 break;
     rewrite ^/erp/(.*) /$1 break;
     proxy_set_header Accept-Encoding "";
     proxy_pass http://127.0.0.1:8000/;
@@ -192,6 +197,10 @@ location ^~ /apps/ { return 307 /erp$request_uri; }
 # The Hospitality PMS registers itself in the desk's app switcher as /pms; it lives at /erp/pms
 location = /pms   { return 307 /erp/pms; }
 location ^~ /pms/ { return 307 /erp$request_uri; }
+# Insights lives at /erp/insights (the /erp/ block above keeps the prefix); a link that still
+# names the root path, from a page rendered before the move or typed by hand, lands there.
+location = /insights   { return 307 /erp/insights; }
+location ^~ /insights/ { return 307 /erp$request_uri; }
 # /hr/ is served by Frappe when hrms is installed — proxy through /erp/ mount
 location ^~ /hr/ {
     rewrite ^/hr/(.*) /hr/$1 break;
