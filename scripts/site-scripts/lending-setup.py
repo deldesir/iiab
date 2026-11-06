@@ -9,13 +9,13 @@ from frappe.utils import flt
 CONFIG = {
     "company": None,            # None = the first (or only) company on the site
     "product_code": "PLAN6",
-    "product_name": "Vente à crédit 6 mois",
-    "rate_of_interest": 3.0,    # % per year as Lending computes it; CONFIRM WITH THE MANAGER
-    "penalty_interest_rate": 2.0,
+    "product_name": "Vente à crédit",          # length is chosen per loan; 6 months is the standard offer
+    "rate_of_interest": 36.0,   # % per YEAR on the remaining balance, accrued daily = 3 % per month
+    "penalty_interest_rate": 36.0,  # % per year on an overdue installment after the grace days = 3 % per month
     "grace_period_in_days": 5,
     "maximum_loan_amount": 100000,
     # the number of installments is set per Loan (repayment_periods), not on the product
-    "disabled": 0,              # 1 = created but not offered yet (terms to confirm)
+    "disabled": 0,              # 1 = created but not offered yet
     "clearing_account": "Installment Clearing",
     "clearing_mode_of_payment": "Installment Plan",
 }
