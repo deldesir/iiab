@@ -115,3 +115,9 @@ rapidpro_centrifugo_log_level: "info"
 rapidpro_centrifugo_allowed_origins: ["*"]
 rapidpro_centrifugo_download_url: "https://github.com/centrifugal/centrifugo/releases/download/v{{ rapidpro_centrifugo_version }}/centrifugo_{{ rapidpro_centrifugo_version }}_linux_{{ rapidpro_go_arch }}.tar.gz"
 rapidpro_centrifugo_checksums_url: "https://github.com/centrifugal/centrifugo/releases/download/v{{ rapidpro_centrifugo_version }}/centrifugo_{{ rapidpro_centrifugo_version }}_checksums.txt"
+
+# The retail line through this box's own RapidPro: the shop's workspace, the gateway key as a global, the
+# catch-all flow and its trigger (tasks/retail-line.yml). The shop's name comes from the gateway role
+# (ai_gateway_retail_line_name); the WhatsApp channel is claimed in the web interface.
+rapidpro_retail_line: False
+rapidpro_retail_line_timezone: "America/Port-au-Prince"

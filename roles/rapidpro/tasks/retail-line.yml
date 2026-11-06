@@ -1,0 +1,44 @@
+---
+# The retail line through this box's own RapidPro (rapidpro_retail_line): the shop's workspace, the
+# gateway's internal key as a global, the catch-all flow that asks the gateway what to say, its trigger.
+# The WhatsApp channel is claimed in the web interface by the person holding the shop's phone.
+
+- name: Make the retail line's folder under the RapidPro tree
+  ansible.builtin.file:
+    path: "{{ rapidpro_dir }}/retail-line"
+    state: directory
+    owner: "{{ iiab_admin_user }}"
+    mode: "0755"
+
+- name: Copy the retail line's flow and workspace script
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ rapidpro_dir }}/retail-line/{{ item }}"
+    owner: "{{ iiab_admin_user }}"
+    mode: "0644"
+  loop:
+    - retail_line_flow.json
+    - retail_line_workspace.py
+
+- name: Create the shop's workspace, key global, catch-all flow and trigger (idempotent)
+  ansible.builtin.shell: |
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
+    uv run python manage.py shell < {{ rapidpro_dir }}/retail-line/retail_line_workspace.py
+  args:
+    chdir: "{{ rapidpro_dir }}"
+  environment:
+    LINE_ORG: "{{ ai_gateway_retail_line_name }}"
+    LINE_TZ: "{{ rapidpro_retail_line_timezone }}"
+    LINE_FLOW_FILE: "{{ rapidpro_dir }}/retail-line/retail_line_flow.json"
+    LINE_SITE: "{{ rapidpro_http_protocol }}://{{ rapidpro_hostname }}{{ rapidpro_url }}"
+    GATEWAY_KEY: "{{ ai_gateway_internal_key }}"
+  become: true
+  become_user: "{{ iiab_admin_user }}"
+  register: retail_line_workspace
+  changed_when: "'created=True' in retail_line_workspace.stdout or 'imported=True' in retail_line_workspace.stdout or 'gateway_key=created' in retail_line_workspace.stdout or 'gateway_key=updated' in retail_line_workspace.stdout"
+  failed_when: "'LINE-WORKSPACE' not in retail_line_workspace.stdout"
+  no_log: true   # the environment carries the gateway's key
+
+- name: Report the retail line's workspace
+  ansible.builtin.debug:
+    msg: "{{ retail_line_workspace.stdout_lines | select('search', 'LINE-WORKSPACE') | list }}"

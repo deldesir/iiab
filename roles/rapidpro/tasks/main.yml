@@ -38,6 +38,16 @@
   when: rapidpro_enabled
   tags: [centrifugo]
 
+# The retail line through this box's RapidPro: the shop's workspace, key global, catch-all flow and
+# trigger. After the services are up (the import asks mailroom to inspect the flow).
+- name: The retail line's workspace and flow
+  ansible.builtin.include_tasks:
+    file: retail-line.yml
+    apply:
+      tags: [retail-line]
+  when: rapidpro_enabled and rapidpro_retail_line
+  tags: [retail-line]
+
 - name: Mark RapidPro as Installed
   ansible.builtin.lineinfile:
     mode: "0644"

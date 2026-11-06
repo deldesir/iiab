@@ -1,0 +1,182 @@
+{
+ "version": "13",
+ "site": "https://box.lan",
+ "flows": [
+  {
+   "name": "Liy boutik",
+   "type": "messaging",
+   "language": "eng",
+   "spec_version": "14.7.0",
+   "expire_after_minutes": 30,
+   "localization": {},
+   "uuid": "342e0fa2-ee52-44f8-b76a-af57019ed639",
+   "revision": 1,
+   "nodes": [
+    {
+     "uuid": "a3581a3a-99c9-439f-8d21-b1cfb621c6ea",
+     "actions": [
+      {
+       "type": "call_webhook",
+       "uuid": "10889415-70bb-4362-8a78-53691f674f05",
+       "method": "POST",
+       "url": "http://127.0.0.1:8086/v1/tools/retail_line",
+       "headers": {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "X-API-Key": "@globals.gateway_key",
+        "X-User-Id": "@(default(input.urn, contact.urns.0))"
+       },
+       "body": "{\"text\": @(json(input.text)), \"attachments\": @(json(default(input.attachments[0], \"\")))}",
+       "result_name": "line"
+      }
+     ],
+     "router": {
+      "type": "switch",
+      "operand": "@results.line.category",
+      "cases": [
+       {
+        "uuid": "975b1661-9906-45b3-bb43-5eff38aaa3f7",
+        "type": "has_only_text",
+        "arguments": [
+         "Success"
+        ],
+        "category_uuid": "70bb259a-da00-45d1-905b-bdfe46ad0115"
+       }
+      ],
+      "categories": [
+       {
+        "uuid": "70bb259a-da00-45d1-905b-bdfe46ad0115",
+        "name": "Success",
+        "exit_uuid": "49fa7598-221d-4dc0-b81a-f638f475a862"
+       },
+       {
+        "uuid": "ba6c8ce5-bfce-4eee-a305-685d66faa599",
+        "name": "Failure",
+        "exit_uuid": "a9ac152e-74c0-4ddd-9b5a-fb503d19adc9"
+       }
+      ],
+      "default_category_uuid": "ba6c8ce5-bfce-4eee-a305-685d66faa599"
+     },
+     "exits": [
+      {
+       "uuid": "49fa7598-221d-4dc0-b81a-f638f475a862",
+       "destination_uuid": "9c2aefc0-ec53-4ea9-8528-02a69e1e5247"
+      },
+      {
+       "uuid": "a9ac152e-74c0-4ddd-9b5a-fb503d19adc9",
+       "destination_uuid": null
+      }
+     ]
+    },
+    {
+     "uuid": "9c2aefc0-ec53-4ea9-8528-02a69e1e5247",
+     "actions": [],
+     "router": {
+      "type": "switch",
+      "operand": "@(parse_json(webhook.json.result).text)",
+      "cases": [
+       {
+        "uuid": "590e91a8-3892-4962-9b1b-fb73639587e9",
+        "type": "has_text",
+        "arguments": [],
+        "category_uuid": "9d6d328d-1f4b-4c20-a8fe-07a038f7ee03"
+       }
+      ],
+      "categories": [
+       {
+        "uuid": "9d6d328d-1f4b-4c20-a8fe-07a038f7ee03",
+        "name": "Reply",
+        "exit_uuid": "b8be0dbb-cf82-4410-be10-d41f90f01904"
+       },
+       {
+        "uuid": "36348361-78d3-423d-906b-687d2903962d",
+        "name": "Silent",
+        "exit_uuid": "fb00de15-0d81-4199-a618-ec7f89af7dfb"
+       }
+      ],
+      "default_category_uuid": "36348361-78d3-423d-906b-687d2903962d"
+     },
+     "exits": [
+      {
+       "uuid": "b8be0dbb-cf82-4410-be10-d41f90f01904",
+       "destination_uuid": "4b0b2698-7484-4bbc-a0ec-04dc8a6b2ccf"
+      },
+      {
+       "uuid": "fb00de15-0d81-4199-a618-ec7f89af7dfb",
+       "destination_uuid": null
+      }
+     ]
+    },
+    {
+     "uuid": "4b0b2698-7484-4bbc-a0ec-04dc8a6b2ccf",
+     "actions": [
+      {
+       "type": "send_msg",
+       "uuid": "679b6eae-8059-4a60-b013-f05bf0582438",
+       "attachments": [],
+       "text": "@(parse_json(webhook.json.result).text)",
+       "quick_replies": [
+        "@(default(parse_json(webhook.json.result).replies[0], \"\"))",
+        "@(default(parse_json(webhook.json.result).replies[1], \"\"))",
+        "@(default(parse_json(webhook.json.result).replies[2], \"\"))",
+        "@(default(parse_json(webhook.json.result).replies[3], \"\"))",
+        "@(default(parse_json(webhook.json.result).replies[4], \"\"))",
+        "@(default(parse_json(webhook.json.result).replies[5], \"\"))",
+        "@(default(parse_json(webhook.json.result).replies[6], \"\"))",
+        "@(default(parse_json(webhook.json.result).replies[7], \"\"))",
+        "@(default(parse_json(webhook.json.result).replies[8], \"\"))",
+        "@(default(parse_json(webhook.json.result).replies[9], \"\"))"
+       ]
+      }
+     ],
+     "exits": [
+      {
+       "uuid": "6d1e2048-9568-4d10-b3d3-021092356480",
+       "destination_uuid": null
+      }
+     ]
+    }
+   ],
+   "_ui": {
+    "nodes": {
+     "a3581a3a-99c9-439f-8d21-b1cfb621c6ea": {
+      "position": {
+       "left": 100,
+       "top": 0
+      },
+      "type": "split_by_webhook"
+     },
+     "9c2aefc0-ec53-4ea9-8528-02a69e1e5247": {
+      "position": {
+       "left": 100,
+       "top": 260
+      },
+      "type": "split_by_expression"
+     },
+     "4b0b2698-7484-4bbc-a0ec-04dc8a6b2ccf": {
+      "position": {
+       "left": 100,
+       "top": 500
+      },
+      "type": "execute_actions"
+     }
+    },
+    "stickies": {}
+   }
+  }
+ ],
+ "campaigns": [],
+ "fields": [],
+ "groups": [],
+ "triggers": [
+  {
+   "trigger_type": "C",
+   "flow": {
+    "uuid": "342e0fa2-ee52-44f8-b76a-af57019ed639",
+    "name": "Liy boutik"
+   },
+   "groups": [],
+   "exclude_groups": []
+  }
+ ]
+}
