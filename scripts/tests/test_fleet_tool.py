@@ -822,3 +822,11 @@ def test_set_current_refuses_a_release_that_pins_fewer_apps(scratch, capsys):
     assert config.load_inventory()["current_release"] == "2026.10-r1"
     assert cli.main(["manifest", "set-current", "2026.10-r2", "--allow-drop"]) == 0
     assert config.load_inventory()["current_release"] == "2026.10-r2"
+
+
+def test_manifest_capture_reads_the_hub_by_role_when_no_box_is_named(scratch, fake, capsys):
+    assert cli.main(["manifest", "capture", "--id", "2026.10-r3"]) == 0
+    out = capsys.readouterr().out
+    assert "captured 2026.10-r3" in out
+    assert {c[1] for c in fake.calls if c[0] == "run_on"} == {"box-001"}        # the hub record, not a box called "hub"
+    assert releases.manifest_apps(releases.read_manifest("2026.10-r3"))
