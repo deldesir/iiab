@@ -13,7 +13,7 @@ accept id, alias or host; output shows "id alias".
                                           findings; feeds the per-box monitors; writes
                                           /var/lib/fleet/checks/<id>/ and the digest
   fleet digest [--send]
-  fleet manifest capture --id ID [--from BOX] [--notes ..] | list | show ID | set-current ID
+  fleet manifest capture --id ID [--from BOX] [--notes ..] | list | show ID | set-current ID [--allow-drop]
   fleet upgrade [ID...|--all] [--release ID] [--preflight] [--now] [--allow-discard ERE]
   fleet suspend ID [--reason TEXT] | resume ID | offboard ID
   fleet dunning [--apply]                 boxes with overdue invoices in the fleet site; --apply
@@ -98,6 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_parser("list", help="every release, the current one marked")
     c = ps.add_parser("show", help="the commits of a release"); c.add_argument("id")
     c = ps.add_parser("set-current", help="make a release the one the fleet is judged against"); c.add_argument("id")
+    c.add_argument("--allow-drop", action="store_true", help="accept a release that pins fewer apps than the current one")
     p = sub.add_parser("assistant", help="the retail line: the assistant user on a box and the numbers bound to it")
     p.add_argument("action", choices=["setup", "bind", "unbind", "list", "push", "rotate", "qr", "line"])
     p.add_argument("id", nargs="?"); p.add_argument("number", nargs="?")

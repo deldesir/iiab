@@ -194,6 +194,17 @@ def evaluate(box: dict, raw: dict, inv: dict, catalog: dict) -> dict:
     for u, st in (raw.get("monitor_units") or {}).items():
         if st != "active":
             f("CRIT", "unit", f"{u} is {st}")
+    # a service the record lists is only real when its apps sit on the bench: the heads the probe read
+    # are every app in sites/apps.txt, so an app missing there was never installed (or was removed)
+    heads = raw.get("heads") or {}
+    if heads:
+        for sid in box.get("services") or []:
+            svc = catalog["services"].get(sid) or {}
+            if svc.get("kind") != "box":
+                continue
+            missing = [x for x in (svc.get("apps") or []) if x not in heads]
+            if missing:
+                f("WARN", "apps", f"{sid}: not on the bench: {', '.join(missing)}")
     if "hospitality" in (box.get("services") or []):
         # the PMS's business date advances only when the night audit runs: a date that lags
         # means no room charges are being posted and the front desk is working on yesterday

@@ -27,6 +27,15 @@ sudo -u frappe -H bash -lc "cd $B && bench --site $SITE backup --with-files" >/d
 latest=$(ls -t $B/sites/$SITE/private/backups/*-database.sql.gz | head -1); base=${latest%-database.sql.gz}
 cp -a "$latest" "$T/site/"; for x in files private-files; do [ -e "$base-$x.tar" ] && cp -a "$base-$x.tar" "$T/site/"; done
 cp -a $B/sites/$SITE/site_config.json "$T/site/site_config.json"
+ERP_SITE=${ERP_SITE:-site.local}
+if [ -d $B/sites/$ERP_SITE ]; then
+  # the hub's own ERP (support desk, learning, the fleet apps): a site nothing else backs up off this machine
+  echo "=== the hub's ERP site backup ($ERP_SITE)"; mkdir -p "$T/erp"
+  sudo -u frappe -H bash -lc "cd $B && bench --site $ERP_SITE backup --with-files" >/dev/null
+  latest=$(ls -t $B/sites/$ERP_SITE/private/backups/*-database.sql.gz | head -1); base=${latest%-database.sql.gz}
+  cp -a "$latest" "$T/erp/"; for x in files private-files; do [ -e "$base-$x.tar" ] && cp -a "$base-$x.tar" "$T/erp/"; done
+  cp -a $B/sites/$ERP_SITE/site_config.json "$T/erp/site_config.json"
+fi
 echo "=== app source (private repository)"
 rsync -a --exclude __pycache__ --exclude .git $B/apps/fleet_ops/ "$T/app/fleet_ops/"
 git -C $B/apps/fleet_ops rev-parse HEAD > "$T/app/fleet_ops.commit" 2>/dev/null || true
@@ -42,6 +51,7 @@ fi
 cat > "$T/MANIFEST.txt" <<M
 control-plane export from $(hostname -f 2>/dev/null || hostname) at $STAMP
 site: $SITE  app commit: $(cat "$T/app/fleet_ops.commit" 2>/dev/null)
+erp/: the hub's own ERP site ($ERP_SITE) database + files, restored by hand: bench --site $ERP_SITE restore erp/<db>.sql.gz --with-public-files ... --with-private-files ...
 import with: import-control-plane.sh $OUT
 M
 tar -C "$T" -cf - . | gpg --batch --yes --quiet --symmetric --cipher-algo AES256 --passphrase-file "$PASS" > "$OUT"

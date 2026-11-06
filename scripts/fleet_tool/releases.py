@@ -33,6 +33,14 @@ def manifest_apps(m: dict[str, str]) -> dict[str, str]:
     return {k: v for k, v in m.items() if k not in ("release", "captured", "notes") and re.fullmatch(r"[0-9a-f]{40}", v or "")}
 
 
+def dropped_apps(inv: dict, apps: dict[str, str]) -> list[str]:
+    """The apps the current release pins that a new manifest (or a box's heads) would leave unpinned."""
+    cur = inv.get("current_release") or ""
+    if not cur or not manifest_path(cur).exists():
+        return []
+    return sorted(set(manifest_apps(read_manifest(cur))) - set(apps))
+
+
 def heads_of(box: dict) -> dict[str, str]:
     """Every app in the bench's apps.txt -> full commit (bench-upgrade.sh uses the same list)."""
     cmd = (f"for a in $(cat {box['bench']}/sites/apps.txt 2>/dev/null); do "
@@ -68,6 +76,10 @@ def cmd_manifest(a, inv):
         print(f"captured {a.id} -> {p}")
         for k, v in sorted(heads.items()):
             print(f"  {k:<10} {v[:10]}")
+        dropped = dropped_apps(inv, heads)
+        if dropped:
+            print(f"note: {inv['current_release']} pins {', '.join(dropped)}, which {box['id']} does not run; a manifest from one box pins only"
+                  f" what that box carries (the hub's bench carries every app). set-current will refuse {a.id} unless --allow-drop is passed")
     elif a.action == "list":
         cur = inv.get("current_release") or ""
         for p in sorted(RELEASES.glob("*.manifest")):
@@ -77,7 +89,10 @@ def cmd_manifest(a, inv):
         for k, v in read_manifest(a.id).items():
             print(f"{k}={v}")
     elif a.action == "set-current":
-        read_manifest(a.id)
+        dropped = dropped_apps(inv, manifest_apps(read_manifest(a.id))) if a.id != inv.get("current_release") else []
+        if dropped and not a.allow_drop:
+            sys.exit(f"fleet: {a.id} pins no commit for {', '.join(dropped)}, which {inv['current_release']} pins: an upgrade would leave those apps"
+                     f" wherever each box has them (capture from the hub, whose bench carries every app, or pass --allow-drop)")
         inv["current_release"] = a.id
         save_inventory(inv)
         print(f"current_release = {a.id}")

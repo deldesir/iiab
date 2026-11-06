@@ -801,3 +801,24 @@ def test_runrole_refreshes_the_checkout_before_the_run(scratch, fake, capsys, mo
     run["git fetch -q origin master"] = (1, "IIAB-BRANCH feature-x")
     with pytest.raises(SystemExit, match="IIAB-BRANCH feature-x"):
         cli.main(["runrole", "shop", "wuzapi"])
+
+
+def test_check_warns_when_a_listed_service_has_no_app_on_the_bench(scratch, fake):
+    inv = config.load_inventory()
+    cat = config.load_catalog()
+    cat["services"]["lending"] = {"kind": "box", "apps": ["lending"]}
+    cat["services"]["retail-line"] = {"kind": "box"}                     # no apps: nothing to compare
+    box = _box(inv, "box-003")
+    box["services"] = box["services"] + ["lending", "retail-line"]
+    r = checks.check_box(box, inv, cat)
+    assert r["status"] == "WARN" and "lending: not on the bench: lending" in r["problems"]
+    assert not [p for p in r["problems"] if "retail-line" in p]
+
+
+def test_set_current_refuses_a_release_that_pins_fewer_apps(scratch, capsys):
+    (releases.RELEASES / "2026.10-r2.manifest").write_text("release=2026.10-r2\ncaptured=x\nfrappe=" + "c" * 40 + "\n")
+    with pytest.raises(SystemExit, match="pins no commit for erpnext"):
+        cli.main(["manifest", "set-current", "2026.10-r2"])
+    assert config.load_inventory()["current_release"] == "2026.10-r1"
+    assert cli.main(["manifest", "set-current", "2026.10-r2", "--allow-drop"]) == 0
+    assert config.load_inventory()["current_release"] == "2026.10-r2"
