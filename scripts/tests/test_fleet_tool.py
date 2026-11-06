@@ -764,7 +764,7 @@ def test_assistant_line_refreshes_the_checkout_supersedes_old_keys_then_runs_the
     assert sed.startswith("cp -a /etc/iiab/local_vars.yml /etc/iiab/local_vars.yml.bak-") and "sed -i -E '/^# --- retail line \\(fleet assistant line\\) ---/,$!{" in sed
     for key in ("wuzapi_admintoken", "wuzapi_enabled", "ai_gateway_api_key", "rivebot_install", "ai_update_skip"):
         assert key in sed
-    assert "abc1234" in out and "retail-line" in next(b for b in config.load_inventory()["boxes"] if b["id"] == "box-002")["services"]
+    assert "abc1234" in out and {"retail-line", "rapidpro"} <= set(next(b for b in config.load_inventory()["boxes"] if b["id"] == "box-002")["services"])
     copies = [c for c in fake.calls if c[0] == "scp_to" and c[3] == "/root/fleet-retail-line.yml"]
     assert len(copies) == 1 and copies[0][4] == "0600"
 

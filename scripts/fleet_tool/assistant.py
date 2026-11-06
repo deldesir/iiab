@@ -174,7 +174,8 @@ def line_vars(box: dict) -> str:
         # The line's units come from the public release mirrors (releases only, no history): a box holds no credential.
         "ai_gateway_repo: \"https://github.com/deldesir/gateway-release.git\"",
         "rivebot_repo: \"https://github.com/deldesir/rivebot-release.git\"",
-        "ai_update_skip: [rapidpro, courier, mailroom]",
+        "ai_update_skip: []",
+        "rapidpro_install: True", "rapidpro_enabled: True", "rapidpro_retail_line: True",
         "wuzapi_install: True", "wuzapi_enabled: True",
         "wuzapi_admintoken: \"{{ lookup('password', iiab_etc_path ~ '/wuzapi_admintoken chars=ascii_letters,digits length=40') }}\"",
         "ai_gateway_install: True", "ai_gateway_enabled: True",
@@ -202,7 +203,7 @@ def supersede_command(box: dict) -> str:
 
 def enable_line(box: dict) -> str:
     """Bring the box's IIAB checkout to master, supersede the older definitions, append the block
-    once and run the three roles on the box; the inventory gains the service."""
+    once and run the four roles on the box; the inventory gains the service."""
     ok, note = refresh_checkout(box)
     if not ok:
         return f"the line did not start on {label(box)}: {note}"
@@ -217,7 +218,7 @@ def enable_line(box: dict) -> str:
         finally:
             tmp.unlink(missing_ok=True)
         run_on(box, f"cat /root/fleet-retail-line.yml >> {LOCAL_VARS} && rm -f /root/fleet-retail-line.yml")
-    rc, out = run_on(box, "cd /opt/iiab/iiab && for r in wuzapi ai-gateway rivebot; do ./runrole $r > /root/fleet-retail-line-$r.log 2>&1 || { echo \"ROLE-FAILED $r\"; tail -5 /root/fleet-retail-line-$r.log; exit 1; }; done; echo ROLES-OK", timeout=3600)
+    rc, out = run_on(box, "cd /opt/iiab/iiab && for r in wuzapi ai-gateway rivebot rapidpro; do ./runrole $r > /root/fleet-retail-line-$r.log 2>&1 || { echo \"ROLE-FAILED $r\"; tail -5 /root/fleet-retail-line-$r.log; exit 1; }; done; echo ROLES-OK", timeout=3600)
     if rc != 0 or "ROLES-OK" not in out:
         return f"the line's roles did not finish on {label(box)}: {out.strip()[-400:]}"
     return f"the line's roles ran on {label(box)} ({note}; logs /root/fleet-retail-line-*.log there)"
@@ -282,11 +283,12 @@ def cmd_assistant(a, inv):
             log_action(f"assistant line {box['id']} result=FAILED")
             return 1
         for b in inv["boxes"]:
-            if b["id"] == box["id"] and "retail-line" not in (b.get("services") or []):
-                b["services"] = list(b.get("services") or []) + ["retail-line"]
+            if b["id"] == box["id"]:
+                b["services"] = list(b.get("services") or []) + [x for x in ("retail-line", "rapidpro") if x not in (b.get("services") or [])]
         save_inventory(inv)
         log_action(f"assistant line {box['id']}")
-        print(f"{label(box)} carries the retail-line service. Next: fleet assistant setup {box['id']}; bind; push; qr")
+        print(f"{label(box)} carries the retail-line and rapidpro services. Next: fleet assistant setup {box['id']}; bind; push; then the shop's "
+              f"number is claimed in RapidPro on the box (Add channel, WhatsApp bridge) and its code scanned from the shop's phone")
         return 0
     if a.action == "rotate":
         box = find_box(inv, a.id)
