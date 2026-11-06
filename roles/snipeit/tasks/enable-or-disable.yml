@@ -1,0 +1,34 @@
+---
+- name: Enable {{ snipeit_url }} via NGINX, by installing /etc/nginx/sites-enabled/snipeit.conf from template (a server block of its own, so sites-enabled, not conf.d)
+  ansible.builtin.template:
+    src: snipeit-nginx.conf.j2
+    dest: /etc/nginx/sites-enabled/snipeit.conf
+    mode: "0644"
+  when: snipeit_enabled
+
+- name: Disable {{ snipeit_url }} via NGINX, by removing /etc/nginx/sites-enabled/snipeit.conf
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/snipeit.conf
+    state: absent
+  when: not snipeit_enabled
+
+- name: Enable & Start snipeit-schedule.timer
+  ansible.builtin.systemd:
+    name: snipeit-schedule.timer
+    daemon_reload: true
+    enabled: true
+    state: started
+  when: snipeit_enabled
+
+- name: Disable & Stop snipeit-schedule.timer
+  ansible.builtin.systemd:
+    name: snipeit-schedule.timer
+    daemon_reload: true
+    enabled: false
+    state: stopped
+  when: not snipeit_enabled
+
+- name: Restart 'nginx' systemd service
+  ansible.builtin.systemd:
+    name: nginx
+    state: restarted
