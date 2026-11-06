@@ -1,0 +1,50 @@
+---
+- name: Assert that "snipeit_install is sameas true" (boolean not string etc)
+  ansible.builtin.assert:
+    that: snipeit_install is sameas true
+    fail_msg: "PLEASE SET 'snipeit_install: True' e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: true
+
+- name: Assert that "snipeit_enabled | type_debug == 'bool'" (boolean not string etc)
+  ansible.builtin.assert:
+    that: snipeit_enabled | type_debug == 'bool'
+    fail_msg: "PLEASE GIVE VARIABLE 'snipeit_enabled' A PROPER (UNQUOTED) ANSIBLE BOOLEAN VALUE e.g. IN: /etc/iiab/local_vars.yml"
+    quiet: true
+
+- name: Install, then enable or disable Snipe-IT
+  block:
+    - name: Install Snipe-IT if 'snipeit_installed' not defined, e.g. in {{ iiab_state_file }}    # /etc/iiab/iiab_state.yml
+      ansible.builtin.include_tasks: install.yml
+      when: snipeit_installed is undefined
+
+    - name: Enable or disable Snipe-IT (nginx listener, scheduler timer)
+      ansible.builtin.include_tasks: enable-or-disable.yml
+
+    - name: Add 'snipeit' variable values to {{ iiab_ini_file }}
+      community.general.ini_file:
+        mode: "0644"
+        path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+        section: snipeit
+        option: "{{ item.option }}"
+        value: "{{ item.value | string }}"
+      with_items:
+        - option: name
+          value: Snipe-IT
+        - option: description
+          value: '"Snipe-IT is an asset register: equipment by serial number, who holds it and where, consumables, audits, labels."'
+        - option: snipeit_install
+          value: "{{ snipeit_install }}"
+        - option: snipeit_enabled
+          value: "{{ snipeit_enabled }}"
+        - option: snipeit_version
+          value: "{{ snipeit_version }}"
+        - option: snipeit_dir
+          value: "{{ snipeit_dir }}"
+        - option: snipeit_url
+          value: "{{ snipeit_url }}"
+
+  rescue:
+    - name: 'SEE ERROR ABOVE (skip_role_on_error: {{ skip_role_on_error }})'
+      ansible.builtin.fail:
+        msg: ""
+      when: not skip_role_on_error

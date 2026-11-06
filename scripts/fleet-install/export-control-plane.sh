@@ -4,7 +4,8 @@
 #
 # Contents: /etc/iiab fleet files (inventory, config, catalog, releases, local_vars copies,
 # backup conf + passphrase files, the lease signing key), /var/lib/fleet state (no venv), the fleet site (database +
-# files + site_config), every other site on the hub bench the same way (under erp/<site>/), the fleet_ops app source (its repository is private), Semaphore config
+# files + site_config), every other site on the hub bench the same way (under erp/<site>/), Snipe-IT's database and
+# uploads when roles/snipeit is on the hub, the fleet_ops app source (its repository is private), Semaphore config
 # + database dump, the tailnet nginx listener, Uptime Kuma data (only if it moves too).
 # Output: /library/backups/control-plane-export-<stamp>.tar.gpg. Prints no secrets.
 # Run nightly by fleet-export.timer: the bundle doubles as the hub's own backup, which the observer's
@@ -39,6 +40,13 @@ for ERP_SITE in $ERP_SITES; do
   cp -a "$latest" "$T/erp/$ERP_SITE/"; for x in files private-files; do [ -e "$base-$x.tar" ] && cp -a "$base-$x.tar" "$T/erp/$ERP_SITE/"; done
   cp -a $B/sites/$ERP_SITE/site_config.json "$T/erp/$ERP_SITE/site_config.json"
 done
+# Snipe-IT (roles/snipeit) when the hub carries the asset register: database dump, .env, private and public uploads.
+if [ -f /opt/iiab/snipe-it/.env ]; then
+  echo "=== snipe-it backup"; mkdir -p "$T/snipeit"
+  SIT_DB=$(sed -n 's/^DB_DATABASE=//p' /opt/iiab/snipe-it/.env | tr -d "'\"")
+  mysqldump --single-transaction "$SIT_DB" | gzip > "$T/snipeit/$SIT_DB.sql.gz" || echo "WARN: snipe-it database dump failed"
+  tar -C /opt/iiab/snipe-it -cf "$T/snipeit/files.tar" .env storage/app public/uploads || echo "WARN: snipe-it files incomplete"
+fi
 echo "=== app source (private repository)"
 rsync -a --exclude __pycache__ --exclude .git $B/apps/fleet_ops/ "$T/app/fleet_ops/"
 git -C $B/apps/fleet_ops rev-parse HEAD > "$T/app/fleet_ops.commit" 2>/dev/null || true
@@ -54,6 +62,7 @@ fi
 cat > "$T/MANIFEST.txt" <<M
 control-plane export from $(hostname -f 2>/dev/null || hostname) at $STAMP
 site: $SITE  app commit: $(cat "$T/app/fleet_ops.commit" 2>/dev/null)
+snipeit/: Snipe-IT database dump + files.tar (.env, storage/app, public/uploads), when installed; restore = import the dump, untar over the install
 erp/<site>/: the hub's other sites ($ERP_SITES) database + files + site_config, restored by hand: bench --site <site> restore erp/<site>/<db>.sql.gz --with-public-files ... --with-private-files ...
 import with: import-control-plane.sh $OUT
 M

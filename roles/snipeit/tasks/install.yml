@@ -1,0 +1,184 @@
+---
+# Snipe-IT on the IIAB stack. nginx (with its `php` upstream), php-fpm and MariaDB are already there
+# from roles/nginx and roles/mysql; this adds the PHP extensions Snipe-IT needs, a system user that
+# owns the code, the release checked out at its tag, the composer dependencies, the database, the
+# .env, the migrations, and a systemd timer standing in for Laravel's documented cron line.
+
+- name: Record (initial) disk space used
+  ansible.builtin.shell: df -B1 --output=used / | tail -1
+  register: df1
+  changed_when: false
+
+- name: Install the PHP extensions Snipe-IT needs, plus composer, git, unzip
+  ansible.builtin.package:
+    name:
+      - php{{ php_version }}-cli
+      - php{{ php_version }}-bcmath
+      - php{{ php_version }}-curl
+      - php{{ php_version }}-gd
+      - php{{ php_version }}-intl
+      - php{{ php_version }}-ldap
+      - php{{ php_version }}-mbstring
+      - php{{ php_version }}-mysql
+      - php{{ php_version }}-xml
+      - php{{ php_version }}-zip
+      - composer
+      - git
+      - unzip
+    state: present
+
+- name: Run roles/www_options/tasks/php-settings.yml (upload limits, time zone) once per Ansible run
+  ansible.builtin.include_tasks: roles/www_options/tasks/php-settings.yml
+  when: php_settings_done is undefined
+
+- name: Read the system time zone for Snipe-IT's APP_TIMEZONE (same recipe as php-settings.yml)
+  ansible.builtin.shell: tmp=$(readlink /etc/localtime) && echo $tmp | sed 's|^/usr/share/zoneinfo/||' || cat /etc/timezone || echo Etc/UTC
+  register: snipeit_tz
+  changed_when: false
+
+- name: Create system user {{ snipeit_user }} (owns the code; composer cache in {{ snipeit_home }})
+  ansible.builtin.user:
+    name: "{{ snipeit_user }}"
+    system: true
+    home: "{{ snipeit_home }}"
+    create_home: true
+    shell: /usr/sbin/nologin
+
+- name: Create {{ snipeit_dir }} owned by {{ snipeit_user }}
+  ansible.builtin.file:
+    path: "{{ snipeit_dir }}"
+    state: directory
+    owner: "{{ snipeit_user }}"
+    group: "{{ apache_user }}"
+    mode: "0755"
+
+- name: Clone Snipe-IT {{ snipeit_version }} into {{ snipeit_dir }}
+  become: true
+  become_user: "{{ snipeit_user }}"
+  ansible.builtin.git:
+    repo: "{{ snipeit_repo }}"
+    dest: "{{ snipeit_dir }}"
+    version: "{{ snipeit_version }}"
+    depth: 1
+
+- name: Install the composer dependencies (no dev packages) as {{ snipeit_user }}
+  become: true
+  become_user: "{{ snipeit_user }}"
+  ansible.builtin.command:
+    cmd: composer install --no-dev --prefer-dist --no-interaction --no-progress
+    chdir: "{{ snipeit_dir }}"
+    creates: "{{ snipeit_dir }}/vendor/autoload.php"
+  environment:
+    HOME: "{{ snipeit_home }}"
+    COMPOSER_HOME: "{{ snipeit_home }}/.composer"
+
+- name: Create the .env from .env.example once (the APP_KEY generated below must survive re-runs)
+  ansible.builtin.copy:
+    src: "{{ snipeit_dir }}/.env.example"
+    dest: "{{ snipeit_dir }}/.env"
+    remote_src: true
+    force: false
+    owner: "{{ snipeit_user }}"
+    group: "{{ apache_user }}"
+    mode: "0640"
+
+- name: Set the .env values this box needs (URL, time zone, locale, database, mail to the log until a relay exists)
+  ansible.builtin.lineinfile:
+    path: "{{ snipeit_dir }}/.env"
+    regexp: "^{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+  loop:
+    - { key: APP_URL, value: "{{ snipeit_url }}" }
+    - { key: APP_TIMEZONE, value: "'{{ snipeit_tz.stdout | default('Etc/UTC') }}'" }
+    - { key: APP_LOCALE, value: "'{{ snipeit_locale }}'" }
+    - { key: DB_CONNECTION, value: mysql }
+    - { key: DB_HOST, value: 127.0.0.1 }
+    - { key: DB_PORT, value: "3306" }
+    - { key: DB_DATABASE, value: "{{ snipeit_db_name }}" }
+    - { key: DB_USERNAME, value: "{{ snipeit_db_user }}" }
+    - { key: DB_PASSWORD, value: "'{{ snipeit_db_password }}'" }
+    - { key: MAIL_MAILER, value: log }
+  loop_control:
+    label: "{{ item.key }}"
+  no_log: true    # the database password
+
+- name: Create MariaDB database {{ snipeit_db_name }}
+  ansible.mariadb.mariadb_db:
+    name: "{{ snipeit_db_name }}"
+    login_unix_socket: /run/mysqld/mysqld.sock
+
+- name: Create MariaDB user {{ snipeit_db_user }} with its password, for that database
+  ansible.mariadb.mariadb_user:
+    name: "{{ snipeit_db_user }}"
+    password: "{{ snipeit_db_password }}"
+    priv: "{{ snipeit_db_name }}.*:ALL"
+    login_unix_socket: /run/mysqld/mysqld.sock
+  no_log: true
+
+- name: Keep {{ snipeit_db_password_file }} private
+  ansible.builtin.file:
+    path: "{{ snipeit_db_password_file }}"
+    mode: "0600"
+
+- name: Make storage/, bootstrap/cache/ and public/uploads/ writable by php-fpm ({{ apache_user }}) and {{ snipeit_user }} (group write, setgid dirs)
+  ansible.builtin.shell: |
+    cd {{ snipeit_dir }} && chown -Rc {{ snipeit_user }}:{{ apache_user }} storage bootstrap/cache public/uploads &&
+    chmod -Rc ug+rwX,o+rX storage bootstrap/cache public/uploads &&
+    find storage bootstrap/cache public/uploads -type d ! -perm -g+s -exec chmod -c g+s {} +
+  register: snipeit_perms
+  changed_when: snipeit_perms.stdout | length > 0
+
+- name: Generate APP_KEY once (as {{ snipeit_user }}, the owner of .env)
+  become: true
+  become_user: "{{ snipeit_user }}"
+  ansible.builtin.shell: umask 002; grep -q '^APP_KEY=base64:' .env || php artisan key:generate --force --no-interaction
+  args:
+    chdir: "{{ snipeit_dir }}"
+  environment:
+    HOME: "{{ snipeit_home }}"
+  register: snipeit_key
+  changed_when: "'set successfully' in snipeit_key.stdout"
+
+- name: Run the database migrations (as {{ apache_user }}, so the cache and log files it creates belong to php-fpm)
+  become: true
+  become_user: "{{ apache_user }}"
+  ansible.builtin.shell: umask 002; php artisan migrate --force --no-interaction
+  args:
+    chdir: "{{ snipeit_dir }}"
+  register: snipeit_migrate
+  changed_when: "'DONE' in snipeit_migrate.stdout or 'Migrating' in snipeit_migrate.stdout"
+
+- name: Install snipeit-schedule.service and .timer (Laravel's `schedule:run` every minute, as {{ apache_user }})
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: /etc/systemd/system/{{ item }}
+    mode: "0644"
+  loop:
+    - snipeit-schedule.service
+    - snipeit-schedule.timer
+
+
+# RECORD Snipe-IT AS INSTALLED
+
+- name: Record (final) disk space used
+  ansible.builtin.shell: df -B1 --output=used / | tail -1
+  register: df2
+  changed_when: false
+
+- name: Add 'snipeit_disk_usage = {{ df2.stdout | int - df1.stdout | int }}' to {{ iiab_ini_file }}
+  community.general.ini_file:
+    mode: "0644"
+    path: "{{ iiab_ini_file }}"    # /etc/iiab/iiab.ini
+    section: snipeit
+    option: snipeit_disk_usage
+    value: "{{ df2.stdout | int - df1.stdout | int }}"
+
+- name: "Set 'snipeit_installed: True'"
+  ansible.builtin.set_fact:
+    snipeit_installed: true
+
+- name: "Add 'snipeit_installed: True' to {{ iiab_state_file }}"
+  ansible.builtin.lineinfile:
+    path: "{{ iiab_state_file }}"    # /etc/iiab/iiab_state.yml
+    regexp: '^snipeit_installed'
+    line: 'snipeit_installed: True'

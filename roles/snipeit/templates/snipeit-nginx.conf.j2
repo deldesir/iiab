@@ -1,0 +1,33 @@
+# Snipe-IT (roles/snipeit): a Laravel app wants the site root, so it gets a listener of its own at
+# {{ snipeit_url }} instead of an IIAB sub-path. PHP runs through the `php` upstream of roles/nginx.
+{% if snipeit_bind %}
+# Bound to {{ snipeit_bind }} only (snipeit_bind in local_vars.yml): off the box's public side.
+{% else %}
+# Bound to every interface. On a box with a public side, set snipeit_bind to a private address.
+{% endif %}
+server {
+    listen {{ (snipeit_bind ~ ':') if snipeit_bind else '' }}{{ snipeit_port }};
+    server_name _;
+    root {{ snipeit_dir }}/public;
+    index index.php;
+    client_max_body_size {{ snipeit_max_upload }};
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        include fastcgi_params;
+        fastcgi_pass php;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        fastcgi_param DOCUMENT_ROOT $realpath_root;
+        fastcgi_param HTTP_PROXY "";
+        fastcgi_read_timeout 300;
+    }
+
+    location ~ /\.(?!well-known) {
+        deny all;
+    }
+}

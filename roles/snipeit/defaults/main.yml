@@ -1,0 +1,24 @@
+# snipeit_install: False
+# snipeit_enabled: False
+# Both are set in vars/default_vars.yml -- change them in /etc/iiab/local_vars.yml before installing.
+
+snipeit_repo: https://github.com/grokability/snipe-it.git
+snipeit_version: v8.8.3    # a release tag; `git ls-remote --tags --refs {{ snipeit_repo }} 'v8.*'` lists newer ones
+
+snipeit_dir: /opt/iiab/snipe-it
+snipeit_user: snipeit    # owns the code and runs composer; php-fpm ({{ apache_user }}) owns the writable dirs
+snipeit_home: /var/lib/snipeit    # composer cache
+
+snipeit_db_name: snipeit
+snipeit_db_user: snipeit
+snipeit_db_password_file: /etc/iiab/snipeit-db.pw    # generated once by the password lookup below, kept 0600
+snipeit_db_password: "{{ lookup('password', snipeit_db_password_file + ' chars=ascii_letters,digits length=28') }}"
+
+# A Laravel app wants the site root, so Snipe-IT gets its own listener instead of a sub-path.
+snipeit_port: 8934
+snipeit_bind: ""    # "" = every interface. On a box with a public side, set a tailnet address here.
+snipeit_host: "{{ snipeit_bind if snipeit_bind else iiab_hostname }}"
+snipeit_url: "http://{{ snipeit_host }}:{{ snipeit_port }}"
+
+snipeit_locale: en-US    # fr-FR for French; the UI language of new users
+snipeit_max_upload: 32m    # nginx client_max_body_size for images, imports and backups

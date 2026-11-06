@@ -1,0 +1,11 @@
+[Unit]
+Description=Snipe-IT scheduler (Laravel schedule:run, in place of the documented cron line)
+After=mariadb.service
+
+[Service]
+Type=oneshot
+User={{ apache_user }}
+Group={{ apache_user }}
+UMask=0002
+WorkingDirectory={{ snipeit_dir }}
+ExecStart=/usr/bin/php {{ snipeit_dir }}/artisan schedule:run --no-interaction

@@ -549,6 +549,10 @@ social_code_enabled: False
 wordpress_install: False
 wordpress_enabled: False
 
+# Snipe-IT asset register (equipment by serial, custodians, consumables) on its own port -- see roles/snipeit
+snipeit_install: False
+snipeit_enabled: False
+
 # SSL/HTTPS Configuration
 ssl_install: True
 ssl_enabled: True

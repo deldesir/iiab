@@ -99,6 +99,11 @@
     name: wordpress
   when: wordpress_install and not is_proot
 
+- name: SNIPE-IT
+  include_role:
+    name: snipeit
+  when: snipeit_install and not is_proot
+
 - name: ERPNEXT
   include_role:
     name: erpnext
