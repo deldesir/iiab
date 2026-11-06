@@ -22,8 +22,8 @@
     src: "{{ wuzapi_src_dir }}/static"
     dest: "{{ wuzapi_dir }}/"
     remote_src: true
-    owner: "{{ ai_update_gateway_user }}"
-    group: "{{ ai_update_gateway_user }}"
+    owner: "{{ iiab_admin_user }}"
+    group: "{{ iiab_admin_user }}"
   become: true
   when: wuzapi_src_result.changed | default(false)
 

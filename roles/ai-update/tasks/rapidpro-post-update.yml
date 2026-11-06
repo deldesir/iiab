@@ -17,7 +17,7 @@
   changed_when: true
 
 - name: Fix RapidPro ownership after git pull
-  ansible.builtin.command: "chown -R {{ ai_update_gateway_user }}:{{ ai_update_gateway_user }} {{ rapidpro_dir }}"
+  ansible.builtin.command: "chown -R {{ iiab_admin_user }}:{{ iiab_admin_user }} {{ rapidpro_dir }}"
   become: true
   changed_when: false
 
@@ -34,45 +34,45 @@
 
 - name: Sync RapidPro Python dependencies
   ansible.builtin.shell: |
-    export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
     uv sync
   args:
     chdir: "{{ rapidpro_dir }}"
   become: true
-  become_user: "{{ ai_update_gateway_user }}"
+  become_user: "{{ iiab_admin_user }}"
   register: rapidpro_sync
   changed_when: "'Installed' in rapidpro_sync.stderr or 'Uninstalled' in rapidpro_sync.stderr"
 
 - name: Run database migrations
   ansible.builtin.shell: |
-    export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
     uv run python manage.py migrate
   args:
     chdir: "{{ rapidpro_dir }}"
   become: true
-  become_user: "{{ ai_update_gateway_user }}"
+  become_user: "{{ iiab_admin_user }}"
   register: rapidpro_migrate
   changed_when: "'No migrations to apply' not in rapidpro_migrate.stdout"
 
 - name: Create the Postgres search indexes
   ansible.builtin.shell: |
-    export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
     uv run python manage.py nanorp_indexes
   args:
     chdir: "{{ rapidpro_dir }}"
   become: true
-  become_user: "{{ ai_update_gateway_user }}"
+  become_user: "{{ iiab_admin_user }}"
   when: not (rapidpro_aws_enabled | default(false))
   changed_when: true   # creates what is missing; the command does not report which
 
 - name: Collect static files
   ansible.builtin.shell: |
-    export PATH="/home/{{ ai_update_gateway_user }}/.local/bin:$PATH"
+    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
     uv run python manage.py collectstatic --noinput
   args:
     chdir: "{{ rapidpro_dir }}"
   become: true
-  become_user: "{{ ai_update_gateway_user }}"
+  become_user: "{{ iiab_admin_user }}"
   register: rapidpro_collectstatic
   changed_when: "'0 static files copied' not in rapidpro_collectstatic.stdout"
 
