@@ -31,7 +31,9 @@
     LINE_TZ: "{{ rapidpro_retail_line_timezone }}"
     LINE_FLOW_FILE: "{{ rapidpro_dir }}/retail-line/retail_line_flow.json"
     LINE_SITE: "{{ rapidpro_http_protocol }}://{{ rapidpro_hostname }}{{ rapidpro_url }}"
-    GATEWAY_KEY: "{{ ai_gateway_internal_key }}"
+    # the gateway's tools key, from the one file both roles share (the gateway role's own variable is
+    # not visible here); the lookup reads the file and only creates it when none exists
+    GATEWAY_KEY: "{{ rivebot_gateway_internal_key | default('', true) or lookup('password', iiab_etc_path ~ '/gateway_internal_key chars=ascii_letters,digits length=40') }}"
   become: true
   become_user: "{{ iiab_admin_user }}"
   register: retail_line_workspace
