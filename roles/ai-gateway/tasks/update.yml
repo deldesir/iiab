@@ -26,8 +26,8 @@
 
 - name: Verify the gateway imports its engines
   ansible.builtin.command: >
-    {{ ai_gateway_uv_bin }} run python -c
-    "from run_agent import AIAgent; from mempalace.mcp_server import tool_status; print('Gateway imports OK')"
+    {{ ai_gateway_uv_bin }} run --no-sync python -c
+    "from app.hermes.tools import register_all_tools; print('Gateway imports OK')"
   args:
     chdir: "{{ ai_gateway_dir }}"
   become: true
