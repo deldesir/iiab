@@ -5,11 +5,14 @@
 # Usage: BASE=https://<box host> bash insights-subpath-deploy.sh      (run as root on the box)
 set -euo pipefail
 B=/home/frappe/frappe-bench; SITE=${SITE:-site.local}; CONF=/etc/nginx/conf.d/erpnext-nginx.conf
+# The backup lives outside conf.d: this nginx includes conf.d/* whole, so a copy left there is
+# read as a second site file and the test fails on its duplicate directives.
+BAK_DIR=${BAK_DIR:-/root/nginx-backups}; mkdir -p "$BAK_DIR"
 STAMP=$(date +%F)
 echo "== $(hostname) $(date -Is)"
-python3 - "$CONF" "$STAMP" <<'PY'
+python3 - "$CONF" "$STAMP" "$BAK_DIR" <<'PY'
 import sys, pathlib, shutil
-conf, stamp = pathlib.Path(sys.argv[1]), sys.argv[2]
+conf, stamp, bakdir = pathlib.Path(sys.argv[1]), sys.argv[2], pathlib.Path(sys.argv[3])
 s = conf.read_text()
 a1 = "    rewrite ^/erp/erp/(.*) /erp/$1 last;\n\n    rewrite ^/erp/(.*) /$1 break;\n"
 n1 = """    rewrite ^/erp/erp/(.*) /erp/$1 last;
@@ -31,10 +34,18 @@ if "rewrite ^/erp/(insights(/.*)?)$" in s and "location = /insights" in s:
     print("nginx: already patched"); sys.exit(0)
 assert s.count(a1) == 1, f"anchor1 x{s.count(a1)}"
 assert s.count(a2) == 1, f"anchor2 x{s.count(a2)}"
-bak = conf.with_name(conf.name + f".bak-{stamp}-insights"); shutil.copy2(conf, bak)
+bak = bakdir / (conf.name + f".bak-{stamp}-insights"); shutil.copy2(conf, bak)
 conf.write_text(s.replace(a1, n1).replace(a2, n2)); print(f"nginx: patched (backup {bak})")
 PY
-nginx -t 2>&1 | tail -1 && systemctl reload nginx && echo "nginx: reloaded"
+# A failed test puts the previous file back before anything else moves: the bench side below
+# only makes sense once nginx keeps the prefix.
+if ! nginx -t >/dev/null 2>&1; then
+  nginx -t 2>&1 | head -3
+  last=$(ls -t "$BAK_DIR"/erpnext-nginx.conf.bak-*-insights 2>/dev/null | head -1)
+  [ -n "$last" ] && cp "$last" "$CONF" && echo "nginx: test failed, restored $last"
+  exit 1
+fi
+systemctl reload nginx && echo "nginx: reloaded"
 cur=$(python3 -c "import json;print(json.load(open('$B/sites/common_site_config.json')).get('insights_path',''))")
 if [ "$cur" = "erp/insights" ]; then echo "bench: insights_path already erp/insights"; else
   sudo -u frappe bash -lc "cd $B && bench set-config -g insights_path erp/insights" >/dev/null && echo "bench: insights_path=erp/insights"
