@@ -5,8 +5,7 @@
 # rather than one with a guessable password
 - name: Check whether the admin user exists
   ansible.builtin.shell: |
-    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    uv run python manage.py shell -c "from temba.users.models import User; print('EXISTS' if User.objects.filter(email__iexact='{{ admin_email }}').exists() else 'MISSING')"
+    .venv/bin/python manage.py shell -c "from temba.users.models import User; print('EXISTS' if User.objects.filter(email__iexact='{{ admin_email }}').exists() else 'MISSING')"
   args:
     chdir: "{{ rapidpro_dir }}"
   become: true
@@ -24,8 +23,7 @@
 
 - name: Create the admin user
   ansible.builtin.shell: |
-    export PATH="/home/{{ iiab_admin_user }}/.local/bin:$PATH"
-    uv run python manage.py createsuperuser --noinput
+    .venv/bin/python manage.py createsuperuser --noinput
   args:
     chdir: "{{ rapidpro_dir }}"
   environment:
