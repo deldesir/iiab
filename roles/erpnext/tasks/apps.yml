@@ -17,6 +17,43 @@
   changed_when: false
   when: erpnext_enabled | bool
 
+- name: Tell the bench Insights lives under the ERP sub-path (bench-wide, every site on it)
+  # Insights reads `insights_path` from the site config once per process, at import, and builds
+  # its routes, its apps-screen link and its router base from it; nginx then passes /erp/insights
+  # through with the prefix kept (templates/erpnext-nginx.conf.j2). It goes in the common site
+  # config because a bench serving several sites takes whichever site imported the hooks first:
+  # on the hub, fleet.local and msf.local serve Insights at /erp/insights on their own ports too.
+  become: true
+  become_user: "{{ erpnext_user_name }}"
+  ansible.builtin.shell: |
+    python3 - <<'PY'
+    import json, subprocess
+    path = 'sites/common_site_config.json'
+    want = 'erp/insights'
+    if json.load(open(path)).get('insights_path') != want:
+        subprocess.run(['/home/{{ erpnext_user_name }}/.local/bin/bench', 'set-config', '-g', 'insights_path', want], check=True)
+        print('UPDATED insights_path')
+    PY
+  args:
+    chdir: /home/{{ erpnext_user_name }}/frappe-bench
+  environment:
+    PATH: "/home/{{ erpnext_user_name }}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  when:
+    - erpnext_enabled | bool
+    - "'insights' in ((erpnext_extra_apps + erpnext_profile_apps) | map(attribute='app_name') | list)"
+  register: erpnext_insights_path_cfg
+  changed_when: "'UPDATED' in erpnext_insights_path_cfg.stdout"
+
+- name: Restart the running site processes when the Insights path changed (read at import) # noqa: command-instead-of-module (worker instances by glob)
+  ansible.builtin.shell: |
+    systemctl try-restart frappe-bench-frappe-web.service frappe-bench-frappe-schedule.service \
+      'frappe-bench-frappe-default-worker@*.service' 'frappe-bench-frappe-short-worker@*.service' \
+      'frappe-bench-frappe-long-worker@*.service'
+  when:
+    - erpnext_enabled | bool
+    - erpnext_insights_path_cfg is changed
+  changed_when: true
+
 - name: Install ERPNext App in Site
   become: true
   become_user: "{{ erpnext_user_name }}"
