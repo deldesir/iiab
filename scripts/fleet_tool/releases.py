@@ -57,7 +57,15 @@ def heads_of(box: dict) -> dict[str, str]:
 def cmd_manifest(a, inv):
     RELEASES.mkdir(parents=True, exist_ok=True)
     if a.action == "capture":
-        box = select_boxes(inv, [a.from_box] if a.from_box else ["hub"], False)[0]
+        if a.from_box:
+            box = select_boxes(inv, [a.from_box], False)[0]
+        else:
+            # the hub's bench carries every app the fleet runs, so its heads pin them all; a box's
+            # heads pin only what that box carries (see dropped_apps)
+            hubs = [b for b in select_boxes(inv, [], True) if b.get("role") == "hub"]
+            if not hubs:
+                sys.exit("fleet: no box with role hub in the inventory: name the box to read with --from")
+            box = hubs[0]
         heads = heads_of(box)
         bad = [k for k, v in heads.items() if v == "?"]
         if not heads or bad:
