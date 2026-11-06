@@ -4,7 +4,7 @@
 #
 # Contents: /etc/iiab fleet files (inventory, config, catalog, releases, local_vars copies,
 # backup conf + passphrase files, the lease signing key), /var/lib/fleet state (no venv), the fleet site (database +
-# files + site_config), the fleet_ops app source (its repository is private), Semaphore config
+# files + site_config), every other site on the hub bench the same way (under erp/<site>/), the fleet_ops app source (its repository is private), Semaphore config
 # + database dump, the tailnet nginx listener, Uptime Kuma data (only if it moves too).
 # Output: /library/backups/control-plane-export-<stamp>.tar.gpg. Prints no secrets.
 # Run nightly by fleet-export.timer: the bundle doubles as the hub's own backup, which the observer's
@@ -27,15 +27,18 @@ sudo -u frappe -H bash -lc "cd $B && bench --site $SITE backup --with-files" >/d
 latest=$(ls -t $B/sites/$SITE/private/backups/*-database.sql.gz | head -1); base=${latest%-database.sql.gz}
 cp -a "$latest" "$T/site/"; for x in files private-files; do [ -e "$base-$x.tar" ] && cp -a "$base-$x.tar" "$T/site/"; done
 cp -a $B/sites/$SITE/site_config.json "$T/site/site_config.json"
-ERP_SITE=${ERP_SITE:-site.local}
-if [ -d $B/sites/$ERP_SITE ]; then
-  # the hub's own ERP (support desk, learning, the fleet apps): a site nothing else backs up off this machine
-  echo "=== the hub's ERP site backup ($ERP_SITE)"; mkdir -p "$T/erp"
-  sudo -u frappe -H bash -lc "cd $B && bench --site $ERP_SITE backup --with-files" >/dev/null
+# The hub's other sites (its own ERP with the support desk and learning apps, any register the operator
+# keeps on this bench): sites nothing else backs up off this machine. Every site on the bench except the
+# fleet site, or the space-separated ERP_SITES list when set. One failing site warns; the export goes on.
+ERP_SITES=${ERP_SITES:-$(for c in $B/sites/*/site_config.json; do s=$(basename "$(dirname "$c")"); [ -f "$c" ] && [ "$s" != "$SITE" ] && printf '%s ' "$s"; done)}
+for ERP_SITE in $ERP_SITES; do
+  [ -f $B/sites/$ERP_SITE/site_config.json ] || { echo "WARN: no site $ERP_SITE on this bench, skipped"; continue; }
+  echo "=== hub site backup ($ERP_SITE)"; mkdir -p "$T/erp/$ERP_SITE"
+  sudo -u frappe -H bash -lc "cd $B && bench --site $ERP_SITE backup --with-files" >/dev/null || { echo "WARN: backup of $ERP_SITE failed, skipped"; continue; }
   latest=$(ls -t $B/sites/$ERP_SITE/private/backups/*-database.sql.gz | head -1); base=${latest%-database.sql.gz}
-  cp -a "$latest" "$T/erp/"; for x in files private-files; do [ -e "$base-$x.tar" ] && cp -a "$base-$x.tar" "$T/erp/"; done
-  cp -a $B/sites/$ERP_SITE/site_config.json "$T/erp/site_config.json"
-fi
+  cp -a "$latest" "$T/erp/$ERP_SITE/"; for x in files private-files; do [ -e "$base-$x.tar" ] && cp -a "$base-$x.tar" "$T/erp/$ERP_SITE/"; done
+  cp -a $B/sites/$ERP_SITE/site_config.json "$T/erp/$ERP_SITE/site_config.json"
+done
 echo "=== app source (private repository)"
 rsync -a --exclude __pycache__ --exclude .git $B/apps/fleet_ops/ "$T/app/fleet_ops/"
 git -C $B/apps/fleet_ops rev-parse HEAD > "$T/app/fleet_ops.commit" 2>/dev/null || true
@@ -51,7 +54,7 @@ fi
 cat > "$T/MANIFEST.txt" <<M
 control-plane export from $(hostname -f 2>/dev/null || hostname) at $STAMP
 site: $SITE  app commit: $(cat "$T/app/fleet_ops.commit" 2>/dev/null)
-erp/: the hub's own ERP site ($ERP_SITE) database + files, restored by hand: bench --site $ERP_SITE restore erp/<db>.sql.gz --with-public-files ... --with-private-files ...
+erp/<site>/: the hub's other sites ($ERP_SITES) database + files + site_config, restored by hand: bench --site <site> restore erp/<site>/<db>.sql.gz --with-public-files ... --with-private-files ...
 import with: import-control-plane.sh $OUT
 M
 tar -C "$T" -cf - . | gpg --batch --yes --quiet --symmetric --cipher-algo AES256 --passphrase-file "$PASS" > "$OUT"
