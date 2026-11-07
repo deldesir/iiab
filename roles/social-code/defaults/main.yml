@@ -32,3 +32,11 @@ social_code_service:
   update: false
   env: social-code.env.j2
   enabled: "{{ social_code_enabled }}"
+
+# The Study Shelf: the private mkdocs site over the curricula (studysite/), served by a
+# python http.server unit on the tailnet address only. Off by default; the suite's own
+# build (studysite/build.sh) must have produced studysite/site before the unit is enabled.
+social_code_study_site_enabled: False
+social_code_study_port: 8930
+social_code_study_user: www-data
+social_code_study_bind: "{{ lookup('pipe', 'tailscale ip -4 2>/dev/null || echo 127.0.0.1') }}"   # this box's tailnet address; set explicitly in local_vars if needed

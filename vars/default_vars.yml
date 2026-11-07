@@ -544,6 +544,7 @@ ai_update_enabled: True
 # Social Code: conversation drills served by the assistant (see roles/social-code)
 social_code_install: False
 social_code_enabled: False
+social_code_study_site_enabled: False
 
 # If using WordPress intensively, set nginx_high_php_limits further above.
 wordpress_install: False
