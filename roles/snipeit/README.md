@@ -24,6 +24,9 @@ It runs natively on the Internet-in-a-Box stack: nginx and php-fpm from [roles/n
 - **Audits** schedule physical inventories; **labels** print from the asset list.
 - Users can be imported from CSV, created by hand, or synced from the REST API by a script of yours.
 
+API keys: the install runs `passport:install` once (OAuth keys under `storage/`, the personal
+access client), so a user can create an API key from their profile and scripts can use the REST API.
+
 ## Variables
 
 | Variable | Default | What it does |

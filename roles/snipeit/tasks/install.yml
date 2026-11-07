@@ -148,6 +148,19 @@
   register: snipeit_migrate
   changed_when: "'DONE' in snipeit_migrate.stdout or 'Migrating' in snipeit_migrate.stdout"
 
+- name: Create the OAuth keys and clients the API needs, once (storage/oauth-*.key and the personal access client, as Snipe-IT's own upgrade.php does)
+  ansible.builtin.shell: |
+    set -e
+    umask 002
+    php artisan passport:install --no-interaction
+  args:
+    chdir: "{{ snipeit_dir }}"
+    creates: "{{ snipeit_dir }}/storage/oauth-private.key"
+  become: true
+  become_user: "{{ apache_user }}"
+  environment:
+    HOME: "{{ snipeit_home }}"
+
 - name: Install snipeit-schedule.service and .timer (Laravel's `schedule:run` every minute, as {{ apache_user }})
   ansible.builtin.template:
     src: "{{ item }}.j2"
