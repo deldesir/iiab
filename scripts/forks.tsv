@@ -1,0 +1,45 @@
+# The repositories this estate deploys from, for supply-check (and the fork sync to come).
+# kind: go | python | frappe | js | ansible = a fork (merge-synced with its upstream; GitHub runs no
+#       Dependabot alerts on forks), own = ours and running on the pipeline box, own-aux = ours, tooling
+#       or documents (alerts reported, never CRIT). pin = <role>:<variable> in roles/<role>/defaults
+#       naming the release the roles install, or -.
+# sync: branch = merge the upstream branch head; tag = merge the newest upstream tag (the forks whose release
+#       tags shadow upstream's); - for our own repositories.
+# name	kind	fork	branch	upstream	upstream_branch	pin	sync	notes
+iiab	ansible	deldesir/iiab	master	iiab/iiab	master	-	branch	install path; fork-only = the ecosystem roles
+iiab-factory	ansible	deldesir/iiab-factory	master	iiab/iiab-factory	master	-	branch	installer one-liners
+iiab-admin-console	ansible	deldesir/iiab-admin-console	master	iiab/iiab-admin-console	master	-	branch	the SSL panel
+rapidpro	python	deldesir/rapidpro	main	nyaruka/temba	main	-	tag	temba web app; deploys from git
+mailroom	go	deldesir/mailroom	main	nyaruka/mailroom	main	rapidpro:rapidpro_mailroom_release	tag	release tags shadow upstream's
+courier	go	deldesir/courier	main	nyaruka/courier	main	rapidpro:rapidpro_courier_release	tag	release tags shadow upstream's
+wuzapi	go	deldesir/wuzapi	main	asternic/wuzapi	main	wuzapi:wuzapi_release	branch	own release sequence (upstream tags none)
+mempalace	python	deldesir/mempalace	develop	MemPalace/mempalace	develop	-	branch	inside the gateway venv
+organized-app	js	deldesir/organized-app	main	sws2apps/organized-app	main	-	branch	the congregation SPA
+frappe	frappe	deldesir/frappe	develop	frappe/frappe	develop	-	branch	benches
+erpnext	frappe	deldesir/erpnext	develop	frappe/erpnext	develop	-	branch	benches
+hrms	frappe	deldesir/hrms	develop	frappe/hrms	develop	-	branch	benches
+crm	frappe	deldesir/crm	develop	frappe/crm	develop	-	branch	benches
+builder	frappe	deldesir/builder	develop	frappe/builder	develop	-	branch	benches
+webshop	frappe	deldesir/webshop	develop	frappe/webshop	develop	-	branch	benches
+POSNext	frappe	deldesir/POSNext	develop	BrainWise-DEV/POSNext	develop	-	branch	tills
+hospitality_pms	frappe	deldesir/hospitality_pms	version-16	globcomqatar/hospitality_pms	version-16	-	branch	hotel profile
+lending	frappe	deldesir/lending	develop	frappe/lending	develop	-	branch	benches
+print_designer	frappe	deldesir/print_designer	develop	frappe/print_designer	develop	-	branch	benches
+insights	frappe	deldesir/insights	develop	frappe/insights	develop	-	branch	benches
+lms	frappe	deldesir/lms	develop	frappe/lms	develop	-	branch	benches
+helpdesk	frappe	deldesir/helpdesk	develop	frappe/helpdesk	develop	-	branch	benches
+education	frappe	deldesir/education	develop	frappe/education	develop	-	branch	benches
+marley	frappe	deldesir/marley	develop	earthians/marley	develop	-	branch	benches
+gateway	own	deldesir/gateway	main	-	-	-	-	ai-gateway
+rivebot	own	deldesir/rivebot	main	-	-	-	-	rivebot
+talkmaster	own	deldesir/talkmaster	main	-	-	-	-	gateway library
+jwlinker	own	deldesir/jwlinker	master	-	-	-	-	gateway library
+organized-backend	own	deldesir/organized-backend	main	-	-	-	-	the congregation API
+builder-cli	own	deldesir/builder-cli	main	-	-	-	-	storefront publish
+speechcraft	own-aux	deldesir/speechcraft	main	-	-	-	-	the book
+playbooks	own-aux	deldesir/playbooks	main	-	-	-	-	booklets
+airtime	own-aux	deldesir/airtime	main	-	-	-	-	the credit ledger app
+social-code	own-aux	deldesir/social-code	main	-	-	-	-	curricula; the gateway reads its data only
+blueprint	own-aux	deldesir/blueprint	main	-	-	-	-	architecture record
+docs	own-aux	deldesir/docs	main	-	-	-	-	the private docs site
+fleet-ops	own-aux	deldesir/fleet-ops	main	-	-	-	-	the fleet site app

@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer for the supply check (daily, after the health check; the report is mailed on Mondays)
+
+[Timer]
+OnCalendar=*-*-* 08:30:00 America/Port-au-Prince
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

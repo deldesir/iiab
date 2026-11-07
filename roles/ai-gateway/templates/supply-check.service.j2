@@ -1,0 +1,15 @@
+[Unit]
+Description=Supply check (what runs here, against the vulnerability databases and the upstreams)
+OnFailure=notify-failure@%n.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/supply-check --mail --mail-on monday
+TimeoutStartSec=60min
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

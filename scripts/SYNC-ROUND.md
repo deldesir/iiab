@@ -213,7 +213,13 @@ a release manifest instead; `RESTORE=0` keeps the current database (code-only). 
   tight collector (`GO_BUILD_JOBS`, `GOGC` in the script): three parallel
   compiles of the elasticsearch client got OOM-killed.
 - Dependabot alerts are off on every fork (GitHub's default), so nothing on
-  GitHub watches the dependencies of the code that runs. pip-audit on a lock:
+  GitHub watches the dependencies of the code that runs. `supply-check`
+  (roles/ai-gateway/files, daily 08:30 Haiti after the health check) does:
+  govulncheck on the binaries the units run, pip-audit on the service venvs,
+  npm audit on the lock files, the forks of `scripts/forks.tsv` against their
+  upstreams and pins, Dependabot alerts on our own repositories. CRIT fails the
+  unit (notify-failure mails it); the report is mailed on Mondays and kept in
+  /var/lib/supply-check/. Tolerated advisories go in /etc/iiab/supply-check.accept. pip-audit on a lock:
   `uv export --frozen --no-hashes --no-emit-project -o req.txt` (drop the
   path/editable lines) then `pip-audit --disable-pip --no-deps -r req.txt`;
   on a venv: `uv pip freeze --python <venv>/bin/python`. Go binaries:

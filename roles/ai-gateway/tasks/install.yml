@@ -146,6 +146,7 @@
     - jwlinker-refresh
     - hermes-elevate
     - pipeline-health-check
+    - supply-check
     - iiab-config
   become: true
 
