@@ -421,6 +421,20 @@ ai_gateway_jobs:
     on_calendar:
       - '*:0/5:00'
     timer_description: Timer for the credit outcomes job (every 5 min)
+  recordingssweep:
+    description: Recordings sweep (the operator's voice notes that never reached the door, read from temba with SELECT only and kept in the inbox; the measures still pending)
+    module: app.jobs.recordings_sweep
+    on_calendar:
+      - '*:0/10:00'
+    timer_description: Timer for the recordings sweep (every 10 min)
+# The operator's private stores, the gateway's user only (0700, outside every web root): the
+# recordings (talkmaster's store: originals, derived files) and the Anki client's collection
+# folder (`jwlinker anki`, a syncing device; never the sync server's own folder). Both are in
+# the nightly second-brain backup. The client's login (/etc/jwlinker/anki-client.env, 0600, the
+# gateway's user) holds the plaintext password and is written by hand, never by this role.
+ai_gateway_private_dirs:
+  - /library/recordings
+  - /library/anki-client
 ai_gateway_maintenance_units:
   - pipeline-health-check
   - supply-check
