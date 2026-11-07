@@ -5,13 +5,25 @@
 # anki_url: /anki
 # anki_port: 27701
 # anki_home: "{{ content_base }}/anki-sync"
-# anki_sync_users:
-#   - anki:changeme
+# anki_sync_users: []          # set it: one 'user:password' (or 'user:<PHC hash>') per user
+# anki_passwords_hashed: False # True when anki_sync_users carries PHC hashes (see README.rst)
 #
-# All above are set in: github.com/iiab/iiab/blob/master/vars/default_vars.yml
+# All above are set in: vars/default_vars.yml
 # If nec, change them by editing /etc/iiab/local_vars.yml prior to installing!
 
-anki_version: latest
+anki_version: latest          # read by the first install only; a re-run never upgrades
 anki_venv: /opt/iiab/anki-sync
-anki_user: root
+anki_user: anki               # a system user the role creates; the server never runs as root
+anki_env_file: /etc/anki-sync.env   # the credentials, root-only (0600), read by systemd
+# Who may reach {{ anki_url }}/ through nginx. The server speaks plain HTTP and Anki's manual says not to
+# expose it to the internet: by default only localhost, private ranges and a Tailscale tailnet.
+# anki_public: True removes the restriction (then put TLS and a strong password in front of it).
+anki_public: False
+anki_allow:
+  - 127.0.0.1
+  - "::1"
+  - 10.0.0.0/8
+  - 172.16.0.0/12
+  - 192.168.0.0/16
+  - 100.64.0.0/10
 anki_package_spec: "{{ 'anki' if anki_version == 'latest' else 'anki==' ~ anki_version }}"

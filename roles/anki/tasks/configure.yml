@@ -1,0 +1,44 @@
+---
+# Runs on every pass, so a re-run applies the unit, the credentials and the ownership to an
+# existing install too (install.yml runs only once).
+
+- name: Refuse the placeholder login shipped in older defaults
+  ansible.builtin.assert:
+    that: "'anki:changeme' not in anki_sync_users"
+    fail_msg: "PLEASE SET YOUR OWN 'anki_sync_users' IN /etc/iiab/local_vars.yml: the placeholder login is public"
+    quiet: true
+
+- name: Create the '{{ anki_user }}' system user for the sync server
+  ansible.builtin.user:
+    name: "{{ anki_user }}"
+    system: true
+    create_home: false
+    home: "{{ anki_home }}"
+    shell: /usr/sbin/nologin
+  when: anki_user != 'root'
+
+- name: Give {{ anki_home }} to '{{ anki_user }}', private (0700)
+  ansible.builtin.file:
+    path: "{{ anki_home }}"
+    state: directory
+    owner: "{{ anki_user }}"
+    group: "{{ anki_user }}"
+    mode: "0700"
+
+- name: Give everything under {{ anki_home }} to '{{ anki_user }}' (an install from before ran as root)
+  ansible.builtin.command: chown -R {{ anki_user }}:{{ anki_user }} {{ anki_home }}
+  changed_when: false
+
+- name: Install the credentials {{ anki_env_file }} (0600, root), read by systemd before it drops to '{{ anki_user }}'
+  ansible.builtin.template:
+    src: anki-sync.env.j2
+    dest: "{{ anki_env_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Install /etc/systemd/system/anki.service from template
+  ansible.builtin.template:
+    mode: "0644"
+    src: anki.service.j2
+    dest: /etc/systemd/system/anki.service

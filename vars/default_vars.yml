@@ -593,14 +593,14 @@ kiwix_incl_apk: False
 kiwix_apk_url: /software/kiwix
 kiwix_apk_src: https://download.kiwix.org/release/kiwix-android/kiwix.apk
 
-# Self-hosted Anki-compatible sync server (clients should use http://box/anki/)
+# Self-hosted Anki-compatible sync server: reachable from localhost, private ranges and a tailnet only
+# (anki_allow, anki_public in roles/anki/defaults); clients use http://<box>/anki/
 anki_install: False
 anki_enabled: False
 anki_url: /anki
 anki_port: 27701
 anki_home: "{{ content_base }}/anki-sync"    # /library/anki-sync
-anki_sync_users:
-  - anki:changeme
+anki_sync_users: []   # set your own in local_vars.yml; the role refuses to run without them
 anki_passwords_hashed: False
 anki_max_sync_payload_megs: 100
 

@@ -19,6 +19,11 @@ rapidpro_hostname: "{{ iiab_hostname }}"
 rapidpro_http_protocol: "http"
 
 rapidpro_url: /rp
+# Who may fetch attachments under {{ rapidpro_url }}/media/. Empty: anyone holding a file's URL (the old
+# behaviour). To keep voice notes off the internet, list localhost, private ranges, the tailnet
+# (100.64.0.0/10) AND the box's own public address, which the gateway and courier use to fetch
+# attachments through the public name. Set it in local_vars.yml.
+rapidpro_media_allow: []
 
 # Bind the courier/mailroom PUBLIC web servers (channel-webhook receivers:
 # courier :8080, mailroom :8090) to loopback only. Every client is local —
