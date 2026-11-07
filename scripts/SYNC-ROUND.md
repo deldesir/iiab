@@ -24,6 +24,14 @@ Order matters; each step is safe to stop after.
 3. Cut the Go releases the roles install from:
    `build-go-release.sh courier <upstream tag> --publish`, same for `mailroom`.
    The temba (web app) release is notes-only; it deploys from git.
+   The script builds with the newest patch release of the toolchain go.mod
+   names and refuses a binary in which govulncheck finds standard-library
+   findings; module findings are listed (a fork-local `go get` on a branch, or
+   upstream's next sync). A rebuild without a source change takes the `-N`
+   suffix (v26.3.120-1). **Bump `rapidpro_courier_release` and
+   `rapidpro_mailroom_release` in roles/rapidpro/defaults in the same iiab PR:**
+   the pins are what a fresh install and the next ai-update after a source pull
+   put on disk, and round 11 left them two releases behind what ran.
 4. temba — **every git command as the service user** (`sudo -u iiab-admin`).
    Root-run git leaves root-owned files; the later `chown` strips the
    `www-data` group from `run/` and gunicorn answers 502.
@@ -82,7 +90,10 @@ message count is unchanged. Then release the probe contact in RapidPro.
 ## 3. wuzapi
 
 `build-go-release.sh wuzapi vN --publish` (own version sequence), bump the
-role pin, then `./runrole ai-update` installs it. Losing the wuzapi DBs means
+role pin (`wuzapi_release`, same PR), then `./runrole ai-update` installs it.
+The service runs `{{ wuzapi_dir }}/wuzapi`; `/usr/local/bin/wuzapi` is only a
+symlink on Android, so scan and back up the binary the unit names
+(`systemctl show -p ExecStart --value wuzapi`). Losing the wuzapi DBs means
 re-linking the number: the backup runs before this step.
 
 ## 4. Frappe benches
@@ -188,3 +199,29 @@ a release manifest instead; `RESTORE=0` keeps the current database (code-only). 
   `<dir>`, the venv's own must win), make `<dir>` readable by the service user,
   and run `sudo -u iiab-admin … python -m pytest tests -o "pythonpath=. <dir>"`
   from the worktree. Four permission-gate tests fail under root by design.
+
+## 8. What the 2026-11-07 review taught
+
+- The role pins lagged the releases (courier v26.3.64 / mailroom v26.3.102
+  pinned, v26.3.68 / v26.3.120 running): a pin left behind is a downgrade
+  waiting for the next source pull. The pin moves in the release's PR.
+- `GOTOOLCHAIN=auto` builds with exactly the release go.mod names, so the
+  round's binaries were go1.27.0 while go1.27.3 was out: 14 standard-library
+  CVEs per binary. `build-go-release.sh` now resolves the newest patch release
+  and gates on govulncheck; the fixed binaries are the `-1` rebuilds.
+- Compiling mailroom on the pipeline box needs one package at a time and a
+  tight collector (`GO_BUILD_JOBS`, `GOGC` in the script): three parallel
+  compiles of the elasticsearch client got OOM-killed.
+- Dependabot alerts are off on every fork (GitHub's default), so nothing on
+  GitHub watches the dependencies of the code that runs. pip-audit on a lock:
+  `uv export --frozen --no-hashes --no-emit-project -o req.txt` (drop the
+  path/editable lines) then `pip-audit --disable-pip --no-deps -r req.txt`;
+  on a venv: `uv pip freeze --python <venv>/bin/python`. Go binaries:
+  `govulncheck -mode=binary <binary>` (`go run golang.org/x/vuln/cmd/govulncheck@latest`).
+- email-bridge ships as files inside its role (the repository is archived): a
+  lock refresh reaches a box only through `./runrole email-bridge --reinstall`;
+  a plain `runrole` skips an installed service.
+- rivebot's venv ran Python 3.10 (end of life 2026-10) from root's uv
+  directory: `rivebot_python` pins 3.14 and roles/uv-service recreates the venv.
+- Units start with `uv run --no-sync` (the email-bridge template lacked it): a
+  service start must never re-resolve the lock.
