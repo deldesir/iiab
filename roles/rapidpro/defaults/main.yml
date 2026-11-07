@@ -87,7 +87,7 @@ rapidpro_mailroom_version: main
 # The Go services' release binaries, each pinned to a tag: the install and the update path both
 # read these, and install-release-binary.sh verifies the asset against the tag's SHA256SUMS.
 # A sync round bumps the tags here (one change, reviewed) instead of following "latest".
-rapidpro_mailroom_release: v26.3.120
+rapidpro_mailroom_release: v26.3.120-1
 rapidpro_courier_release: v26.3.68
 rapidpro_mailroom_binary_url: "https://github.com/deldesir/mailroom/releases/download/{{ rapidpro_mailroom_release }}/mailroom-linux-{{ rapidpro_go_arch }}"
 rapidpro_courier_binary_url: "https://github.com/deldesir/courier/releases/download/{{ rapidpro_courier_release }}/courier-linux-{{ rapidpro_go_arch }}"
