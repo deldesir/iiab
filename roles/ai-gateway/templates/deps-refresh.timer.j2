@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer for the dependency refresh (Sundays; the pull requests wait for Monday's review)
+
+[Timer]
+OnCalendar=Sun *-*-* 06:00:00 America/Port-au-Prince
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

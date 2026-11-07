@@ -1,0 +1,15 @@
+[Unit]
+Description=Dependency refresh (a weekly lock-upgrade pull request for the repositories Dependabot cannot resolve)
+OnFailure=notify-failure@%n.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/deps-refresh
+TimeoutStartSec=90min
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

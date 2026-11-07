@@ -1,0 +1,117 @@
+#!/bin/bash
+# deps-refresh — a weekly lock refresh, as a pull request, for the repositories Dependabot cannot resolve.
+#
+#   deps-refresh [--dry-run] [--work DIR] [repo ...]          default repositories: gateway talkmaster
+#
+# The gateway and talkmaster depend on private siblings by path (/opt/iiab/talkmaster,
+# /opt/iiab/jwlinker, /opt/iiab/hermes-agent), which Dependabot's runner does not have and this
+# box does. For each repository: a fresh clone of its default branch, `uv lock --upgrade`, and
+# when the lock moved: `uv sync --frozen`, the test suite, pip-audit on the new lock, then a
+# deps-<date> branch and a pull request whose body lists what moved, the test result and the
+# audit. Failing tests still open the pull request, as a draft, so the failure is seen rather
+# than silent. --dry-run does everything but push. Exits 0 with a notice when gh is not logged
+# in (the same unit runs on boxes without it) or when nothing moved.
+#
+# The lock is the truth the box installs (uv sync --frozen): a merged pull request reaches the
+# service on its next `git pull` + `uv sync --frozen` (ai-update, or the role).
+set -euo pipefail
+
+OWNER=${DEPS_REFRESH_OWNER:-deldesir}
+WORK=${DEPS_REFRESH_WORK:-/var/lib/deps-refresh}
+DRY=0; REPOS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run) DRY=1 ;;
+    --work)    WORK=$2; shift ;;
+    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+    -*)        echo "unknown option: $1" >&2; exit 2 ;;
+    *)         REPOS+=("$1") ;;
+  esac
+  shift
+done
+[[ ${#REPOS[@]} -gt 0 ]] || REPOS=(gateway talkmaster)
+# how each suite is synced and run (the repository's own CI does the same)
+declare -A SYNC_ARGS=([gateway]="" [talkmaster]="--all-extras" [jwlinker]="--all-extras" [rivebot]="--all-extras")
+UV=${UV_BIN:-/usr/local/bin/uv}
+GIT=(git -c user.name="${GIT_USER_NAME:-Blondel Mondesir}" -c user.email="${GIT_USER_EMAIL:-blondel.md@gmail.com}")
+export HOME=${HOME:-/root}
+
+say() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
+if ! gh auth status >/dev/null 2>&1; then say "gh is not logged in here: nothing to do"; exit 0; fi
+command -v "$UV" >/dev/null || { echo "uv not found at $UV" >&2; exit 1; }
+mkdir -p "$WORK"
+
+# What moved between two uv.lock files, one line per package.
+lock_diff() {
+  python3 -I - "$1" "$2" <<'PY'
+import sys, tomllib
+def read(p):
+    with open(p, "rb") as f:
+        return {pkg["name"]: pkg.get("version", "") for pkg in tomllib.load(f).get("package", [])}
+a, b = read(sys.argv[1]), read(sys.argv[2])
+for name in sorted(set(a) | set(b)):
+    if name not in a: print(f"+ {name} {b[name]}")
+    elif name not in b: print(f"- {name} {a[name]}")
+    elif a[name] != b[name]: print(f"  {name} {a[name]} -> {b[name]}")
+PY
+}
+
+RC=0
+for repo in "${REPOS[@]}"; do
+  dir=$WORK/$repo
+  say "== $repo"
+  rm -rf "$dir"
+  if ! git clone -q --depth 50 "https://github.com/$OWNER/$repo.git" "$dir"; then say "$repo: clone failed"; RC=1; continue; fi
+  branch=$(git -C "$dir" symbolic-ref --short HEAD)
+  [[ -f "$dir/uv.lock" ]] || { say "$repo: no uv.lock; skipped"; continue; }
+  cp "$dir/uv.lock" "$dir/uv.lock.before"
+  if ! "$UV" lock --upgrade --directory "$dir" >"$dir/lock.log" 2>&1; then say "$repo: uv lock --upgrade failed: $(tail -1 "$dir/lock.log")"; RC=1; continue; fi
+  if git -C "$dir" diff --quiet -- uv.lock; then say "$repo: the lock is current"; continue; fi
+  changes=$(lock_diff "$dir/uv.lock.before" "$dir/uv.lock")
+  say "$repo: $(wc -l <<<"$changes") package(s) moved"
+
+  tests="not run"
+  # shellcheck disable=SC2086
+  if "$UV" sync --frozen ${SYNC_ARGS[$repo]:-} --directory "$dir" >"$dir/sync.log" 2>&1; then
+    if "$UV" run --frozen --no-sync --directory "$dir" pytest tests -q -p no:cacheprovider >"$dir/tests.log" 2>&1; then
+      tests="passed ($(tail -1 "$dir/tests.log"))"
+    else
+      tests="FAILED ($(tail -1 "$dir/tests.log"))"
+    fi
+  else
+    tests="sync failed ($(tail -1 "$dir/sync.log"))"
+  fi
+  say "$repo: tests $tests"
+
+  audit="pip-audit did not run"
+  if "$UV" export --directory "$dir" --frozen --no-hashes --no-emit-project -o "$dir/req.txt" >/dev/null 2>&1; then
+    grep -v -E '^(-e |\.|/|#)|/opt/iiab' "$dir/req.txt" | grep '==' > "$dir/pinned.txt" || true
+    set +e
+    audit_out=$("$UV" tool run pip-audit --disable-pip --no-deps --progress-spinner off -r "$dir/pinned.txt" -f columns 2>/dev/null)
+    audit_rc=$?
+    set -e
+    case $audit_rc in
+      0) audit="clean" ;;
+      1) audit=$(printf 'advisories remain:\n%s' "$(grep -v -E '^(Name|----)' <<<"$audit_out" | head -20)") ;;
+    esac
+  fi
+  say "$repo: audit ${audit%%$'\n'*}"
+
+  date_tag=$(date +%Y%m%d); sync_branch="deps-$date_tag"
+  "${GIT[@]}" -C "$dir" checkout -q -b "$sync_branch"
+  "${GIT[@]}" -C "$dir" add uv.lock
+  "${GIT[@]}" -C "$dir" commit -q -m "deps: lock refreshed $(date +%Y-%m-%d)
+
+uv lock --upgrade; tests $tests; pip-audit $(head -1 <<<"$audit")."
+  if [[ $DRY -eq 1 ]]; then say "$repo: dry run, not pushed ($sync_branch)"; printf '%s\n' "$changes" | head -40; continue; fi
+  if ! git -C "$dir" push -q -u origin "$sync_branch" 2>"$dir/push.log"; then say "$repo: push failed: $(tail -1 "$dir/push.log")"; RC=1; continue; fi
+  draft=(); title="deps: lock refreshed $(date +%Y-%m-%d)"
+  [[ $tests == passed* ]] || { draft=(--draft); title="$title (tests $tests)"; }
+  body=$(printf 'Weekly `uv lock --upgrade` on this box (Dependabot cannot resolve the private path dependencies).\n\nTests: %s\npip-audit on the new lock: %s\n\nWhat moved:\n```\n%s\n```\n\nMerging it: `git pull` + `uv sync --frozen` on the box (ai-update or the role does both).' "$tests" "$audit" "$changes")
+  if gh pr create -R "$OWNER/$repo" --base "$branch" --head "$sync_branch" --title "$title" --body "$body" "${draft[@]}" >"$dir/pr.log" 2>&1; then
+    say "$repo: $(tail -1 "$dir/pr.log")"
+  else
+    say "$repo: pull request not opened: $(tail -1 "$dir/pr.log")"; RC=1
+  fi
+done
+exit $RC
