@@ -147,6 +147,7 @@
     - hermes-elevate
     - pipeline-health-check
     - supply-check
+    - deps-refresh
     - iiab-config
   become: true
 
