@@ -14,6 +14,22 @@
     state: absent
   when: not (social_code_enabled | bool)
 
+- name: "Enable and restart the Study Shelf unit, if social_code_study_site_enabled"
+  ansible.builtin.systemd:
+    name: study-site
+    daemon_reload: true
+    enabled: true
+    state: restarted
+  when: social_code_study_site_enabled | bool
+
+- name: "Disable and stop the Study Shelf unit, if not social_code_study_site_enabled"
+  ansible.builtin.systemd:
+    name: study-site
+    enabled: false
+    state: stopped
+  when: not (social_code_study_site_enabled | bool)
+  failed_when: false
+
 - name: "Record social-code enabled state"
   ansible.builtin.lineinfile:
     path: /etc/iiab/iiab_state.yml

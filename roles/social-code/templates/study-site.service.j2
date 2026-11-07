@@ -1,0 +1,15 @@
+[Unit]
+Description=Social Code Study Shelf (private static site, tailnet address only)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+# Bound to this box's tailnet address only: the box may carry a public address and the
+# shelf renders private curricula. The site is rebuilt by studysite/build.sh after a merge.
+ExecStart=/usr/bin/python3 -m http.server {{ social_code_study_port }} --bind {{ social_code_study_bind }} --directory {{ social_code_src }}/studysite/site
+User={{ social_code_study_user }}
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

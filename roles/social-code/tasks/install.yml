@@ -22,6 +22,12 @@
   args:
     creates: "{{ social_code_data_dir }}/small_talk.db"
 
+- name: "Install the Study Shelf unit (serves studysite/site on the tailnet address)"
+  ansible.builtin.template:
+    src: study-site.service.j2
+    dest: /etc/systemd/system/study-site.service
+    mode: "0644"
+
 - name: "Record social-code as installed"
   ansible.builtin.lineinfile:
     path: /etc/iiab/iiab_state.yml
