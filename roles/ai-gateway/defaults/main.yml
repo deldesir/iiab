@@ -417,6 +417,7 @@ ai_gateway_jobs:
     timer_description: Timer for the team contact notifier (daily check for directory changes)
 ai_gateway_maintenance_units:
   - pipeline-health-check
+  - supply-check
   - second-brain-backup
   - fleet-backup-mail
   - fleet-backup-mail-hub
@@ -438,7 +439,7 @@ ai_gateway_units: >-
      + (ai_gateway_maintenance_units | product(['.service.j2', '.timer.j2']) | map('join') | list) }}
 ai_gateway_timers: >-
   {{ (ai_gateway_jobs | list | map('regex_replace', '^', 'ai-gateway-') | map('regex_replace', '$', '.timer') | list)
-     + (['pipeline-health-check.timer', 'second-brain-backup.timer'] if ai_gateway_profile != 'retail' else []) }}
+     + (['pipeline-health-check.timer', 'supply-check.timer', 'second-brain-backup.timer'] if ai_gateway_profile != 'retail' else []) }}
 
 ai_gateway_service:
   name: ai-gateway

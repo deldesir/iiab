@@ -1,0 +1,618 @@
+#!/usr/bin/env python3
+"""supply-check: what runs on this box, against what is known to be vulnerable or behind.
+
+The nightly companion of pipeline-health-check: that one asks whether the pipeline is alive,
+this one asks whether what it runs is current. Four questions, each skipped when the box does
+not have the thing:
+
+  go      the binaries the units run (courier, mailroom, wuzapi): govulncheck in binary mode
+          against the Go vulnerability database, the toolchain and revision read from the binary
+  python  the virtualenvs the services run (gateway, rivebot, email-bridge, organized-backend,
+          RapidPro, the Frappe bench): pip-audit on the frozen set, the interpreter's end of life
+  npm     the Node lock files deployed code is built from (organized-app, builder-cli):
+          npm audit
+  github  the forks against their upstreams (commits behind, upstream's latest release against
+          the fork's and the role's pin), the pins against the installed binaries, and the
+          Dependabot alerts on the repositories that are ours (forks get none: GitHub's default)
+
+Every line is OK, NOTE, WARN, CRIT or SKIP. CRIT means a vulnerability with a fixed release in
+code that runs, or a pinned release that is not published: the exit status is 1, the unit
+fails and notify-failure mails the journal (the summary at the end names each CRIT). WARN is
+to read, not to wake for: drift behind upstream, a vulnerability without a fix, an interpreter
+past end of life, a pin behind the installed binary, a fork's npm advisories (its fixes come
+with the sync). The report lands in /var/lib/supply-check/last.txt and last.json and, with
+--mail, goes to the operator through the email bridge the way notify-failure does.
+
+  /etc/iiab/supply-check.accept   advisories to tolerate, one id per line (GHSA-, PYSEC-, CVE-,
+                                  GO-, or npm:<repo>:<package>), the reason after '#': they are
+                                  listed as accepted and never CRIT. Private: reasons are ours.
+  scripts/forks.tsv (iiab)        the forks and our repositories; --forks names another file.
+
+Needs: uv (pip-audit through `uv tool run`), the Go toolchain for the binaries, npm for the
+locks, gh logged in for GitHub; each is skipped, never failed, when it is missing.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+import re
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+STATE_DIR = Path("/var/lib/supply-check")
+ACCEPT_FILE = Path("/etc/iiab/supply-check.accept")
+FORKS_FILE = Path("/opt/iiab/iiab/scripts/forks.tsv")
+ROLES_DIR = Path("/opt/iiab/iiab/roles")
+BRIDGE_ENV = Path("/opt/iiab/email-bridge/.env")
+GO = Path("/usr/local/go/bin/go")
+UV = next((p for p in ("/usr/local/bin/uv", "/root/.local/bin/uv") if Path(p).exists()), "uv")
+GOVULNCHECK = "golang.org/x/vuln/cmd/govulncheck@latest"
+SECTIONS = ("go", "python", "npm", "github")
+
+# unit -> name in forks.tsv; the binary the unit starts is what is scanned
+GO_UNITS = {"rapidpro-courier": "courier", "rapidpro-mailroom": "mailroom", "wuzapi": "wuzapi"}
+# the virtualenvs services run from; a missing one is skipped
+VENVS = {
+    "ai-gateway": "/opt/iiab/ai-gateway/.venv",
+    "rivebot": "/opt/iiab/rivebot/.venv",
+    "email-bridge": "/opt/iiab/email-bridge/.venv",
+    "organized-backend": "/opt/iiab/organized-backend/.venv",
+    "rapidpro": "/opt/iiab/rapidpro/.venv",
+    "frappe-bench": "/home/frappe/frappe-bench/env",
+}
+# the Node lock files deployed code is built from; a name that is a fork in forks.tsv is reported as one
+NPM_LOCKS = {
+    "organized-app": "/opt/iiab/organized-app",
+    "builder-cli": "/opt/iiab/builder-cli",
+}
+# python.org's schedule: the last security release of each minor
+PY_EOL = {"3.8": "2024-10-07", "3.9": "2025-10-31", "3.10": "2026-10-31", "3.11": "2027-10-31",
+          "3.12": "2028-10-31", "3.13": "2029-10-31", "3.14": "2030-10-31"}
+PSEUDO_VERSION = re.compile(r"\.\d{14}-[0-9a-f]{12}$")   # a Go fix that exists only as a commit (v0.58.1-0.20261009181718-2f1f834330b2), not a release
+
+
+class Report:
+    def __init__(self):
+        self.rows: list[tuple[str, str, str]] = []
+
+    def add(self, level: str, section: str, text: str) -> None:
+        self.rows.append((level, section, text))
+
+    def count(self, level: str) -> int:
+        return sum(1 for r in self.rows if r[0] == level)
+
+
+def version_key(v: str) -> tuple:
+    """Sorts version strings numerically where they are numbers (2.14.0 < 2.15.0, go1.26.9 < go1.26.10)."""
+    return tuple(int(x) if x.isdigit() else x for x in re.findall(r"\d+|[a-zA-Z]+", v))
+
+
+def newest(versions) -> str:
+    """The highest of the version strings (the one release that fixes every finding in a group)."""
+    vs = [v for v in versions if v]
+    return max(vs, key=version_key) if vs else ""
+
+
+def ids_text(ids: list[str], limit: int = 4) -> str:
+    return ", ".join(ids[:limit]) + (f", +{len(ids) - limit} more" if len(ids) > limit else "")
+
+
+def group_go(rows: dict[tuple[str, str, str], str]) -> dict[tuple[str, str], dict[str, str]]:
+    """{(module, version): {osv id: fixed version}}."""
+    groups: dict[tuple[str, str], dict[str, str]] = {}
+    for (osv, module, version), fixed in rows.items():
+        groups.setdefault((module, version), {})[osv] = fixed
+    return groups
+
+
+def group_python(rows) -> dict[tuple[str, str], dict[str, tuple[list[str], list[str]]]]:
+    """{(package, version): {advisory id: (fix versions, aliases)}}; pip-audit repeats an advisory it sees twice."""
+    groups: dict[tuple[str, str], dict[str, tuple[list[str], list[str]]]] = {}
+    for pkg, version, vid, fix, aliases in rows:
+        groups.setdefault((pkg, version), {}).setdefault(vid, (fix, aliases))
+    return groups
+
+
+def run(cmd: list[str], timeout: int = 600, env: dict | None = None) -> tuple[int, str, str]:
+    """A command's (rc, stdout, stderr); a missing program or a timeout is an rc, never an exception."""
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env, check=False)
+    except FileNotFoundError:
+        return 127, "", f"{cmd[0]}: not found"
+    except subprocess.TimeoutExpired:
+        return 124, "", f"{cmd[0]}: timed out after {timeout}s"
+    return p.returncode, p.stdout, p.stderr
+
+
+def last_line(text: str, rc: int) -> str:
+    lines = [ln for ln in text.strip().splitlines() if ln.strip()]
+    return lines[-1][:120] if lines else f"rc={rc}"
+
+
+def load_accept(path: Path) -> dict[str, str]:
+    """id -> reason; a line is '<id>  # reason', blank lines and comments ignored."""
+    ids: dict[str, str] = {}
+    if not path.is_file():
+        return ids
+    for line in path.read_text().splitlines():
+        body, _, reason = line.partition("#")
+        if body.strip():
+            ids[body.strip()] = reason.strip()
+    return ids
+
+
+def load_forks(path: Path) -> list[dict[str, str]]:
+    keys = ("name", "kind", "fork", "branch", "upstream", "upstream_branch", "pin", "sync", "notes")
+    rows = []
+    for line in path.read_text().splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        fields = line.rstrip("\n").split("\t")
+        if len(fields) < 7:
+            continue
+        fields = fields + [""] * (len(keys) - len(fields))
+        rows.append(dict(zip(keys, fields)))
+    return rows
+
+
+# ── go ────────────────────────────────────────────────────────────────────────────────────────
+
+def unit_binary(unit: str) -> Path | None:
+    rc, out, _ = run(["systemctl", "show", "-p", "ExecStart", "--value", unit])
+    m = re.search(r"path=(\S+)", out)
+    return Path(m.group(1)) if rc == 0 and m else None
+
+
+def go_env() -> dict[str, str]:
+    env = dict(os.environ)
+    env.setdefault("HOME", "/root")
+    env["GOFLAGS"] = "-mod=mod"
+    env["PATH"] = f"{GO.parent}:{env.get('PATH', '')}"
+    return env
+
+
+def go_buildinfo(binary: Path) -> dict[str, str]:
+    info = {"go": "", "revision": "", "time": ""}
+    rc, out, _ = run([str(GO), "version", "-m", str(binary)], env=go_env())
+    if rc != 0 or not out:
+        return info
+    m = re.search(r":\s+(go\S+)", out.splitlines()[0])
+    info["go"] = m.group(1) if m else ""
+    m = re.search(r"vcs\.revision=(\S+)", out)
+    info["revision"] = m.group(1)[:7] if m else ""
+    m = re.search(r"vcs\.time=(\S+)", out)
+    info["time"] = m.group(1)[:10] if m else ""
+    return info
+
+
+def parse_govulncheck(raw: str) -> tuple[dict[tuple[str, str, str], str], dict[str, str]]:
+    """govulncheck -json is a stream of objects: OSV entries and findings.
+
+    Returns {(osv id, module, version): fixed version} and {osv id: summary}."""
+    dec = json.JSONDecoder()
+    i, osvs, rows = 0, {}, {}
+    while i < len(raw):
+        while i < len(raw) and raw[i].isspace():
+            i += 1
+        if i >= len(raw):
+            break
+        obj, i = dec.raw_decode(raw, i)
+        if "osv" in obj:
+            osvs[obj["osv"]["id"]] = obj["osv"].get("summary", "")
+        if "finding" in obj:
+            f = obj["finding"]
+            t = f["trace"][0]
+            rows.setdefault((f["osv"], t.get("module", "?"), t.get("version", "")), f.get("fixed_version", ""))
+    return rows, osvs
+
+
+def go_level(module: str, fixed: str) -> tuple[str, str]:
+    if module == "stdlib":
+        return "CRIT", "the toolchain is behind: rebuild"
+    if not fixed:
+        return "WARN", "no fixed release"
+    if PSEUDO_VERSION.search(fixed):
+        return "WARN", "fixed only in a pre-release"
+    return "CRIT", "go get on a branch"
+
+
+def check_go(report: Report, accept: dict[str, str]) -> None:
+    if not GO.exists():
+        report.add("SKIP", "go", f"no Go toolchain at {GO}")
+        return
+    for unit, name in GO_UNITS.items():
+        binary = unit_binary(unit)
+        if not binary or not binary.exists():
+            report.add("SKIP", "go", f"{name}: no unit {unit} on this box")
+            continue
+        info = go_buildinfo(binary)
+        head = f"{name}: {binary}, {info['go'] or 'go ?'}, {info['revision']} {info['time']}".rstrip()
+        rc, out, err = run([str(GO), "run", GOVULNCHECK, "-mode=binary", "-json", str(binary)], env=go_env(), timeout=1200)
+        if not out.strip():
+            report.add("WARN", "go", f"{head}: govulncheck did not run ({last_line(err, rc)})")
+            continue
+        rows, osvs = parse_govulncheck(out)
+        if not rows:
+            report.add("OK", "go", f"{head}: no known vulnerabilities")
+            continue
+        report.add("NOTE", "go", f"{head}: {len(rows)} findings")
+        for (module, version), group in group_go(rows).items():
+            ids = sorted(group)
+            accepted = [i for i in ids if i in accept]
+            live = [i for i in ids if i not in accept]
+            fixed = newest(group[i] for i in live) if live else ""
+            text = f"{name}: {module}@{version}: {len(ids)} finding(s) -> {fixed or 'no fix'} ({ids_text(ids)})"
+            if not live:
+                report.add("OK", "go", f"{text} [accepted: {accept[accepted[0]]}]")
+                continue
+            level, why = go_level(module, fixed)
+            report.add(level, "go", f"{text}; {why}")
+
+
+# ── python ────────────────────────────────────────────────────────────────────────────────────
+
+def pip_audit_rows(data: dict) -> list[tuple[str, str, str, list[str], list[str]]]:
+    """(package, version, id, fix versions, aliases) per advisory in pip-audit's JSON."""
+    rows = []
+    for dep in data.get("dependencies", []):
+        for v in dep.get("vulns", []):
+            rows.append((dep["name"], dep["version"], v["id"], list(v.get("fix_versions") or []), list(v.get("aliases") or [])))
+    return rows
+
+
+def python_eol(version: str, today: dt.date) -> str:
+    minor = ".".join(version.split(".")[:2])
+    eol = PY_EOL.get(minor)
+    if not eol:
+        return ""
+    eol_date = dt.date.fromisoformat(eol)
+    if eol_date <= today:
+        return f"Python {version} reached end of life {eol}"
+    if (eol_date - today).days <= 120:
+        return f"Python {version} reaches end of life {eol}"
+    return ""
+
+
+def check_python(report: Report, accept: dict[str, str], today: dt.date) -> None:
+    for name, venv in VENVS.items():
+        py = Path(venv) / "bin" / "python"
+        if not py.exists():
+            report.add("SKIP", "python", f"{name}: no venv at {venv}")
+            continue
+        rc, out, _ = run([str(py), "-c", "import sys; print('%d.%d.%d' % sys.version_info[:3])"])
+        version = out.strip() if rc == 0 else "?"
+        eol = python_eol(version, today)
+        if eol:
+            report.add("WARN", "python", f"{name}: {eol}")
+        rc, out, err = run([UV, "pip", "freeze", "--python", str(py)])
+        if rc != 0:
+            report.add("WARN", "python", f"{name}: uv pip freeze failed ({last_line(err, rc)})")
+            continue
+        pinned = [ln for ln in out.splitlines() if "==" in ln and not ln.startswith("-e") and " @ " not in ln]
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as tmp:
+            tmp.write("\n".join(pinned) + "\n")
+            req = tmp.name
+        try:
+            rc, out, err = run([UV, "tool", "run", "pip-audit", "--disable-pip", "--no-deps", "--progress-spinner", "off",
+                                "-f", "json", "-r", req], timeout=900)
+        finally:
+            os.unlink(req)
+        if rc > 1 or not out.strip():
+            report.add("WARN", "python", f"{name}: pip-audit did not run ({last_line(err, rc)})")
+            continue
+        try:
+            rows = pip_audit_rows(json.loads(out))
+        except (json.JSONDecodeError, KeyError):
+            report.add("WARN", "python", f"{name}: pip-audit output unreadable")
+            continue
+        if not rows:
+            report.add("OK", "python", f"{name}: Python {version}, {len(pinned)} packages, no known vulnerabilities")
+            continue
+        report.add("NOTE", "python", f"{name}: Python {version}, {len(pinned)} packages, {len(rows)} advisories")
+        for (pkg, pkg_version), group in group_python(rows).items():
+            live = {vid: fix for vid, (fix, aliases) in group.items() if not any(i in accept for i in [vid, *aliases])}
+            accepted = [vid for vid in group if vid not in live]
+            fixable = [f for fixes in live.values() for f in fixes]
+            text = f"{name}: {pkg} {pkg_version}: {len(group)} advisor{'y' if len(group) == 1 else 'ies'} -> {newest(fixable) if fixable else 'no fix'} ({ids_text(sorted(group))})"
+            if not live:
+                reason = next(accept[i] for vid in accepted for i in [vid, *group[vid][1]] if i in accept)
+                report.add("OK", "python", f"{text} [accepted: {reason}]")
+            elif fixable:
+                report.add("CRIT", "python", text)
+            else:
+                report.add("WARN", "python", text)
+
+
+# ── npm ───────────────────────────────────────────────────────────────────────────────────────
+
+def check_npm(report: Report, accept: dict[str, str], fork_names: set[str]) -> None:
+    npm = shutil.which("npm")
+    if not npm:
+        report.add("SKIP", "npm", "no npm on this box")
+        return
+    for name, d in NPM_LOCKS.items():
+        if not (Path(d) / "package-lock.json").exists():
+            report.add("SKIP", "npm", f"{name}: no package-lock.json at {d}")
+            continue
+        rc, out, err = run([npm, "audit", "--package-lock-only", "--json", "--prefix", d], timeout=600)
+        try:
+            data = json.loads(out) if out.strip() else {}
+        except json.JSONDecodeError:
+            data = {}
+        if not data:
+            report.add("WARN", "npm", f"{name}: npm audit did not run ({last_line(err, rc)})")
+            continue
+        meta = data.get("metadata", {}).get("vulnerabilities", {})
+        total = meta.get("total", 0)
+        counts = ", ".join(f"{meta[k]} {k}" for k in ("critical", "high", "moderate", "low") if meta.get(k))
+        if not total:
+            report.add("OK", "npm", f"{name}: no known vulnerabilities")
+            continue
+        if name in fork_names:
+            report.add("WARN", "npm", f"{name}: {total} advisories ({counts}); a fork: the fixes come with the upstream sync")
+            continue
+        report.add("NOTE", "npm", f"{name}: {total} advisories ({counts})")
+        for pkg, v in sorted(data.get("vulnerabilities", {}).items()):
+            if v.get("severity") not in ("critical", "high"):
+                continue
+            fix = v.get("fixAvailable")
+            how = "npm audit fix" if fix is True else (f"major: {fix.get('name')}@{fix.get('version')}" if isinstance(fix, dict) else "no fix")
+            text = f"{name}: {pkg} {v.get('severity')} -> {how}"
+            key = f"npm:{name}:{pkg}"
+            if key in accept:
+                report.add("OK", "npm", f"{text} [accepted: {accept[key]}]")
+            elif fix is True:
+                report.add("CRIT", "npm", text)
+            else:
+                report.add("WARN", "npm", text)
+
+
+# ── github ────────────────────────────────────────────────────────────────────────────────────
+
+def gh_json(path: str) -> tuple[dict | list | None, str]:
+    rc, out, err = run(["gh", "api", path], timeout=60)
+    if rc != 0:
+        return None, (err or out).strip().splitlines()[-1][:120] if (err or out).strip() else f"rc={rc}"
+    try:
+        return json.loads(out), ""
+    except json.JSONDecodeError:
+        return None, "unreadable"
+
+
+def role_pin(spec: str) -> str | None:
+    """'<role>:<variable>' -> its value in roles/<role>/defaults/main.yml, or None."""
+    role, _, var = spec.partition(":")
+    path = ROLES_DIR / role / "defaults" / "main.yml"
+    if not var or not path.exists():
+        return None
+    try:
+        import yaml  # ansible's
+    except ImportError:
+        return None
+    value = (yaml.safe_load(path.read_text()) or {}).get(var)
+    return str(value) if value is not None else None
+
+
+def version_tuple(tag: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in re.findall(r"\d+", tag.split("-")[0]))
+
+
+def release_sums(repo: str, tag: str) -> set[str]:
+    """The checksums in a release's SHA256SUMS; empty when the release or the file is missing."""
+    url = f"https://github.com/{repo}/releases/download/{tag}/SHA256SUMS"
+    try:
+        with urllib.request.urlopen(url, timeout=30) as r:
+            text = r.read().decode()
+    except (urllib.error.URLError, OSError, ValueError):
+        return set()
+    return {line.split()[0] for line in text.splitlines() if len(line.split()) == 2}
+
+
+def sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def drift(cmp: dict) -> tuple[int, int]:
+    """(upstream commits the fork lacks, commits of the fork's own) from compare/<fork>...<upstream>.
+
+    GitHub counts from the head's side: with the fork as base and upstream as head, ahead_by is
+    what upstream has and the fork lacks, behind_by is what the fork carries of its own."""
+    return int(cmp.get("ahead_by", 0)), int(cmp.get("behind_by", 0))
+
+
+def check_fork(report: Report, row: dict[str, str]) -> None:
+    name = row["name"]
+    owner = row["upstream"].split("/")[0]
+    cmp, err = gh_json(f"repos/{row['fork']}/compare/{row['branch']}...{owner}:{row['upstream_branch']}")
+    if not isinstance(cmp, dict):
+        report.add("WARN", "github", f"{name}: compare with {row['upstream']} failed ({err})")
+        return
+    behind, ahead = drift(cmp)
+    up_rel, _ = gh_json(f"repos/{row['upstream']}/releases/latest")
+    fork_rel, _ = gh_json(f"repos/{row['fork']}/releases/latest")
+    up_tag = up_rel.get("tag_name") if isinstance(up_rel, dict) else None
+    fork_tag = fork_rel.get("tag_name") if isinstance(fork_rel, dict) else None
+    line = f"{name}: {behind} behind {row['upstream']}/{row['upstream_branch']}, {ahead} ahead (ours)"
+    if up_tag:
+        line += f"; upstream release {up_tag}"
+    if fork_tag:
+        line += f", fork release {fork_tag}"
+    report.add("WARN" if behind else "OK", "github", line)
+    if up_tag and fork_tag and version_tuple(up_tag) > version_tuple(fork_tag):
+        report.add("WARN", "github", f"{name}: upstream released {up_tag}, the fork's latest is {fork_tag}")
+    if row["pin"] in ("", "-"):
+        return
+    pin = role_pin(row["pin"])
+    if not pin:
+        report.add("SKIP", "github", f"{name}: pin {row['pin']} not readable here")
+        return
+    release, err = gh_json(f"repos/{row['fork']}/releases/tags/{pin}")
+    if release is None:
+        report.add("CRIT", "github", f"{name}: the pinned release {pin} is not published on {row['fork']} ({err})")
+    elif fork_tag and pin != fork_tag:
+        report.add("WARN", "github", f"{name}: the pin {pin} is not the fork's latest release {fork_tag}")
+    else:
+        report.add("OK", "github", f"{name}: the pin {pin} is the fork's latest release")
+    unit = next((u for u, n in GO_UNITS.items() if n == name), None)
+    binary = unit_binary(unit) if unit else None
+    if not binary or not binary.exists():
+        return
+    digest = sha256(binary)
+    if digest in release_sums(row["fork"], pin):
+        report.add("OK", "github", f"{name}: the installed binary is the pinned release {pin}")
+    elif fork_tag and digest in release_sums(row["fork"], fork_tag):
+        report.add("WARN", "github", f"{name}: the installed binary is release {fork_tag}; the pin {pin} is behind it")
+    else:
+        report.add("WARN", "github", f"{name}: the installed binary is neither {pin} nor the latest release (a local build?)")
+
+
+def check_alerts(report: Report, accept: dict[str, str], row: dict[str, str]) -> None:
+    name, repo, kind = row["name"], row["fork"], row["kind"]
+    alerts, err = gh_json(f"repos/{repo}/dependabot/alerts?state=open&per_page=100")
+    if not isinstance(alerts, list):
+        quiet = any(w in err for w in ("archived", "disabled", "Not Found", "404"))
+        report.add("SKIP" if quiet else "WARN", "github", f"{name}: Dependabot alerts not readable ({err})")
+        return
+    if not alerts:
+        report.add("OK", "github", f"{name}: no open Dependabot alerts")
+        return
+    by_severity: dict[str, int] = {}
+    for a in alerts:
+        s = a["security_advisory"]["severity"]
+        by_severity[s] = by_severity.get(s, 0) + 1
+    counts = ", ".join(f"{by_severity[k]} {k}" for k in ("critical", "high", "medium", "low") if by_severity.get(k))
+    report.add("NOTE", "github", f"{name}: {len(alerts)} open Dependabot alerts ({counts})")
+    groups: dict[tuple[str, str], list[dict]] = {}
+    for a in alerts:
+        if a["security_advisory"]["severity"] in ("critical", "high"):
+            groups.setdefault((a["dependency"]["package"]["name"], a["dependency"]["manifest_path"]), []).append(a)
+    for (pkg, manifest), group in sorted(groups.items()):
+        ids = sorted(a["security_advisory"]["ghsa_id"] for a in group)
+        live = [a for a in group if a["security_advisory"]["ghsa_id"] not in accept]
+        fixes = [v for a in live if (v := (a["security_vulnerability"].get("first_patched_version") or {}).get("identifier"))]
+        worst = "critical" if any(a["security_advisory"]["severity"] == "critical" for a in live) else "high"
+        text = f"{name}: {pkg} ({manifest}): {len(group)} {worst} alert(s) -> {newest(fixes) if fixes else 'no fix'} ({ids_text(ids)})"
+        if not live:
+            report.add("OK", "github", f"{text} [accepted: {accept[ids[0]]}]")
+        elif fixes and kind == "own":
+            report.add("CRIT", "github", text)
+        else:
+            report.add("WARN", "github", text)
+
+
+def check_github(report: Report, accept: dict[str, str], forks: list[dict[str, str]]) -> None:
+    rc, _, _ = run(["gh", "auth", "status"], timeout=60)
+    if rc != 0:
+        report.add("SKIP", "github", "gh is not logged in here: forks, pins and alerts not checked")
+        return
+    for row in forks:
+        if row["kind"].startswith("own"):
+            check_alerts(report, accept, row)
+        else:
+            check_fork(report, row)
+
+
+# ── the report ────────────────────────────────────────────────────────────────────────────────
+
+def render(report: Report, host: str, started: dt.datetime, elapsed: float) -> str:
+    lines = [f"supply-check on {host}, {started:%Y-%m-%d %H:%M %Z} ({elapsed:.0f}s)", ""]
+    for section in SECTIONS:
+        rows = [r for r in report.rows if r[1] == section]
+        if not rows:
+            continue
+        lines.append(f"[{section}]")
+        lines.extend(f"  {level:4} {text}" for level, _, text in rows)
+        lines.append("")
+    crit = [r for r in report.rows if r[0] == "CRIT"]
+    lines.append(f"summary: {len(crit)} CRIT, {report.count('WARN')} WARN, {report.count('OK')} OK, {report.count('SKIP')} SKIP")
+    lines.extend(f"  CRIT [{section}] {text}" for _, section, text in crit[:30])
+    return "\n".join(lines) + "\n"
+
+
+def mail(text: str, host: str, crit: int, warn: int, port: int) -> str:
+    """Through the email bridge's /send, the way notify-failure does: recipient and secret from its env."""
+    env: dict[str, str] = {}
+    try:
+        for line in BRIDGE_ENV.read_text().splitlines():
+            k, _, v = line.partition("=")
+            if k in ("EMAIL_SEND_AUTH", "EMAIL_ALLOWED_SENDERS"):
+                env[k] = v.strip()
+    except OSError:
+        return "not mailed: no email bridge env"
+    to = env.get("EMAIL_ALLOWED_SENDERS", "").split(",")[0].strip()
+    if not to:
+        return "not mailed: no recipient in the bridge env"
+    body = f"Subject: [{host}] supply check: {crit} CRIT, {warn} WARN\n\n{text}"[:7900]
+    data = urllib.parse.urlencode({"to": to, "text": body}).encode()
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/send", data=data, headers={"Authorization": env.get("EMAIL_SEND_AUTH", "")})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return f"mailed to the operator ({r.status})"
+    except (urllib.error.URLError, OSError) as e:
+        return f"not mailed: {e}"
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="what runs on this box, against what is known to be vulnerable or behind")
+    ap.add_argument("--only", help="sections to run, comma-separated: " + ",".join(SECTIONS))
+    ap.add_argument("--forks", type=Path, default=FORKS_FILE, help="the forks table (default: the iiab checkout's)")
+    ap.add_argument("--accept", type=Path, default=ACCEPT_FILE, help="advisories to tolerate")
+    ap.add_argument("--state-dir", type=Path, default=STATE_DIR, help="where last.txt and last.json are written")
+    ap.add_argument("--mail", action="store_true", help="send the report through the email bridge")
+    ap.add_argument("--mail-on", help="with --mail: only on this weekday (monday ... sunday)")
+    ap.add_argument("--bridge-port", type=int, default=8096)
+    a = ap.parse_args(argv)
+    started = dt.datetime.now().astimezone()
+    t0 = time.monotonic()
+    sections = set(a.only.split(",")) if a.only else set(SECTIONS)
+    unknown = sections - set(SECTIONS)
+    if unknown:
+        ap.error(f"unknown section(s): {', '.join(sorted(unknown))}")
+    accept = load_accept(a.accept)
+    forks = load_forks(a.forks) if a.forks.is_file() else []
+    report = Report()
+    if "go" in sections:
+        check_go(report, accept)
+    if "python" in sections:
+        check_python(report, accept, started.date())
+    if "npm" in sections:
+        check_npm(report, accept, {r["name"] for r in forks if not r["kind"].startswith("own")})
+    if "github" in sections:
+        if forks:
+            check_github(report, accept, forks)
+        else:
+            report.add("SKIP", "github", f"no forks table at {a.forks}")
+    host = socket.gethostname()
+    text = render(report, host, started, time.monotonic() - t0)
+    crit, warn = report.count("CRIT"), report.count("WARN")
+    try:
+        a.state_dir.mkdir(parents=True, exist_ok=True)
+        (a.state_dir / "last.txt").write_text(text)
+        state = {"host": host, "at": started.isoformat(), "crit": crit, "warn": warn,
+                 "rows": [{"level": lv, "section": s, "text": t} for lv, s, t in report.rows]}
+        (a.state_dir / "last.json").write_text(json.dumps(state, indent=1))
+    except OSError as e:
+        text += f"state not written: {e}\n"
+    sys.stdout.write(text)
+    if a.mail and (not a.mail_on or started.strftime("%A").lower() == a.mail_on.lower()):
+        print(mail(text, host, crit, warn, a.bridge_port))
+    return 1 if crit else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
