@@ -6,6 +6,7 @@ rivebot_enabled: True
 rivebot_home: /opt/iiab/rivebot
 rivebot_user: "{{ iiab_admin_user }}"
 rivebot_uv_bin: /usr/local/bin/uv
+rivebot_python: "3.14"           # the venv's interpreter; changing it recreates the venv on the next run (3.10 reached end of life 2026-10)
 
 # Source repository
 rivebot_repo: "https://github.com/deldesir/rivebot.git"
@@ -54,3 +55,4 @@ rivebot_service:
   units: [rivebot.service.j2]
   services: [rivebot]
   enabled: "{{ rivebot_enabled }}"
+  python: "{{ rivebot_python }}"

@@ -16,7 +16,7 @@ SuccessExitStatus=143 SIGTERM
 # Kill any orphan holding the port (prevents crash loops)
 ExecStartPre=-/usr/bin/fuser -k {{ email_bridge_port }}/tcp
 
-ExecStart={{ email_bridge_uv_bin }} run uvicorn email_bridge:app --host 127.0.0.1 --port {{ email_bridge_port }} --log-level info
+ExecStart={{ email_bridge_uv_bin }} run --no-sync uvicorn email_bridge:app --host 127.0.0.1 --port {{ email_bridge_port }} --log-level info
 Restart=always
 RestartSec=3
 
