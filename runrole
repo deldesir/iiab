@@ -109,7 +109,7 @@ elif [ $ROLE_NAME == "ai-update" ]; then
 elif [ $ROLE_NAME == "hermes-agent" ]; then
     ROLE_VAR=hermes_agent
 else
-    ROLE_VAR="$ROLE_NAME"
+    ROLE_VAR="${ROLE_NAME//-/_}"    # email-bridge, ai-gateway, social-code: their state lines are email_bridge_, ai_gateway_, social_code_
 fi
 
 echo
