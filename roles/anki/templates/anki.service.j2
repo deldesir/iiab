@@ -5,17 +5,15 @@ After=network.target
 [Service]
 Type=simple
 User={{ anki_user }}
+Group={{ anki_user }}
 WorkingDirectory={{ anki_home }}
 Environment=SYNC_HOST=127.0.0.1
 Environment=SYNC_PORT={{ anki_port }}
 Environment=SYNC_BASE={{ anki_home }}
 Environment=MAX_SYNC_PAYLOAD_MEGS={{ anki_max_sync_payload_megs }}
-{% if anki_passwords_hashed %}
-Environment=PASSWORDS_HASHED=1
-{% endif %}
-{% for sync_user in anki_sync_users %}
-Environment=SYNC_USER{{ loop.index }}={{ sync_user }}
-{% endfor %}
+# The logins live in a root-only file, so `systemctl show` does not print them to any local user.
+EnvironmentFile={{ anki_env_file }}
+UMask=0077
 ExecStart={{ anki_venv }}/bin/python3 -m anki.syncserver
 Restart=on-failure
 RestartSec=5

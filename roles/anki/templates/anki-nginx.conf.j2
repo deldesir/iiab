@@ -3,6 +3,13 @@ location = {{ anki_url }} {
 }
 
 location {{ anki_url }}/ {
+{% if not anki_public %}
+    # Not the public internet: Anki's manual says the server must not face it directly.
+{% for a in anki_allow %}
+    allow {{ a }};
+{% endfor %}
+    deny all;
+{% endif %}
     client_max_body_size {{ anki_max_sync_payload_megs }}m;
     proxy_pass http://127.0.0.1:{{ anki_port }}/;
     proxy_http_version 1.1;

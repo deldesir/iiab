@@ -48,6 +48,39 @@ tar -czf "$DEST/$STAMP/siyuan-workspace.tar.gz" \
     -C /library siyuan 2>/dev/null
 echo "siyuan workspace ok"
 
+# Anki sync server: the collection, its media index and the media folder. The server holds the
+# media index locked while it runs, so it is stopped for the seconds the copy takes and always
+# started again; on a clean stop it also folds its WAL into the collection. A failure here is
+# logged and never stops the rest of the backup.
+if [ -d /library/anki-sync ]; then
+  anki_was_active=0
+  if systemctl is-active --quiet anki; then anki_was_active=1; systemctl stop anki || true; fi
+  if tar -czf "$DEST/$STAMP/anki-sync.tar.gz" -C /library anki-sync; then
+    echo "anki sync data ok"
+  else
+    echo "FAILED: anki sync data" >&2
+  fi
+  if [ "$anki_was_active" = 1 ]; then systemctl start anki || echo "FAILED: anki did not start again" >&2; fi
+fi
+
+# The Anki client's own collection (jwlinker's sync client works there, never in the server's folder).
+if [ -d /library/anki-client ]; then
+  if tar -czf "$DEST/$STAMP/anki-client.tar.gz" -C /library anki-client; then echo "anki client ok"; else echo "FAILED: anki client" >&2; fi
+fi
+
+# Recordings: the originals only (derived files are recomputable). Originals never change, so each
+# night is a hard-linked copy of the night before: an unchanged file costs no space. Their index lives
+# in talkmaster.db, copied above.
+if [ -d /library/recordings/originals ]; then
+  prev=$(ls -1d "$DEST"/*/recordings/originals 2>/dev/null | grep -v "/$STAMP/" | tail -1 || true)
+  mkdir -p "$DEST/$STAMP/recordings"
+  if rsync -a ${prev:+--link-dest="$prev"} /library/recordings/originals/ "$DEST/$STAMP/recordings/originals/"; then
+    echo "recordings ok ($(du -sh /library/recordings/originals | cut -f1))"
+  else
+    echo "FAILED: recordings" >&2
+  fi
+fi
+
 # MemPalace palace (ChromaDB) — the verbatim memory itself
 tar -czf "$DEST/$STAMP/mempalace-palace.tar.gz" \
     -C /opt/iiab/ai-gateway/data palace 2>/dev/null

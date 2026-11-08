@@ -1,4 +1,16 @@
 ---
+# Every pass, so a box installed before these stores existed gets them too.
+- name: The operator's private stores (recordings, the Anki client's folder), the gateway's user only
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ai_gateway_user }}"
+    group: "{{ ai_gateway_user }}"
+    mode: "0700"
+  loop: "{{ ai_gateway_private_dirs }}"
+  when: ai_gateway_profile != 'retail'
+  become: true
+
 # Create konex_* tables in Postgres (idempotent safety net).
 # The gateway's init_db() also does this on startup, but this ensures
 # tables + permissions exist before the first boot.

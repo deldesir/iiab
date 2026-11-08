@@ -13,6 +13,13 @@ location {{ rapidpro_url }}/static/ {
 }
 
 location {{ rapidpro_url }}/media/ {
+{% if rapidpro_media_allow | length > 0 %}
+    # Attachments (voice notes, pictures) only for the sources listed in rapidpro_media_allow.
+{% for a in rapidpro_media_allow %}
+    allow {{ a }};
+{% endfor %}
+    deny all;
+{% endif %}
     root {{ rapidpro_dir }};
     rewrite ^{{ rapidpro_url }}/media/(.*)$ /media/$1 break;
 }

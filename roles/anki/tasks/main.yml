@@ -26,6 +26,9 @@
       ansible.builtin.include_tasks: install.yml
       when: anki_installed is undefined
 
+    - name: Configure Anki (user, credentials, unit), on every pass
+      ansible.builtin.include_tasks: configure.yml
+
     - name: Enable or disable Anki
       ansible.builtin.include_tasks: enable-or-disable.yml
     - name: Add 'anki' variable values to {{ iiab_ini_file }}
