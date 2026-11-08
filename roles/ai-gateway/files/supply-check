@@ -577,6 +577,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--mail-on", help="with --mail: only on this weekday (monday ... sunday)")
     ap.add_argument("--bridge-port", type=int, default=8096)
     a = ap.parse_args(argv)
+    # A system unit runs without HOME: gh then finds no login (the github section was skipped on
+    # the first timer run), and npm and the Go cache have nowhere to write. deps-refresh does the same.
+    os.environ.setdefault("HOME", "/root")
     started = dt.datetime.now().astimezone()
     t0 = time.monotonic()
     sections = set(a.only.split(",")) if a.only else set(SECTIONS)
