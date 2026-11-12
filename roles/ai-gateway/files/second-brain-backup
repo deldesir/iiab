@@ -41,6 +41,11 @@ for store in small_talk wit deep sub emo empathy_lab magnet archive; do
 done
 backup_sqlite /opt/iiab/social-code/data/registers/registers.db           social-code-registers.db
 backup_sqlite /opt/iiab/social-code/data/emotions/emotions.db             social-code-emotions.db
+# The course's private card files: the owner's own corrected lines, kept out of every repository
+# (social-code course/cards/README.md). Only present once he has typed some in.
+if [ -d "$SOCIAL_CODE_DATA/cards" ]; then
+  if tar -czf "$DEST/$STAMP/social-code-cards.tar.gz" -C "$SOCIAL_CODE_DATA" cards; then echo "social-code cards ok"; else echo "FAILED: social-code cards" >&2; fi
+fi
 
 # SiYuan workspace (notes + conf; excludes temp/history caches)
 tar -czf "$DEST/$STAMP/siyuan-workspace.tar.gz" \
