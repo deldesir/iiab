@@ -9,8 +9,18 @@ its upstream, then deploys the result across the fleet. Tools in this folder:
 
 - Each fork is synced by **merge** of the upstream branch, never rebase: the
   fork's history is what the boxes run and the release tags shadow upstream's.
-- One PR per repo, from a `sync-<date>` branch. Mains are ruleset-protected;
-  the operator merges. Nothing below happens until the PRs are merged.
+  The fork's own commits are its philosophy (the Postgres-only mode, the
+  sub-path desk, the WhatsApp channel, the relative assets): a conflict is a
+  decision, never an auto-resolution.
+- `scripts/sync-forks.sh` does it for every fork of `scripts/forks.tsv`: a
+  private cache clone, the upstream branch head (or the newest upstream tag
+  for courier, mailroom and temba) merged `--no-ff`, conflicts aborted and
+  reported, `--tests` running the fork's suite on the merged tree, and a dry
+  run unless `--pr` (one PR per repo from a `sync-<date>` branch) or
+  `--release` (a push, for the unprotected branches). `sync-forks.sh courier
+  mailroom --tests` before a round tells what the round will be.
+- Mains are ruleset-protected; the operator merges. Nothing below happens
+  until the PRs are merged.
 - Read the upstream changelog for settings and migrations; anything that needs
   a role change goes into an `iiab` PR of the same round (templates, version
   pins in the ai-update / wuzapi roles).
@@ -219,7 +229,14 @@ a release manifest instead; `RESTORE=0` keeps the current database (code-only). 
   npm audit on the lock files, the forks of `scripts/forks.tsv` against their
   upstreams and pins, Dependabot alerts on our own repositories. CRIT fails the
   unit (notify-failure mails it); the report is mailed on Mondays and kept in
-  /var/lib/supply-check/. Tolerated advisories go in /etc/iiab/supply-check.accept. pip-audit on a lock:
+  /var/lib/supply-check/. Tolerated advisories go in /etc/iiab/supply-check.accept.
+- Our own repositories: Dependabot (the `uv` ecosystem, one grouped PR a week) on
+  rivebot, jwlinker, speechcraft, playbooks and builder-cli (npm). The gateway and
+  talkmaster depend on private siblings by path, which Dependabot cannot resolve:
+  `deps-refresh` (roles/ai-gateway/files, Sundays 06:00 Haiti) clones them, runs
+  `uv lock --upgrade`, the tests and pip-audit, and opens the `deps-<date>` pull
+  request (a draft when the tests fail). Merging one is the usual pull + `uv sync
+  --frozen`. pip-audit on a lock:
   `uv export --frozen --no-hashes --no-emit-project -o req.txt` (drop the
   path/editable lines) then `pip-audit --disable-pip --no-deps -r req.txt`;
   on a venv: `uv pip freeze --python <venv>/bin/python`. Go binaries:
