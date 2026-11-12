@@ -112,3 +112,16 @@ def test_drift_reads_github_compare_from_the_fork_side():
     # courier, 2026-11-07: upstream had 24 commits the fork lacked; the fork carried 65 of its own
     assert sc.drift({"ahead_by": 24, "behind_by": 65, "status": "diverged"}) == (24, 65)
     assert sc.drift({}) == (0, 0)
+
+
+def test_main_gives_a_system_unit_a_home(tmp_path, monkeypatch):
+    """A system unit has no HOME, and gh then reads no login: main defaults it to root's."""
+    sc = load()
+    seen = {}
+    monkeypatch.delenv("HOME", raising=False)
+    monkeypatch.setattr(sc, "check_go", lambda report, accept: seen.setdefault("home", sc.os.environ.get("HOME")))
+    rc = sc.main(["--only", "go", "--state-dir", str(tmp_path), "--accept", str(tmp_path / "none"),
+                  "--forks", str(tmp_path / "none.tsv")])
+    assert rc == 0
+    assert seen["home"] == "/root"
+    assert (tmp_path / "last.txt").is_file()
