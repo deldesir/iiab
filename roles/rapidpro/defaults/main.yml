@@ -108,7 +108,7 @@ rapidpro_courier_bin: /usr/local/bin/courier
 # without one. Loopback-only, stateless (memory engine), nothing to back up.
 # Systemd hosts only (no pdsm/Android path yet).
 rapidpro_centrifugo_enabled: false
-rapidpro_centrifugo_version: "6.9.6"
+rapidpro_centrifugo_version: "6.10.3"
 rapidpro_centrifugo_port: 8092            # Centrifugo itself; nginx fronts /ws/connect
 rapidpro_internal_http_port: 8093         # loopback nginx listener for temba's /ti/ API
 rapidpro_centrifugo_api_key: ""           # shared with mailroom (MAILROOM_CENTRIFUGO_KEY)

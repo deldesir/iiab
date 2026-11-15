@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
 done
 [[ ${#REPOS[@]} -gt 0 ]] || REPOS=(gateway talkmaster)
 # how each suite is synced and run (the repository's own CI does the same)
-declare -A SYNC_ARGS=([gateway]="" [talkmaster]="--all-extras" [jwlinker]="--all-extras" [rivebot]="--all-extras")
+declare -A SYNC_ARGS=([gateway]="--all-extras" [talkmaster]="--all-extras" [jwlinker]="--all-extras" [rivebot]="--all-extras")
 UV=${UV_BIN:-/usr/local/bin/uv}
 GIT=(git -c user.name="${GIT_USER_NAME:-Blondel Mondesir}" -c user.email="${GIT_USER_EMAIL:-blondel.md@gmail.com}")
 export HOME=${HOME:-/root}

@@ -248,3 +248,37 @@ a release manifest instead; `RESTORE=0` keeps the current database (code-only). 
   directory: `rivebot_python` pins 3.14 and roles/uv-service recreates the venv.
 - Units start with `uv run --no-sync` (the email-bridge template lacked it): a
   service start must never re-resolve the lock.
+
+## 9. What the 2026-11-15 round taught
+
+- `sync-forks.sh` dry run first, `--tests` on the Go forks, and the four
+  conflicts of the round were each a fork customisation meeting an upstream
+  change in the same lines (courier's Dynamo guard and its x/net bump,
+  temba's sub-path imports, mempalace's `MEMPALACE_KG_PATH`, the installer's
+  Galaxy retry). Resolve in the cache clone, commit the merge, test, push the
+  `sync-<date>` branch and open the PR by hand; the script does not touch a
+  resolved merge.
+- **A clean merge can still drop a customisation.** Upstream split
+  mempalace's `mcp_server.py` into a package and the fork's 500-drawer cap
+  vanished without a conflict. After every merge, `git grep` the fork's own
+  commits' distinctive lines in the merged tree (`git log upstream..HEAD` for
+  the list) before trusting the summary.
+- A clean merge can also stop satisfying upstream's contracts: courier's test
+  harness now refuses a send that reports no cost (v26.3.76), so the WhatsApp
+  bridge handler needed `res.AddCost(1)`. The fork suites are the gate.
+- Two fork suites must not run at once: `go-fork-tests.sh` drops the test
+  roles when it ends, and the other run then fails with "password
+  authentication failed for user courier_test". A `[build failed]` with no
+  compiler output is the compiler OOM-killed by other builds on the box.
+- temba before the binaries this time: mailroom v26.3.138+ and courier
+  v26.3.81+ write channel tallies to `channels_channeltally`, which temba
+  migration 0224 creates. The round's 17 migrations include backfills that
+  lock source rows; run them at a quiet hour, `showmigrations --plan` first.
+- `deps-refresh` syncs every repository with `--all-extras`: the gateway's
+  talk-preparation extra is what its suite imports (81 errors otherwise).
+- hermes-agent v0.23.1 staged the runbook way (worktree + the three patches +
+  a gateway clone locked against it): green, pinned here. The gateway's lock
+  moves in its own PR; deploy order is the hermes checkout, then the lock.
+- Centrifugo 6.9.6 → 6.10.3: stricter client-protocol JSON parsing (official
+  SDKs unaffected), `temporary` on server API errors, no configuration change
+  for the role's keys; confirm the socket contract (§2.6) after the restart.
