@@ -318,3 +318,12 @@ a release manifest instead; `RESTORE=0` keeps the current database (code-only). 
   install path; a plain `./runrole organized` on an installed box only re-renders and restarts, and
   the app stays at its old commit with the old `dist`. `ai-update` does not cover this app. Back up
   `dist` first (`tar -C /opt/iiab/organized-app -czf … dist`): the role removes it before the build.
+- **An app that follows its own upstream can outrun the fork that bundles it.** CRM's frontend
+  build compiles the whatsapp app's UI sources through the `@framework/ui` alias. whatsapp's
+  develop of 2026-11-16 (2c3a3d5) started importing `getSocketInstance`, which no frappe revision
+  exports there, and the CRM build on the hub stopped (`UPGRADE-FAILED: build`) with the apps
+  already fast-forwarded and the migration not yet run. Fix: a manifest that pins whatsapp one
+  commit earlier (62e2909) and a `MANIFEST=` rerun, which the script treats as a no-op move for
+  the apps already in place. When a fork sync moves CRM or frappe, build CRM's frontend on the
+  canary with the whatsapp commit the manifest will carry (`cd apps/crm/frontend && yarn build`)
+  before the fleet rollout; the preflight only checks fast-forwards, not builds.
