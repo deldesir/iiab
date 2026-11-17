@@ -282,3 +282,39 @@ a release manifest instead; `RESTORE=0` keeps the current database (code-only). 
 - Centrifugo 6.9.6 → 6.10.3: stricter client-protocol JSON parsing (official
   SDKs unaffected), `temporary` on server API errors, no configuration change
   for the role's keys; confirm the socket contract (§2.6) after the restart.
+
+### What the deploy of that round added (2026-11-17)
+
+- **A fork that jumps many upstream releases at once can hit a migration order upstream never
+  runs.** temba v26.3.172 → .196 brought 21 migrations; `flows.0418_backfill_flow_tallies` reads
+  `orgs_tallyflush`, created by `orgs.0198_tallyflush`, and declares no dependency on it, so the
+  plan put the backfill first and it failed on the missing table. Upstream deploys one release at a
+  time, where 0198 is already applied. Read `showmigrations --plan` for backfills whose SQL names
+  another app's new table, and apply that table's migration first (`manage.py migrate orgs
+  0198_tallyflush`, then `migrate`). A failed RunPython is rolled back; the plan resumes cleanly.
+- **The gateway lock pins its path dependencies by version.** mempalace moved to 3.12.0 on disk and
+  `uv lock --check` in the gateway failed until the lock was refreshed, although no dependency
+  changed. After every path-dependency sync (hermes, mempalace, talkmaster, jwlinker), run
+  `uv lock --check` in a scratch clone of the gateway and ship the refreshed lock in the round.
+- **Upstream temba moved the login page to `/accounts/login/`**; `/users/login/` is a 404 under the
+  sub-path, not a broken desk. Probe `/rp/accounts/login/`.
+- **The service user cannot pull a private repository over HTTPS** (talkmaster): root holds the
+  credentials, the tree belongs to the service user, and a root-run pull leaves root-owned files
+  (23 in talkmaster, 413 in the gateway, found and chowned back this round). Fetch as root into a
+  bare mirror under `/opt/iiab/.fork-sync/<repo>.git`, chown it to the service user, and pull from
+  the mirror as the service user. A deploy key for the service user would remove the detour.
+- **Look at the fork's CI after a merge.** `fork-checks` on deldesir/iiab had been red since
+  2026-11-12 (four task names in `roles/anki` with a template in the middle, the production
+  profile's `name[template]`), and nothing surfaced it until this round. The GitHub token had also
+  expired, which stops releases and pull requests cold: `gh auth status` belongs at the start of a
+  round.
+- **The zero-token probe (§2) no longer reaches the gateway from the EX channel.** Workspace 1's
+  catch-all trigger has been inactive since 2026-11-04; "sync probe" matches no keyword, so the
+  message is handled without a flow (`msgs_msg.flow_id` null) and nothing is sent. The probe still
+  proves courier → mailroom → database on the new binaries. The gateway leg is covered by the
+  gateway suite and its health endpoint, or by a keyword the probe contact is allowed to use.
+- **organized-app deploys with `./runrole organized --reinstall`.** The role's git task (force
+  clone at `organized_app_version`, then `npm ci`, the Vite env, a fresh `dist`) lives in its
+  install path; a plain `./runrole organized` on an installed box only re-renders and restarts, and
+  the app stays at its old commit with the old `dist`. `ai-update` does not cover this app. Back up
+  `dist` first (`tar -C /opt/iiab/organized-app -czf … dist`): the role removes it before the build.
