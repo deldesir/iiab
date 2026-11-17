@@ -313,3 +313,8 @@ a release manifest instead; `RESTORE=0` keeps the current database (code-only). 
   message is handled without a flow (`msgs_msg.flow_id` null) and nothing is sent. The probe still
   proves courier → mailroom → database on the new binaries. The gateway leg is covered by the
   gateway suite and its health endpoint, or by a keyword the probe contact is allowed to use.
+- **organized-app deploys with `./runrole organized --reinstall`.** The role's git task (force
+  clone at `organized_app_version`, then `npm ci`, the Vite env, a fresh `dist`) lives in its
+  install path; a plain `./runrole organized` on an installed box only re-renders and restarts, and
+  the app stays at its old commit with the old `dist`. `ai-update` does not cover this app. Back up
+  `dist` first (`tar -C /opt/iiab/organized-app -czf … dist`): the role removes it before the build.
