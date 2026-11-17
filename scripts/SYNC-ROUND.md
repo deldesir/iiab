@@ -327,3 +327,10 @@ a release manifest instead; `RESTORE=0` keeps the current database (code-only). 
   the apps already in place. When a fork sync moves CRM or frappe, build CRM's frontend on the
   canary with the whatsapp commit the manifest will carry (`cd apps/crm/frontend && yarn build`)
   before the fleet rollout; the preflight only checks fast-forwards, not builds.
+- **Upstream frappe now renders templates in its sandbox.** `render_safe_globals()` gives templates
+  a `frappe.utils` that is the `VALID_UTILS` subset of `frappe.utils.data`; a fork helper a template
+  calls (`get_url_prefix()` in `base.html`, the sub-path) must be listed there or every website
+  page answers 500 with "There was an error while rendering this template" (deldesir/frappe
+  `subpath-template-prefix`). The desk, POS and the Vue apps keep working, so a ping-only check
+  passes: probe `/erp/login` on the canary before capturing the release. The hub ran the fix
+  commit (fast-forwarded on its `develop`) until the fork merged it.
