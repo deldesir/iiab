@@ -46,6 +46,8 @@ if [ -f /opt/iiab/snipe-it/.env ]; then
   SIT_DB=$(sed -n 's/^DB_DATABASE=//p' /opt/iiab/snipe-it/.env | tr -d "'\"")
   mysqldump --single-transaction "$SIT_DB" | gzip > "$T/snipeit/$SIT_DB.sql.gz" || echo "WARN: snipe-it database dump failed"
   tar -C /opt/iiab/snipe-it -cf "$T/snipeit/files.tar" .env storage/app public/uploads || echo "WARN: snipe-it files incomplete"
+  # the register's working folder (loaders, standard, pre-change database snapshots, exports), when the operator keeps one
+  [ -d /root/msf ] && { tar -C /root -cf "$T/snipeit/workdir.tar" msf || echo "WARN: register working folder incomplete"; }
 fi
 echo "=== app source (private repository)"
 rsync -a --exclude __pycache__ --exclude .git $B/apps/fleet_ops/ "$T/app/fleet_ops/"
@@ -62,7 +64,7 @@ fi
 cat > "$T/MANIFEST.txt" <<M
 control-plane export from $(hostname -f 2>/dev/null || hostname) at $STAMP
 site: $SITE  app commit: $(cat "$T/app/fleet_ops.commit" 2>/dev/null)
-snipeit/: Snipe-IT database dump + files.tar (.env, storage/app, public/uploads), when installed; restore = import the dump, untar over the install
+snipeit/: Snipe-IT database dump + files.tar (.env, storage/app, public/uploads), when installed; restore = import the dump, untar over the install; workdir.tar = the operator's register working folder (/root/msf), restore = untar into /root
 erp/<site>/: the hub's other sites ($ERP_SITES) database + files + site_config, restored by hand: bench --site <site> restore erp/<site>/<db>.sql.gz --with-public-files ... --with-private-files ...
 import with: import-control-plane.sh $OUT
 M
