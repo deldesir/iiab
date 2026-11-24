@@ -258,6 +258,12 @@ ai_gateway_jobs:
     on_calendar:
       - '*-*-* 03:45:00'
     timer_description: Timer for nightly Organized→talkmaster assignment sync
+  deckwake:
+    description: Daily deck wake (the textbook and the cases, once the brochure's index is learned)
+    module: app.jobs.deck_wake
+    on_calendar:
+      - '*-*-* 01:45:00 America/Port-au-Prince'
+    timer_description: Timer for the daily deck wake
   radar:
     description: Nightly cockpit radar (reality scan → SiYuan Radar + morning digest)
     after:
